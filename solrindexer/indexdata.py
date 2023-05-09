@@ -92,7 +92,7 @@ class MMD4SolR:
             try:
                 self.mydoc = xmltodict.parse(file)
             except Exception as e:
-                logger.error('Could read incoming file: %s' , e)
+                logger.error('Could read incoming file: %s', e)
                 raise
 
     def check_mmd(self):
