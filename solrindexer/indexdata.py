@@ -526,70 +526,63 @@ class MMD4SolR:
             if 'mmd:license_text' in mmd['mmd:use_constraint']:
                 mydict['use_constraint_license_text'] = str(use_constraint['mmd:license_text'])
 
-        logger.info("Personnel")
-        if 'mmd:personnel' in mmd:
-            personnel_elements = mmd['mmd:personnel']
+        """ Personnel """
+        if 'mmd:personnel' in self.mydoc['mmd:mmd']:
+            personnel_elements = self.mydoc['mmd:mmd']['mmd:personnel']
 
-            # Only one element
-            if isinstance(personnel_elements, dict):
-                # make it an iterable list
-                personnel_elements = [personnel_elements]
+            if isinstance(personnel_elements, dict): #Only one element
+                personnel_elements = [personnel_elements] # make it an iterable list
 
             # Facet elements
             mydict['personnel_role'] = []
             mydict['personnel_name'] = []
             mydict['personnel_organisation'] = []
-
             # Fix role based lists
             for role in personnel_role_LUT:
-                mydict[f'personnel_{personnel_role_LUT[role]}_role'] = []
-                mydict[f'personnel_{personnel_role_LUT[role]}_name'] = []
-                mydict[f'personnel_{personnel_role_LUT[role]}_email'] = []
-                mydict[f'personnel_{personnel_role_LUT[role]}_phone'] = []
-                mydict[f'personnel_{personnel_role_LUT[role]}_fax'] = []
-                mydict[f'personnel_{personnel_role_LUT[role]}_organisation'] = []
-                mydict[f'personnel_{personnel_role_LUT[role]}_address'] = []
-                # don't think this is needed Øystein Godøy, METNO/FOU, 2021-09-08
-                # mydict[f'personnel_{personnel_role_LUT[role]}_address_address'] = []
-                mydict[f'personnel_{personnel_role_LUT[role]}_address_city'] = []
-                mydict[f'personnel_{personnel_role_LUT[role]}_address_province_or_state'] = []
-                mydict[f'personnel_{personnel_role_LUT[role]}_address_postal_code'] = []
-                mydict[f'personnel_{personnel_role_LUT[role]}_address_country'] = []
+                mydict['personnel_{}_role'.format(personnel_role_LUT[role])] = []
+                mydict['personnel_{}_name'.format(personnel_role_LUT[role])] = []
+                mydict['personnel_{}_email'.format(personnel_role_LUT[role])] = []
+                mydict['personnel_{}_phone'.format(personnel_role_LUT[role])] = []
+                mydict['personnel_{}_fax'.format(personnel_role_LUT[role])] = []
+                mydict['personnel_{}_organisation'.format(personnel_role_LUT[role])] = []
+                mydict['personnel_{}_address'.format(personnel_role_LUT[role])] = []
+                # don't think this is needed Øystein Godøy, METNO/FOU, 2021-09-08 mydict['personnel_{}_address_address'.format(personnel_role_LUT[role])] = []
+                mydict['personnel_{}_address_city'.format(personnel_role_LUT[role])] = []
+                mydict['personnel_{}_address_province_or_state'.format(personnel_role_LUT[role])] = []
+                mydict['personnel_{}_address_postal_code'.format(personnel_role_LUT[role])] = []
+                mydict['personnel_{}_address_country'.format(personnel_role_LUT[role])] = []
 
             # Fill lists with information
             for personnel in personnel_elements:
                 role = personnel['mmd:role']
                 if not role:
-                    logger.warning('No role available for personnel')
+                    self.logger.warning('No role available for personnel')
                     break
                 if role not in personnel_role_LUT:
-                    logger.warning('Wrong role provided for personnel')
+                    self.logger.warning('Wrong role provided for personnel')
                     break
-                for entry_key, entry in personnel.items():
-                    entry_type = entry_key.split(':')[-1]
+                for entry in personnel:
+                    entry_type = entry.split(':')[-1]
                     if entry_type == 'role':
-                        mydict['personnel_{}_role'.format(personnel_role_LUT[role])].append(entry)
-                        mydict['personnel_role'].append(personnel[entry_key])
+                        mydict['personnel_{}_role'.format(personnel_role_LUT[role])].append(personnel[entry])
+                        mydict['personnel_role'].append(personnel[entry])
                     else:
-                        # Treat address specifically and handle faceting elements personnel_role,
-                        # personnel_name, personnel_organisation.
+                        # Treat address specifically and handle faceting elements personnel_role, personnel_name, personnel_organisation.
                         if entry_type == 'contact_address':
-                            for el_key, el in entry.items():
-                                el_type = el_key.split(':')[-1]
+                            for el in personnel[entry]:
+                                el_type = el.split(':')[-1]
                                 if el_type == 'address':
-                                    key = f'personnel_{personnel_role_LUT[role]}_address_{el_type}'
-                                    mydict[key].append(el)
+                                    mydict['personnel_{}_{}'.format(personnel_role_LUT[role], el_type)].append(personnel[entry][el])
                                 else:
-                                    key = f'personnel_{personnel_role_LUT[role]}_address_{el_type}'
-                                    mydict[key].append(el)
+                                    mydict['personnel_{}_address_{}'.format(personnel_role_LUT[role], el_type)].append(personnel[entry][el])
                         elif entry_type == 'name':
-                            mydict[f'personnel_{personnel_role_LUT[role]}_{el_type}'].append(entry)
-                            mydict['personnel_name'].append(entry)
+                            mydict['personnel_{}_{}'.format(personnel_role_LUT[role], entry_type)].append(personnel[entry])
+                            mydict['personnel_name'].append(personnel[entry])
                         elif entry_type == 'organisation':
-                            mydict[f'personnel_{personnel_role_LUT[role]}_{el_type}'].append(entry)
-                            mydict['personnel_organisation'].append(entry)
+                            mydict['personnel_{}_{}'.format(personnel_role_LUT[role], entry_type)].append(personnel[entry])
+                            mydict['personnel_organisation'].append(personnel[entry])
                         else:
-                            mydict[f'personnel_{personnel_role_LUT[role]}_{el_type}'].append(entry)
+                            mydict['personnel_{}_{}'.format(personnel_role_LUT[role], entry_type)].append(personnel[entry])
 
         logger.info("Data center")
         if 'mmd:data_center' in mmd:
