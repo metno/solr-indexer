@@ -1378,10 +1378,10 @@ class IndexMMD:
             if res['doc'] is None:
                 return False, "No parent found in index."
             else:
-                doc = {'id': parentid, 'isParent': True }
+                doc = {'id': parentid, 'isParent': True}
                 try:
-                    self.mysolr.add([doc], fieldUpdates={'isParent':'set'})
+                    self.mysolr.add([doc], fieldUpdates={'isParent': 'set'})
                 except Exception as e:
-                    logger.error("Atomic update failed on parent %s. Error is: ", (parentid,e))
+                    logger.error("Atomic update failed on parent %s. Error is: ", (parentid, e))
                     return False, e
                 return True, "Parent updated."
