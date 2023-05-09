@@ -6,3 +6,4 @@ pysolr
 PyYAML
 requests
 xmltodict
+requests

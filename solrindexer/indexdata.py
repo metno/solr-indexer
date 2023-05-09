@@ -43,6 +43,7 @@ import netCDF4
 import logging
 import warnings
 import xmltodict
+import requests
 import dateutil.parser
 import lxml.etree as ET
 import cartopy.crs as ccrs
@@ -910,10 +911,16 @@ class IndexMMD:
         self.thumbnail_type = None
         self.thumbnail_extent = None
 
+        # Solr authentication
+        self.authentication = authentication
+
+        # Keep track of solr endpoint
+        self.solr_url = mysolrserver
+
         # Connecting to core
         try:
             self.solrc = pysolr.Solr(mysolrserver, always_commit=always_commit, timeout=1020,
-                                     auth=authentication)
+                                     auth=self.authentication)
             logger.info("Connection established to: %s", str(mysolrserver))
         except Exception as e:
             logger.error("Something failed in SolR init: %s", str(e))
@@ -1355,3 +1362,26 @@ class IndexMMD:
             mylinks[proto] = myurl
 
         return (mylinks)
+
+    def update_parent(self,parentid):
+        """Search index for parent and update parent flag.
+        Use solr real-time get to check if a parent is already indexed,
+        and have been marked as parent
+        """
+        res = requests.get(self.solr_url +'/get?id='+id, auth=self.authentication)
+        res.raise_for_status()
+        logger.info("Got parent: %s", res)
+
+        if res is None:
+            return False, "No parent found in index."
+        else:
+            if res['doc'] is None:
+                return False, "No parent found in index."
+            else:
+                doc = {'id': parentid, 'isParent': True }
+                try:
+                    self.mysolr.add([doc], fieldUpdates={'isParent':'set'})
+                except Exception as e:
+                    logger.error("Atomic update failed on parent %s. Error is: ", (parentid,e))
+                    return False, e
+                return True, "Parent updated."
