@@ -548,10 +548,14 @@ class MMD4SolR:
                 mydict['personnel_{}_address'.format(personnel_role_LUT[role])] = []
                 # don't think this is needed Øystein Godøy, METNO/FOU, 2021-09-08
                 # mydict['personnel_{}_address_address'.format(personnel_role_LUT[role])] = []
-                mydict['personnel_{}_address_city'.format(personnel_role_LUT[role])] = []
-                mydict['personnel_{}_address_province_or_state'.format(personnel_role_LUT[role])] = []
-                mydict['personnel_{}_address_postal_code'.format(personnel_role_LUT[role])] = []
-                mydict['personnel_{}_address_country'.format(personnel_role_LUT[role])] = []
+                mydict['personnel_{}_address_city'
+                       .format(personnel_role_LUT[role])] = []
+                mydict['personnel_{}_address_province_or_state'
+                       .format(personnel_role_LUT[role])] = []
+                mydict['personnel_{}_address_postal_code'
+                       .format(personnel_role_LUT[role])] = []
+                mydict['personnel_{}_address_country'
+                       .format(personnel_role_LUT[role])] = []
 
             # Fill lists with information
             for personnel in personnel_elements:
@@ -575,7 +579,7 @@ class MMD4SolR:
                             for el in personnel[entry]:
                                 el_type = el.split(':')[-1]
                                 if el_type == 'address':
-                                    mydict['personnel_{}_{}'. \
+                                    mydict['personnel_{}_{}'.
                                            format(personnel_role_LUT[role], el_type)] \
                                         .append(personnel[entry][el])
                                 else:
