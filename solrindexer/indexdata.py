@@ -1372,10 +1372,11 @@ class IndexMMD:
         res.raise_for_status()
         logger.info("Got parent: %s", res)
 
-        if res is None:
+        myparent = res.json()
+        if myparent is None:
             return False, "No parent found in index."
         else:
-            if res['doc'] is None:
+            if myparent['doc'] is None:
                 return False, "No parent found in index."
             else:
                 doc = {'id': parentid, 'isParent': True}
