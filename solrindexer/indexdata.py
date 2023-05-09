@@ -526,7 +526,7 @@ class MMD4SolR:
             if 'mmd:license_text' in mmd['mmd:use_constraint']:
                 mydict['use_constraint_license_text'] = str(use_constraint['mmd:license_text'])
 
-        """ Personnel """
+        logger.info("Personnel")
         if 'mmd:personnel' in self.mydoc['mmd:mmd']:
             personnel_elements = self.mydoc['mmd:mmd']['mmd:personnel']
 
@@ -546,7 +546,8 @@ class MMD4SolR:
                 mydict['personnel_{}_fax'.format(personnel_role_LUT[role])] = []
                 mydict['personnel_{}_organisation'.format(personnel_role_LUT[role])] = []
                 mydict['personnel_{}_address'.format(personnel_role_LUT[role])] = []
-                # don't think this is needed Øystein Godøy, METNO/FOU, 2021-09-08 mydict['personnel_{}_address_address'.format(personnel_role_LUT[role])] = []
+                # don't think this is needed Øystein Godøy, METNO/FOU, 2021-09-08
+                # mydict['personnel_{}_address_address'.format(personnel_role_LUT[role])] = []
                 mydict['personnel_{}_address_city'.format(personnel_role_LUT[role])] = []
                 mydict['personnel_{}_address_province_or_state'.format(personnel_role_LUT[role])] = []
                 mydict['personnel_{}_address_postal_code'.format(personnel_role_LUT[role])] = []
@@ -567,7 +568,8 @@ class MMD4SolR:
                         mydict['personnel_{}_role'.format(personnel_role_LUT[role])].append(personnel[entry])
                         mydict['personnel_role'].append(personnel[entry])
                     else:
-                        # Treat address specifically and handle faceting elements personnel_role, personnel_name, personnel_organisation.
+                        # Treat address specifically and handle faceting elements
+                        # personnel_role, personnel_name, personnel_organisation.
                         if entry_type == 'contact_address':
                             for el in personnel[entry]:
                                 el_type = el.split(':')[-1]
