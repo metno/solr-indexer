@@ -1363,12 +1363,12 @@ class IndexMMD:
 
         return (mylinks)
 
-    def update_parent(self,parentid):
+    def update_parent(self, parentid):
         """Search index for parent and update parent flag.
         Use solr real-time get to check if a parent is already indexed,
         and have been marked as parent
         """
-        res = requests.get(self.solr_url +'/get?id='+id, auth=self.authentication)
+        res = requests.get(self.solr_url + '/get?id=' + parentid, auth=self.authentication)
         res.raise_for_status()
         logger.info("Got parent: %s", res)
 
