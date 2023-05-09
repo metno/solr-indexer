@@ -574,21 +574,26 @@ class MMD4SolR:
                             for el in personnel[entry]:
                                 el_type = el.split(':')[-1]
                                 if el_type == 'address':
-                                    mydict['personnel_{}_{}'.format(personnel_role_LUT[role], el_type)] \
+                                    mydict['personnel_{}_{}'. \
+                                           format(personnel_role_LUT[role], el_type)] \
                                         .append(personnel[entry][el])
                                 else:
-                                    mydict['personnel_{}_address_{}'.format(personnel_role_LUT[role], el_type)] \
+                                    mydict['personnel_{}_address_{}' \
+                                           .format(personnel_role_LUT[role], el_type)] \
                                         .append(personnel[entry][el])
                         elif entry_type == 'name':
-                            mydict['personnel_{}_{}'.format(personnel_role_LUT[role], entry_type)] \
+                            mydict['personnel_{}_{}'. \
+                                   format(personnel_role_LUT[role], entry_type)] \
                                 .append(personnel[entry])
                             mydict['personnel_name'].append(personnel[entry])
                         elif entry_type == 'organisation':
-                            mydict['personnel_{}_{}'.format(personnel_role_LUT[role], entry_type)] \
+                            mydict['personnel_{}_{}'. \
+                                   format(personnel_role_LUT[role], entry_type)] \
                                 .append(personnel[entry])
                             mydict['personnel_organisation'].append(personnel[entry])
                         else:
-                            mydict['personnel_{}_{}'.format(personnel_role_LUT[role], entry_type)] \
+                            mydict['personnel_{}_{}'. \
+                                   format(personnel_role_LUT[role], entry_type)] \
                                 .append(personnel[entry])
 
         logger.info("Data center")
