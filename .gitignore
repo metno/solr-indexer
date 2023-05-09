@@ -1,0 +1,3 @@
+build/
+solrindexer.egg-info/
+*.log
