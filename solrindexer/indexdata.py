@@ -900,6 +900,10 @@ class MMD4SolR:
         xml_b64 = (encoded_xml_string).decode('utf-8')
         mydict['mmd_xml_file'] = xml_b64
 
+        """Set defualt parent/child flags"""
+        mydict['isParent'] = False
+        mydict['isChild'] = False
+
         return mydict
 
 
@@ -1382,6 +1386,16 @@ class IndexMMD:
             mylinks[proto] = myurl
 
         return (mylinks)
+
+    def delete(self, id):
+        for e in IDREPLS:
+            id = id.replace(e, '-')
+
+        try:
+            self.solrc.delete(id=id)
+        except Exception:
+            logger.error("Something went wrong deleting doucument with id: %s", id)
+        logger.info("Sucessfully deleted document with id: %s", id)
 
     def get_dataset(self, id):
         """
