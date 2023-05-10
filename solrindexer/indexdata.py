@@ -1393,9 +1393,13 @@ class IndexMMD:
 
         try:
             self.solrc.delete(id=id)
-        except Exception:
+        except Exception as e:
             logger.error("Something went wrong deleting doucument with id: %s", id)
+            return False, e
+
         logger.info("Sucessfully deleted document with id: %s", id)
+
+        return True, "Document %s sucessfully deleted" % id
 
     def get_dataset(self, id):
         """
