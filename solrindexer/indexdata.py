@@ -984,7 +984,7 @@ class IndexMMD:
             try:
                 myfeature = self.get_feature_type(input_record['data_access_url_opendap'])
             except AttributeError:
-                logger.warn("No feature_type attribute found.")
+                logger.warn("No featureType attribute found.")
             except Exception as e:
                 logger.error("Something failed while retrieving feature type: %s", str(e))
             if myfeature:
@@ -1301,6 +1301,9 @@ class IndexMMD:
         # Try to get the global attribute featureType
         try:
             featureType = ds.getncattr('featureType')
+        except AttributeError:
+            logger.warn("No featureType attribute found.")
+            raise
         except Exception as e:
             logger.error("Something failed extracting featureType: %s", str(e))
             raise
@@ -1347,7 +1350,7 @@ class IndexMMD:
         """ Rewrite to take full metadata record as input """
         logger.info("Deleting %s from thumbnail core.", datasetid)
         try:
-            self.solrt.delete(id=datasetid)
+            self.solrc.delete(id=datasetid)
         except Exception as e:
             logger.error("Something failed in SolR delete: %s", str(e))
             raise
@@ -1380,21 +1383,43 @@ class IndexMMD:
 
         return (mylinks)
 
-    def update_parent(self, parentid):
-        """Search index for parent and update parent flag.
-        Use solr real-time get to check if a parent is already indexed,
-        and have been marked as parent
+    def get_dataset(self, id):
         """
-        res = requests.get(self.solr_url + '/get?id=' + parentid, auth=self.authentication)
-        res.raise_for_status()
-        logger.info("Got parent: %s", res)
+        Use real-time get to fetch latest dataset
+        based on id.
+        """
+        res = None
+        try:
+            res = requests.get(self.solr_url + '/get?id=' + id, auth=self.authentication)
+            res.raise_for_status()
+        except requests.exceptions.HTTPError as errh:
+            logger.error("Http Error: %s", errh)
+        except requests.exceptions.ConnectionError as errc:
+            logger.error("Error Connecting: %s", errc)
+        except requests.exceptions.Timeout as errt:
+            logger.error("Timeout Error: %s", errt)
+        except requests.exceptions.RequestException as err:
+            logger.error("OOps: Something Else went wrong: %s", err)
 
-        myparent = res.json()
+        if res is None:
+            return None
+        else:
+            return res.json()
+
+    def update_parent(self, parentid):
+        """Search index for parent and update parent flag."""
+
+        myparent = self.get_dataset(parentid)
+        logger.info("Got parent: %s", myparent['doc']['metadata_identifier'])
+
         if myparent is None:
             return False, "No parent found in index."
         else:
             if myparent['doc'] is None:
                 return False, "No parent found in index."
+            if bool(myparent['doc']['isParent']):
+                logger.info("Dataset already marked as parent.")
+                return True, "Already updated."
             else:
                 doc = {'id': parentid, 'isParent': True}
                 try:
@@ -1402,4 +1427,5 @@ class IndexMMD:
                 except Exception as e:
                     logger.error("Atomic update failed on parent %s. Error is: ", (parentid, e))
                     return False, e
+                logger.info("Parent sucessfully updated in SolR.")
                 return True, "Parent updated."
