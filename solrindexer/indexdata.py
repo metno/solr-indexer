@@ -972,9 +972,10 @@ class IndexMMD:
         """
         if level == 1 or level is None:
             input_record.update({'dataset_type': 'Level-1'})
-            input_record.update({'isParent': 'false'})
+            # input_record.update({'isParent': 'false'})
         elif level == 2:
             input_record.update({'dataset_type': 'Level-2'})
+            input_record.update({'isChild': True})
         else:
             logger.error('Invalid level given: {}. Hence terminating'.format(level))
 
@@ -1387,12 +1388,20 @@ class IndexMMD:
 
         return (mylinks)
 
-    def delete(self, id):
+    def to_solr_id(self, id):
+        """Function that translate from metadata_identifier
+        to solr compatilbe id field syntax
+        """
+        solr_id = str(id)
         for e in IDREPLS:
-            id = id.replace(e, '-')
+            solr_id = solr_id.replace(e, '-')
 
+        return solr_id
+
+    def delete(self, id):
+        solr_id = self.to_solr_id(id)
         try:
-            self.solrc.delete(id=id)
+            self.solrc.delete(id=solr_id)
         except Exception as e:
             logger.error("Something went wrong deleting doucument with id: %s", id)
             return False, e
@@ -1428,13 +1437,13 @@ class IndexMMD:
         """Search index for parent and update parent flag."""
 
         myparent = self.get_dataset(parentid)
-        logger.info("Got parent: %s", myparent['doc']['metadata_identifier'])
 
         if myparent is None:
             return False, "No parent found in index."
         else:
             if myparent['doc'] is None:
                 return False, "No parent found in index."
+            logger.info("Got parent: %s", myparent['doc']['metadata_identifier'])
             if bool(myparent['doc']['isParent']):
                 logger.info("Dataset already marked as parent.")
                 return True, "Already updated."
