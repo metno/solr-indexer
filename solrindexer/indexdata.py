@@ -1381,7 +1381,7 @@ class IndexMMD:
             else:
                 doc = {'id': parentid, 'isParent': True}
                 try:
-                    self.mysolr.add([doc], fieldUpdates={'isParent': 'set'})
+                    self.solrc.add([doc], fieldUpdates={'isParent': 'set'})
                 except Exception as e:
                     logger.error("Atomic update failed on parent %s. Error is: ", (parentid, e))
                     return False, e
