@@ -36,6 +36,7 @@ UPDATES:
 """
 
 import os
+import re
 import math
 import base64
 import pysolr
@@ -57,6 +58,10 @@ from shapely.geometry import box, mapping
 
 logger = logging.getLogger(__name__)
 IDREPLS = [':', '/', '.']
+
+DATETIME_REGEX = re.compile(
+    r"^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})T(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})(\.\d+)?Z$"  # NOQA: E501
+)
 
 
 def getZones(lon, lat):
@@ -870,7 +875,17 @@ class MMD4SolR:
                     # Fix issue between MMD and SolR schema, SolR requires full datetime, MMD not.
                     if element_suffix == 'publication_date':
                         if v is not None:
-                            v += 'T12:00:00Z'
+                            solrdate = re.match(DATETIME_REGEX, v)
+                            if not solrdate:
+                                v += 'T12:00:00Z'
+                            test = re.match(DATETIME_REGEX, v)
+                            if not test:
+                                # print(type(date))
+                                if re.search(r'\+\d\d:\d\dZ$', v) is not None:
+                                    date = re.sub(r'\+\d\d:\d\d', '', v)
+                                    newdate = dateutil.parser.parse(date)
+                                    v = newdate.strftime('%Y-%m-%dT%H:%M:%SZ')
+
                     mydict['dataset_citation_{}'.format(element_suffix)] = v
 
         """ Quality control """
@@ -968,6 +983,8 @@ class IndexMMD:
             # Or better do this as part of get_feature_type?
             try:
                 myfeature = self.get_feature_type(input_record['data_access_url_opendap'])
+            except AttributeError:
+                logger.warn("No feature_type attribute found.")
             except Exception as e:
                 logger.error("Something failed while retrieving feature type: %s", str(e))
             if myfeature:
