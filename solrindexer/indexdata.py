@@ -980,8 +980,9 @@ class IndexMMD:
             logger.error('Invalid level given: {}. Hence terminating'.format(level))
 
         if input_record['metadata_status'] == 'Inactive':
-            logger.warning('Skipping record')
-            return False
+            msg = 'Skipping record'
+            logger.warning(msg)
+            return False, msg
         myfeature = None
         if 'data_access_url_opendap' in input_record:
             # Thumbnail of timeseries to be added
@@ -1027,11 +1028,13 @@ class IndexMMD:
         try:
             self.solrc.add(mmd_record)
         except Exception as e:
-            logger.error("Something failed in SolR adding document: %s", str(e))
-            return False
+            msg = "Something failed in SolR adding document: %s" % str(e)
+            logger.error(msg)
+            return False, msg
+        msg = "Record successfully added."
         logger.info("Record successfully added.")
 
-        return True
+        return True, msg
 
     def add_level2(self, myl2record, addThumbnail=False, projection=ccrs.Mercator(),
                    wms_layer=None, wms_style=None, wms_zoom_level=0, add_coastlines=True,

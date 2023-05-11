@@ -267,7 +267,8 @@ def main():
         else:
             if tflg:
                 try:
-                    mysolr.index_record(input_record=mydoc.tosolr(), addThumbnail=tflg,
+                    status, msg = mysolr.index_record(input_record=mydoc.tosolr(),
+                                        addThumbnail=tflg,
                                         wms_layer=wms_layer, wms_style=wms_style,
                                         wms_zoom_level=wms_zoom_level,
                                         add_coastlines=wms_coastlines, projection=mapprojection,
@@ -277,7 +278,8 @@ def main():
                     logger.warning('Something failed during indexing %s', e)
             else:
                 try:
-                    mysolr.index_record(input_record=mydoc.tosolr(), addThumbnail=tflg)
+                    status, msg = mysolr.index_record(input_record=mydoc.tosolr(),
+                                                      addThumbnail=tflg)
                 except Exception as e:
                     logger.warning('Something failed during indexing %s', e)
         if not args.level2:
