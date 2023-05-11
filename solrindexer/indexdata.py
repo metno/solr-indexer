@@ -1401,7 +1401,7 @@ class IndexMMD:
 
         return solr_id
 
-    def delete(self, id):
+    def delete(self, id, commit=False):
         solr_id = self.to_solr_id(id)
         try:
             self.solrc.delete(id=solr_id)
@@ -1410,7 +1410,9 @@ class IndexMMD:
             return False, e
 
         logger.info("Sucessfully deleted document with id: %s", id)
-
+        if commit:
+            logger.info("Commiting deletion")
+            self.commit()
         return True, "Document %s sucessfully deleted" % id
 
     def get_dataset(self, id):
@@ -1436,16 +1438,23 @@ class IndexMMD:
         else:
             return res.json()
 
-    def update_parent(self, parentid):
+    def update_parent(self, parentid, fail_on_missing=False):
         """Search index for parent and update parent flag."""
 
         myparent = self.get_dataset(parentid)
 
+        logger.info(myparent)
         if myparent is None:
             return False, "No parent found in index."
         else:
             if myparent['doc'] is None:
-                return False, "No parent found in index."
+                if fail_on_missing:
+                    return False, "No parent found in index. Index parent first"
+                else:
+                    logger.warn("Parent %s is not in the index. Make sure to index parent first.",
+                                parentid)
+                    return True, "WARNING!!! Parent is not in the index. \
+                Make sure to index parent and then the children for relation to be updated"
             logger.info("Got parent: %s", myparent['doc']['metadata_identifier'])
             if bool(myparent['doc']['isParent']):
                 logger.info("Dataset already marked as parent.")
