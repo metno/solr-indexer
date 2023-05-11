@@ -48,12 +48,6 @@ def parse_arguments():
                         help='Create and index thumbnail, do not update the main content.')
     parser.add_argument('-n', '--no_thumbnail', action='store_true',
                         help='Do not index thumbnails (done automatically if WMS available).')
-    # parser.add_argument('-f','--feature_type', action='store_true',
-    #                    help='Extract featureType during ingestion (to be done automatically).')
-    parser.add_argument('-r', '--remove',
-                        help='Remove the dataset with the specified identifier'
-                        '(to be replaced by searchindex).')
-    parser.add_argument('-2', '--level2', action='store_true', help='Operate on child core.')
 
     # Thumbnail parameters
     parser.add_argument('-m', '--map_projection', required=False,
