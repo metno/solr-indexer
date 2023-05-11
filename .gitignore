@@ -1,3 +1,4 @@
 build/
 solrindexer.egg-info/
 *.log
+*__pycache__*
