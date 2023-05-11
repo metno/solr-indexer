@@ -1403,12 +1403,15 @@ class IndexMMD:
 
     def delete(self, id, commit=False):
         solr_id = self.to_solr_id(id)
+        doc_exsists = self.get_dataset(solr_id)
+        if(doc_exsists["doc"] is None ):
+            return False, "Document %s not found in index." %id
         try:
-            self.solrc.delete(id=solr_id)
+           result = self.solrc.delete(id=solr_id)
         except Exception as e:
             logger.error("Something went wrong deleting doucument with id: %s", id)
             return False, e
-
+        print("Delete result object: %s" % result)
         logger.info("Sucessfully deleted document with id: %s", id)
         if commit:
             logger.info("Commiting deletion")
