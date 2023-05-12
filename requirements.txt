@@ -11,3 +11,5 @@ requests
 xmltodict
 requests
 metvocab @ git+https://github.com/metno/met-vocab-tools@v1.1
+pytest
+pytest-cov
