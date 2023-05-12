@@ -84,7 +84,7 @@ class MMD4SolR:
     """ Read and check MMD files, convert to dictionary """
 
     def __init__(self, filename, file=None):
-        logger.info('Creating an instance of IndexMMD')
+        logger.info('Creating an instance of MMD4SolR')
         """ set variables in class """
         if file is None:
             self.filename = filename
@@ -151,10 +151,14 @@ class MMD4SolR:
         #    https://github.com/steingod/scivocab/tree/master/metno
         #  Is fetched from vocab.met.no via https://github.com/metno/met-vocab-tools
 
-        mmd_iso_topic_category = MMDGroup('mmd', 'https://vocab.met.no/mmd/ISO_Topic_Category')
-        mmd_collection = MMDGroup('mmd', 'https://vocab.met.no/mmd/Collection_Keywords')
-        mmd_dataset_status = MMDGroup('mmd', 'https://vocab.met.no/mmd/Dataset_Production_Status')
-        mmd_quality_control = MMDGroup('mmd', 'https://vocab.met.no/mmd/Quality_Control')
+        mmd_iso_topic_category = MMDGroup(
+            'mmd', 'https://vocab.met.no/mmd/ISO_Topic_Category')
+        mmd_collection = MMDGroup(
+            'mmd', 'https://vocab.met.no/mmd/Collection_Keywords')
+        mmd_dataset_status = MMDGroup(
+            'mmd', 'https://vocab.met.no/mmd/Dataset_Production_Status')
+        mmd_quality_control = MMDGroup(
+            'mmd', 'https://vocab.met.no/mmd/Quality_Control')
         mmd_controlled_elements = {
             'mmd:iso_topic_category': mmd_iso_topic_category,
             'mmd:collection': mmd_collection,
@@ -162,7 +166,8 @@ class MMD4SolR:
             'mmd:quality_control': mmd_quality_control,
         }
         for element in mmd_controlled_elements.keys():
-            logger.info('Checking %s for compliance with controlled vocabulary', element)
+            logger.info(
+                'Checking %s for compliance with controlled vocabulary', element)
             if element in mmd:
                 if isinstance(mmd[element], list):
                     for elem in mmd[element]:
@@ -178,7 +183,8 @@ class MMD4SolR:
 
                 if myvalue is not None:
                     if mmd_controlled_elements[element].search(myvalue) is False:
-                        logger.warning('%s contains non valid content: %s', element, myvalue)
+                        logger.warning(
+                            '%s contains non valid content: %s', element, myvalue)
 
         """
         Check that keywords also contain GCMD keywords
@@ -256,7 +262,8 @@ class MMD4SolR:
                             mmd['mmd:temporal_extent'][mykey] = \
                                 mydate.strftime('%Y-%m-%dT%H:%M:%SZ')
                         except Exception as e:
-                            logger.error('Date format could not be parsed: %s', e)
+                            logger.error(
+                                'Date format could not be parsed: %s', e)
 
     def tosolr(self):
         """
@@ -315,9 +322,11 @@ class MMD4SolR:
             # FIXME check if this works correctly
             # Only one last_metadata_update element
             if isinstance(last_metadata_update['mmd:update'], dict):
-                lmu_datetime.append(str(last_metadata_update['mmd:update']['mmd:datetime']))
+                lmu_datetime.append(
+                    str(last_metadata_update['mmd:update']['mmd:datetime']))
                 lmu_type.append(last_metadata_update['mmd:update']['mmd:type'])
-                lmu_note.append(last_metadata_update['mmd:update'].get('mmd:note', ''))
+                lmu_note.append(
+                    last_metadata_update['mmd:update'].get('mmd:note', ''))
             # Multiple last_metadata_update elements
             else:
                 for i, e in enumerate(last_metadata_update['mmd:update']):
@@ -407,8 +416,10 @@ class MMD4SolR:
                             mintime = mytime
                         if mytime > maxtime:
                             maxtime = mytime
-                mydict['temporal_extent_start_date'] = mintime.strftime('%Y-%m-%dT%H:%M:%SZ')
-                mydict['temporal_extent_end_date'] = maxtime.strftime('%Y-%m-%dT%H:%M:%SZ')
+                mydict['temporal_extent_start_date'] = mintime.strftime(
+                    '%Y-%m-%dT%H:%M:%SZ')
+                mydict['temporal_extent_end_date'] = maxtime.strftime(
+                    '%Y-%m-%dT%H:%M:%SZ')
             else:
                 mydict["temporal_extent_start_date"] = str(
                     mmd['mmd:temporal_extent']['mmd:start_date'])
@@ -453,7 +464,8 @@ class MMD4SolR:
                             mydict['polygon_rpt'] = point.wkt
                             logger.info(mapping(point))
                     else:
-                        bbox = box(min(lonvals), min(latvals), max(lonvals), max(latvals))
+                        bbox = box(min(lonvals), min(latvals),
+                                   max(lonvals), max(latvals))
                         logger.info("First conditition")
                         logger.info(bbox)
                         polygon = bbox.wkt
@@ -467,23 +479,30 @@ class MMD4SolR:
             else:
                 for item in mmd_geographic_extent['mmd:rectangle'].values:
                     if item is None:
-                        logger.warning('Missing geographical element, will not process the file.')
+                        logger.warning(
+                            'Missing geographical element, will not process the file.')
                         mydict['metadata_status'] = 'Inactive'
                         raise Warning('Missing spatial bounds')
 
-                north = float(mmd_geographic_extent['mmd:rectangle']['mmd:north'])
-                south = float(mmd_geographic_extent['mmd:rectangle']['mmd:south'])
-                east = float(mmd_geographic_extent['mmd:rectangle']['mmd:east'])
-                west = float(mmd_geographic_extent['mmd:rectangle']['mmd:west'])
+                north = float(
+                    mmd_geographic_extent['mmd:rectangle']['mmd:north'])
+                south = float(
+                    mmd_geographic_extent['mmd:rectangle']['mmd:south'])
+                east = float(
+                    mmd_geographic_extent['mmd:rectangle']['mmd:east'])
+                west = float(
+                    mmd_geographic_extent['mmd:rectangle']['mmd:west'])
                 mydict['geographic_extent_rectangle_north'] = north
                 mydict['geographic_extent_rectangle_south'] = south
                 mydict['geographic_extent_rectangle_east'] = east
                 mydict['geographic_extent_rectangle_west'] = west
-                srsname = mmd_geographic_extent['mmd:rectangle'].get('@srsName', None)
+                srsname = mmd_geographic_extent['mmd:rectangle'].get(
+                    '@srsName', None)
                 if srsname is not None:
                     mydict['geographic_extent_rectangle_srsName'] = srsname
 
-                mydict['bbox'] = "ENVELOPE("+west + "," + east + "," + north + "," + south + ")"
+                mydict['bbox'] = "ENVELOPE("+west + "," + \
+                    east + "," + north + "," + south + ")"
 
                 logger.info("Second conditition")
                 #  Check if we have a point or a boundingbox
@@ -504,7 +523,8 @@ class MMD4SolR:
             if isinstance(mmd['mmd:dataset_production_status'], dict):
                 mydict['dataset_production_status'] = mmd['mmd:dataset_production_status']['#text']
             else:
-                mydict['dataset_production_status'] = str(mmd['mmd:dataset_production_status'])
+                mydict['dataset_production_status'] = str(
+                    mmd['mmd:dataset_production_status'])
 
         logger.info("Dataset language")
         if 'mmd:dataset_language' in mmd:
@@ -523,21 +543,26 @@ class MMD4SolR:
         if use_constraint is not None:
             # Need both identifier and resource for use constraint
             if 'mmd:identifier' in use_constraint and 'mmd:resource' in use_constraint:
-                mydict['use_constraint_identifier'] = str(use_constraint['mmd:identifier'])
-                mydict['use_constraint_resource'] = str(use_constraint['mmd:resource'])
+                mydict['use_constraint_identifier'] = str(
+                    use_constraint['mmd:identifier'])
+                mydict['use_constraint_resource'] = str(
+                    use_constraint['mmd:resource'])
             else:
-                logger.warning('Both license identifier and resource needed to index properly')
+                logger.warning(
+                    'Both license identifier and resource needed to index properly')
                 mydict['use_constraint_identifier'] = "Not provided"
                 mydict['use_constraint_resource'] = "Not provided"
             if 'mmd:license_text' in mmd['mmd:use_constraint']:
-                mydict['use_constraint_license_text'] = str(use_constraint['mmd:license_text'])
+                mydict['use_constraint_license_text'] = str(
+                    use_constraint['mmd:license_text'])
 
         logger.info("Personnel")
         if 'mmd:personnel' in self.mydoc['mmd:mmd']:
             personnel_elements = self.mydoc['mmd:mmd']['mmd:personnel']
 
             if isinstance(personnel_elements, dict):  # Only one element
-                personnel_elements = [personnel_elements]  # make it an iterable list
+                # make it an iterable list
+                personnel_elements = [personnel_elements]
 
             # Facet elements
             mydict['personnel_role'] = []
@@ -545,13 +570,20 @@ class MMD4SolR:
             mydict['personnel_organisation'] = []
             # Fix role based lists
             for role in personnel_role_LUT:
-                mydict['personnel_{}_role'.format(personnel_role_LUT[role])] = []
-                mydict['personnel_{}_name'.format(personnel_role_LUT[role])] = []
-                mydict['personnel_{}_email'.format(personnel_role_LUT[role])] = []
-                mydict['personnel_{}_phone'.format(personnel_role_LUT[role])] = []
-                mydict['personnel_{}_fax'.format(personnel_role_LUT[role])] = []
-                mydict['personnel_{}_organisation'.format(personnel_role_LUT[role])] = []
-                mydict['personnel_{}_address'.format(personnel_role_LUT[role])] = []
+                mydict['personnel_{}_role'.format(
+                    personnel_role_LUT[role])] = []
+                mydict['personnel_{}_name'.format(
+                    personnel_role_LUT[role])] = []
+                mydict['personnel_{}_email'.format(
+                    personnel_role_LUT[role])] = []
+                mydict['personnel_{}_phone'.format(
+                    personnel_role_LUT[role])] = []
+                mydict['personnel_{}_fax'.format(
+                    personnel_role_LUT[role])] = []
+                mydict['personnel_{}_organisation'.format(
+                    personnel_role_LUT[role])] = []
+                mydict['personnel_{}_address'.format(
+                    personnel_role_LUT[role])] = []
                 # don't think this is needed Øystein Godøy, METNO/FOU, 2021-09-08
                 # mydict['personnel_{}_address_address'.format(personnel_role_LUT[role])] = []
                 mydict['personnel_{}_address_city'
@@ -601,7 +633,8 @@ class MMD4SolR:
                             mydict['personnel_{}_{}'.
                                    format(personnel_role_LUT[role], entry_type)] \
                                 .append(personnel[entry])
-                            mydict['personnel_organisation'].append(personnel[entry])
+                            mydict['personnel_organisation'].append(
+                                personnel[entry])
                         else:
                             mydict['personnel_{}_{}'.
                                    format(personnel_role_LUT[role], entry_type)] \
@@ -647,13 +680,15 @@ class MMD4SolR:
                 data_access_elements = [data_access_elements]
             # iterate over all data_center elements
             for data_access in data_access_elements:
-                data_access_type = data_access['mmd:type'].replace(" ", "_").lower()
+                data_access_type = data_access['mmd:type'].replace(
+                    " ", "_").lower()
                 mydict[f'data_access_url_{data_access_type}'] = data_access['mmd:resource']
 
                 if 'mmd:wms_layers' in data_access and data_access_type == 'ogc_wms':
                     data_access_wms_layers_string = 'data_access_wms_layers'
                     # Map directly to list
-                    data_access_wms_layers = list(data_access['mmd:wms_layers'])
+                    data_access_wms_layers = list(
+                        data_access['mmd:wms_layers'])
                     # old version was [i for i in data_access_wms_layers.values()][0]
                     mydict[data_access_wms_layers_string] = data_access_wms_layers[0]
 
@@ -675,14 +710,16 @@ class MMD4SolR:
                                 mydict['related_dataset_id'] = mydict['related_dataset']
                                 for e in IDREPLS:
                                     mydict['related_dataset_id'] = \
-                                        mydict['related_dataset_id'].replace(e, '-')
+                                        mydict['related_dataset_id'].replace(
+                                            e, '-')
             else:
                 # Not sure if this is used??
                 if '#text' in dict(mmd['mmd:related_dataset']):
                     mydict['related_dataset'] = mmd['mmd:related_dataset']['#text']
                     mydict['related_dataset_id'] = mydict['related_dataset']
                     for e in IDREPLS:
-                        mydict['related_dataset_id'] = mydict['related_dataset_id'].replace(e, '-')
+                        mydict['related_dataset_id'] = mydict['related_dataset_id'].replace(
+                            e, '-')
 
         logger.info("Storage information")
         storage_information = mmd.get("mmd:storage_information", None)
@@ -695,21 +732,28 @@ class MMD4SolR:
             if file_name is not None:
                 mydict['storage_information_file_name'] = str(file_name)
             if file_location is not None:
-                mydict['storage_information_file_location'] = str(file_location)
+                mydict['storage_information_file_location'] = str(
+                    file_location)
             if file_format is not None:
                 mydict['storage_information_file_format'] = str(file_format)
             if file_size is not None:
                 if isinstance(file_size, dict):
-                    mydict['storage_information_file_size'] = str(file_size['#text'])
-                    mydict['storage_information_file_size_unit'] = str(file_size['@unit'])
+                    mydict['storage_information_file_size'] = str(
+                        file_size['#text'])
+                    mydict['storage_information_file_size_unit'] = str(
+                        file_size['@unit'])
                 else:
-                    logger.warning("Filesize unit not specified, skipping field")
+                    logger.warning(
+                        "Filesize unit not specified, skipping field")
             if checksum is not None:
                 if isinstance(checksum, dict):
-                    mydict['storage_information_file_checksum'] = str(checksum['#text'])
-                    mydict['storage_information_file_checksum_type'] = str(checksum['@type'])
+                    mydict['storage_information_file_checksum'] = str(
+                        checksum['#text'])
+                    mydict['storage_information_file_checksum_type'] = str(
+                        checksum['@type'])
                 else:
-                    logger.warning("Checksum type is not specified, skipping field")
+                    logger.warning(
+                        "Checksum type is not specified, skipping field")
 
         logger.info("Related information")
         if 'mmd:related_information' in mmd:
@@ -739,7 +783,8 @@ class MMD4SolR:
                 for iso_topic_category in mmd['mmd:iso_topic_category']:
                     mydict['iso_topic_category'].append(iso_topic_category)
             else:
-                mydict['iso_topic_category'].append(mmd['mmd:iso_topic_category'])
+                mydict['iso_topic_category'].append(
+                    mmd['mmd:iso_topic_category'])
 
         logger.info("Keywords")
         # Added double indexing of GCMD keywords. keywords_gcmd (and keywords_wigos) are for
@@ -755,8 +800,10 @@ class MMD4SolR:
                 vocab = mmd['mmd:keywords']['@vocabulary']
                 if isinstance(mmd['mmd:keywords']['mmd:keyword'], str):
                     if vocab == "GCMDSK":
-                        mydict['keywords_gcmd'].append(mmd['mmd:keywords']['mmd:keyword'])
-                    mydict['keywords_keyword'].append(mmd['mmd:keywords']['mmd:keyword'])
+                        mydict['keywords_gcmd'].append(
+                            mmd['mmd:keywords']['mmd:keyword'])
+                    mydict['keywords_keyword'].append(
+                        mmd['mmd:keywords']['mmd:keyword'])
                     mydict['keywords_vocabulary'].append(vocab)
                 else:
                     for elem in mmd['mmd:keywords']['mmd:keyword']:
@@ -776,19 +823,26 @@ class MMD4SolR:
                             for keyword in elem['mmd:keyword']:
                                 if elem['@vocabulary'] == "GCMDSK":
                                     mydict['keywords_gcmd'].append(keyword)
-                                mydict['keywords_vocabulary'].append(elem['@vocabulary'])
+                                mydict['keywords_vocabulary'].append(
+                                    elem['@vocabulary'])
                                 mydict['keywords_keyword'].append(keyword)
                         else:
                             if mmd['mmd:keywords'][i]['@vocabulary'] == "GCMDSK":
-                                mydict['keywords_gcmd'].append(elem['mmd:keyword'])
-                            mydict['keywords_vocabulary'].append(elem['@vocabulary'])
-                            mydict['keywords_keyword'].append(elem['mmd:keyword'])
+                                mydict['keywords_gcmd'].append(
+                                    elem['mmd:keyword'])
+                            mydict['keywords_vocabulary'].append(
+                                elem['@vocabulary'])
+                            mydict['keywords_keyword'].append(
+                                elem['mmd:keyword'])
 
             else:
                 if mmd['mmd:keywords']['@vocabulary'] == "GCMDSK":
-                    mydict['keywords_gcmd'].append(mmd['mmd:keywords']['mmd:keyword'])
-                mydict['keywords_vocabulary'].append(mmd['mmd:keywords']['@vocabulary'])
-                mydict['keywords_keyword'].append(mmd['mmd:keywords']['mmd:keyword'])
+                    mydict['keywords_gcmd'].append(
+                        mmd['mmd:keywords']['mmd:keyword'])
+                mydict['keywords_vocabulary'].append(
+                    mmd['mmd:keywords']['@vocabulary'])
+                mydict['keywords_keyword'].append(
+                    mmd['mmd:keywords']['mmd:keyword'])
 
         logger.info("Project")
         mydict['project_short_name'] = []
@@ -839,7 +893,8 @@ class MMD4SolR:
                                 mydict[element_name].append(val)
                     # sub element is not ordered dicts
                     else:
-                        element_name = 'platform_{}'.format(platform_key.split(':')[-1])
+                        element_name = 'platform_{}'.format(
+                            platform_key.split(':')[-1])
                         # create key in mydict. Repetition of above. Should be simplified.
                         if element_name not in mydict.keys():
                             mydict[element_name] = []
@@ -977,7 +1032,8 @@ class IndexMMD:
             input_record.update({'dataset_type': 'Level-2'})
             input_record.update({'isChild': True})
         else:
-            logger.error('Invalid level given: {}. Hence terminating'.format(level))
+            logger.error(
+                'Invalid level given: {}. Hence terminating'.format(level))
 
         if input_record['metadata_status'] == 'Inactive':
             msg = 'Skipping record'
@@ -988,11 +1044,13 @@ class IndexMMD:
             # Thumbnail of timeseries to be added
             # Or better do this as part of get_feature_type?
             try:
-                myfeature = self.get_feature_type(input_record['data_access_url_opendap'])
+                myfeature = self.get_feature_type(
+                    input_record['data_access_url_opendap'])
             except AttributeError:
                 logger.warn("No featureType attribute found.")
             except Exception as e:
-                logger.error("Something failed while retrieving feature type: %s", str(e))
+                logger.error(
+                    "Something failed while retrieving feature type: %s", str(e))
             if myfeature:
                 logger.info('feature_type found: %s', myfeature)
                 input_record.update({'feature_type': myfeature})
@@ -1013,7 +1071,8 @@ class IndexMMD:
             thumbnail_data = self.add_thumbnail(url=getCapUrl)
 
             if not thumbnail_data:
-                logger.warning('Could not properly parse WMS GetCapabilities document')
+                logger.warning(
+                    'Could not properly parse WMS GetCapabilities document')
                 # If WMS is not available, remove this data_access element from the XML that
                 # is indexed
                 del input_record['data_access_url_ogc_wms']
@@ -1060,9 +1119,11 @@ class IndexMMD:
             # Thumbnail of timeseries to be added
             # Or better do this as part of get_feature_type?
             try:
-                myfeature = self.get_feature_type(myl2record['data_access_url_opendap'])
+                myfeature = self.get_feature_type(
+                    myl2record['data_access_url_opendap'])
             except Exception as e:
-                logger.error("Something failed while retrieving feature type: %s", str(e))
+                logger.error(
+                    "Something failed while retrieving feature type: %s", str(e))
 
             if myfeature:
                 logger.info('feature_type found: %s', myfeature)
@@ -1086,7 +1147,8 @@ class IndexMMD:
                 try:
                     thumbnail_data = self.add_thumbnail(url=getCapUrl)
                 except Exception as e:
-                    logger.error("Something failed in adding thumbnail: %s", str(e))
+                    logger.error(
+                        "Something failed in adding thumbnail: %s", str(e))
                     warnings.warning("Couldn't add thumbnail.")
 
         if addThumbnail and thumbnail_data:
@@ -1099,9 +1161,11 @@ class IndexMMD:
         for e in IDREPLS:
             myparid = myparid.replace(e, '-')
         try:
-            myresults = self.solrc.search('id:' + myparid, **{'wt': 'python', 'rows': 100})
+            myresults = self.solrc.search(
+                'id:' + myparid, **{'wt': 'python', 'rows': 100})
         except Exception as e:
-            logger.error("Something failed in searching for parent dataset, " + str(e))
+            logger.error(
+                "Something failed in searching for parent dataset, " + str(e))
 
         # Check that only one record is returned
         if len(myresults) != 1:
@@ -1156,7 +1220,8 @@ class IndexMMD:
         try:
             self.solrc.add(mmd_record1)
         except Exception as e:
-            raise Exception("Something failed in SolR update level 1 for level 2", str(e))
+            raise Exception(
+                "Something failed in SolR update level 1 for level 2", str(e))
         logger.info("Level 1 record successfully updated.")
 
     def add_thumbnail(self, url, thumbnail_type='wms'):
@@ -1210,7 +1275,8 @@ class IndexMMD:
 
         if wms_layer not in available_layers:
             wms_layer = available_layers[0]
-            logger.info('Creating WMS thumbnail for layer: {}'.format(wms_layer))
+            logger.info(
+                'Creating WMS thumbnail for layer: {}'.format(wms_layer))
 
         # Checking styles
         available_styles = list(wms.contents[wms_layer].styles.keys())
@@ -1268,7 +1334,8 @@ class IndexMMD:
         fig.set_dpi(100)
         # ax.background_patch.set_alpha(1)
 
-        ax.add_wms(wms, wms_layer, wms_kwargs={'transparent': False, 'styles': wms_style})
+        ax.add_wms(wms, wms_layer, wms_kwargs={
+                   'transparent': False, 'styles': wms_style})
 
         if add_coastlines:
             ax.coastlines(resolution="50m", linewidth=0.5)
@@ -1319,7 +1386,8 @@ class IndexMMD:
 
         if featureType not in ['point', 'timeSeries', 'trajectory', 'profile', 'timeSeriesProfile',
                                'trajectoryProfile']:
-            logger.warning("The featureType found - %s - is not valid", featureType)
+            logger.warning(
+                "The featureType found - %s - is not valid", featureType)
             logger.warning("Fixing this locally")
             if featureType.lower() == "timeseries":
                 featureType = 'timeSeries'
@@ -1368,7 +1436,8 @@ class IndexMMD:
     def search(self):
         """ Require Id as input """
         try:
-            results = pysolr.search('mmd_title:Sea Ice Extent', df='text_en', rows=100)
+            results = pysolr.search(
+                'mmd_title:Sea Ice Extent', df='text_en', rows=100)
         except Exception as e:
             logger.error("Something failed during search: %s", str(e))
 
@@ -1404,14 +1473,14 @@ class IndexMMD:
     def delete(self, id, commit=False):
         solr_id = self.to_solr_id(id)
         doc_exsists = self.get_dataset(solr_id)
-        if(doc_exsists["doc"] is None ):
-            return False, "Document %s not found in index." %id
+        if (doc_exsists["doc"] is None):
+            return False, "Document %s not found in index." % id
         try:
-           result = self.solrc.delete(id=solr_id)
+            self.solrc.delete(id=solr_id)
         except Exception as e:
-            logger.error("Something went wrong deleting doucument with id: %s", id)
+            logger.error(
+                "Something went wrong deleting doucument with id: %s", id)
             return False, e
-        print("Delete result object: %s" % result)
         logger.info("Sucessfully deleted document with id: %s", id)
         if commit:
             logger.info("Commiting deletion")
@@ -1423,9 +1492,11 @@ class IndexMMD:
         Use real-time get to fetch latest dataset
         based on id.
         """
+        print(self.authentication)
         res = None
         try:
-            res = requests.get(self.solr_url + '/get?id=' + id, auth=self.authentication)
+            res = requests.get(self.solr_url + '/get?id=' +
+                               id, auth=self.authentication)
             res.raise_for_status()
         except requests.exceptions.HTTPError as errh:
             logger.error("Http Error: %s", errh)
@@ -1458,7 +1529,8 @@ class IndexMMD:
                                 parentid)
                     return True, "WARNING!!! Parent is not in the index. \
                 Make sure to index parent and then the children for relation to be updated"
-            logger.info("Got parent: %s", myparent['doc']['metadata_identifier'])
+            logger.info("Got parent: %s",
+                        myparent['doc']['metadata_identifier'])
             if bool(myparent['doc']['isParent']):
                 logger.info("Dataset already marked as parent.")
                 return True, "Already updated."
@@ -1467,7 +1539,8 @@ class IndexMMD:
                 try:
                     self.solrc.add([doc], fieldUpdates={'isParent': 'set'})
                 except Exception as e:
-                    logger.error("Atomic update failed on parent %s. Error is: ", (parentid, e))
+                    logger.error(
+                        "Atomic update failed on parent %s. Error is: ", (parentid, e))
                     return False, e
                 logger.info("Parent sucessfully updated in SolR.")
                 return True, "Parent updated."

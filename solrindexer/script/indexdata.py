@@ -88,8 +88,10 @@ def main():
     IDREPLS = [':', '/', '.']
 
     tflg = l2flg = nflg = False
+    """ FIXME
     if args.level2:
         l2flg = True
+    """
 
     # CONFIG START
     # Read config file, can be done as a CONFIG class, such that argparser can overwrite duplicates
@@ -135,7 +137,6 @@ def main():
     # CONFIG DONE
 
     # Find files to process
-    # FIXME remove l2 and thumbnail cores, reconsider deletion herein
     if args.input_file:
         myfiles = [args.input_file]
     elif args.list_file:
@@ -146,18 +147,6 @@ def main():
             return
         myfiles = f2.readlines()
         f2.close()
-    elif args.remove:
-        mysolr.delete_level1(args.remove)
-        return
-    elif args.remove and args.level2:
-        mysolr.delete_level2(args.remove)
-        return
-
-    # This was not implemented
-    # elif args.remove and args.thumbnail:
-    #    mysolr.delete_thumbnail(deleteid)
-    #    return
-
     elif args.directory:
         try:
             myfiles = os.listdir(args.directory)
@@ -167,6 +156,9 @@ def main():
 
     fileno = 0
     myfiles_pending = []
+    files2ingest = []
+    pendingfiles2ingest = []
+    parentids = set()
     for myfile in myfiles:
         myfile = myfile.strip()
         # Decide files to operate on

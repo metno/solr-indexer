@@ -7,3 +7,5 @@ PyYAML
 requests
 xmltodict
 requests
+gdal
+proj
