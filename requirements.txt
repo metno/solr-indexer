@@ -1,3 +1,6 @@
+GEOS
+Shapely
+pyshp
 cartopy
 lxml
 netCDF4
@@ -7,5 +10,3 @@ PyYAML
 requests
 xmltodict
 requests
-gdal
-proj
