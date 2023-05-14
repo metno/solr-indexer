@@ -28,7 +28,7 @@ import cartopy.crs as ccrs
 from time import sleep
 from requests.auth import HTTPBasicAuth
 from solrindexer.indexdata import MMD4SolR, IndexMMD
-from solrindexer.thumbnail import WMSThumbNail
+from solrindexer.thumb.thumbnail import WMSThumbNail
 
 logger = logging.getLogger(__name__)
 
