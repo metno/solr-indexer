@@ -60,7 +60,7 @@ class WMSThumbNail:
         self.thumbnail_type = thumbnail_type
         self.thumbnail_extent = thumbnail_extent
 
-    def create_wms_thumbnail(self, url):
+    def create_wms_thumbnail(self, url, id):
         """ Create a base64 encoded thumbnail by means of cartopy.
 
             Args:
@@ -69,7 +69,7 @@ class WMSThumbNail:
             Returns:
                 thumbnail_b64: base64 string representation of image
         """
-
+        logger.debug("Creating thumbnail for url: %s" % url)
         wms_layer = self.wms_layer
         wms_style = self.wms_style
         wms_zoom_level = self.wms_zoom_level
@@ -156,7 +156,7 @@ class WMSThumbNail:
         else:
             ax.set_extent(cartopy_extent_zoomed, ccrs.PlateCarree())
 
-        thumbnail_fname = 'thumbnail_{}.png'.format(self.id)
+        thumbnail_fname = 'thumbnail_{}.png'.format(id)
         fig.savefig(thumbnail_fname, format='png', bbox_inches='tight')
         plt.close('all')
 

@@ -199,7 +199,7 @@ def main():
 
         """Creating thumbnail generator class for use"""
         thumbClass = WMSThumbNail(projection=mapprojection,
-                                  wmstimeout=120, wms_layer=wms_layer, wms_style=wms_style,
+                                  wms_layer=wms_layer, wms_style=wms_style,
                                   wms_zoom_level=wms_zoom_level, add_coastlines=wms_coastlines,
                                   wms_timeout=cfg['wms-timeout'], thumbnail_extent=thumbnail_extent)
         # Index files

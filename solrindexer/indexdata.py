@@ -1213,10 +1213,10 @@ class IndexMMD:
             Returns:
                 thumbnail: base64 string representation of image
         """
-        logger.info("adding thumbnail for: ", url)
+        logger.info("adding thumbnail for: %s" % url)
         if thumbnail_type == 'wms':
             try:
-                thumbnail = self.thumbClass.create_wms_thumbnail(url)
+                thumbnail = self.thumbClass.create_wms_thumbnail(url, self.id)
                 return thumbnail
             except Exception as e:
                 logger.error("Thumbnail creation from OGC WMS failed: %s", e)
