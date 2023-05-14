@@ -35,7 +35,6 @@ UPDATES:
         Refactoring
 """
 
-import os
 import re
 import math
 import base64
@@ -47,13 +46,11 @@ import xmltodict
 import requests
 import dateutil.parser
 import lxml.etree as ET
-import cartopy.crs as ccrs
-import matplotlib.pyplot as plt
-import shapely.geometry as shpgeo
+
 
 from metvocab.mmdgroup import MMDGroup
-from owslib.wms import WebMapService
 from shapely.geometry import box, mapping
+import shapely.geometry as shpgeo
 
 
 logger = logging.getLogger(__name__)
@@ -984,6 +981,7 @@ class IndexMMD:
         self.projection = None
         self.thumbnail_type = None
         self.thumbnail_extent = None
+        self.thumbClass = None
 
         # Solr authentication
         self.authentication = authentication
@@ -1004,9 +1002,7 @@ class IndexMMD:
     def commit(self):
         self.solrc.commit()
 
-    def index_record(self, input_record, addThumbnail, level=None, wms_layer=None, wms_style=None,
-                     wms_zoom_level=0, add_coastlines=True, projection=ccrs.PlateCarree(),
-                     wms_timeout=120, thumbnail_extent=None):
+    def index_record(self, input_record, addThumbnail, level=None, thumbClass=None):
         """ Add thumbnail to SolR
             Args:
                 input_record() : input MMD file to be indexed in SolR
@@ -1025,6 +1021,7 @@ class IndexMMD:
             Returns:
                 bool
         """
+        self.thumbClass = thumbClass
         if level == 1 or level is None:
             input_record.update({'dataset_type': 'Level-1'})
             # input_record.update({'isParent': 'false'})
@@ -1061,13 +1058,6 @@ class IndexMMD:
             getCapUrl = input_record['data_access_url_ogc_wms']
             if not myfeature:
                 self.thumbnail_type = 'wms'
-            self.wms_layer = wms_layer
-            self.wms_style = wms_style
-            self.wms_zoom_level = wms_zoom_level
-            self.add_coastlines = add_coastlines
-            self.projection = projection
-            self.wms_timeout = wms_timeout
-            self.thumbnail_extent = thumbnail_extent
             thumbnail_data = self.add_thumbnail(url=getCapUrl)
 
             if not thumbnail_data:
@@ -1095,9 +1085,8 @@ class IndexMMD:
 
         return True, msg
 
-    def add_level2(self, myl2record, addThumbnail=False, projection=ccrs.Mercator(),
-                   wms_layer=None, wms_style=None, wms_zoom_level=0, add_coastlines=True,
-                   wms_timeout=120, thumbnail_extent=None):
+    def add_level2(self, myl2record, addThumbnail=False, thumbClass=None):
+        self.thumbClass = thumbClass
         """ Add a level 2 dataset, i.e. update level 1 as well """
         mmd_record2 = list()
 
@@ -1135,13 +1124,6 @@ class IndexMMD:
             logger.info("Checking tumbnails...")
             if not myfeature:
                 self.thumbnail_type = 'wms'
-            self.wms_layer = wms_layer
-            self.wms_style = wms_style
-            self.wms_zoom_level = wms_zoom_level
-            self.add_coastlines = add_coastlines
-            self.projection = projection
-            self.wms_timeout = wms_timeout
-            self.thumbnail_extent = thumbnail_extent
             if 'data_access_url_ogc_wms' in myl2record.keys():
                 getCapUrl = myl2record['data_access_url_ogc_wms']
                 try:
@@ -1234,7 +1216,7 @@ class IndexMMD:
         logger.info("adding thumbnail for: ", url)
         if thumbnail_type == 'wms':
             try:
-                thumbnail = self.create_wms_thumbnail(url)
+                thumbnail = self.thumbClass.create_wms_thumbnail(url)
                 return thumbnail
             except Exception as e:
                 logger.error("Thumbnail creation from OGC WMS failed: %s", e)
@@ -1247,117 +1229,6 @@ class IndexMMD:
         else:
             logger.error('Invalid thumbnail type: {}'.format(thumbnail_type))
             return None
-
-    def create_wms_thumbnail(self, url):
-        """ Create a base64 encoded thumbnail by means of cartopy.
-
-            Args:
-                url: wms GetCapabilities document
-
-            Returns:
-                thumbnail_b64: base64 string representation of image
-        """
-
-        wms_layer = self.wms_layer
-        wms_style = self.wms_style
-        wms_zoom_level = self.wms_zoom_level
-        wms_timeout = self.wms_timeout
-        add_coastlines = self.add_coastlines
-        map_projection = self.projection
-        thumbnail_extent = self.thumbnail_extent
-
-        # map projection string to ccrs projection
-        if isinstance(map_projection, str):
-            map_projection = getattr(ccrs, map_projection)()
-
-        wms = WebMapService(url, timeout=wms_timeout)
-        available_layers = list(wms.contents.keys())
-
-        if wms_layer not in available_layers:
-            wms_layer = available_layers[0]
-            logger.info(
-                'Creating WMS thumbnail for layer: {}'.format(wms_layer))
-
-        # Checking styles
-        available_styles = list(wms.contents[wms_layer].styles.keys())
-
-        if available_styles:
-            if wms_style not in available_styles:
-                wms_style = [available_styles[0]]
-            else:
-                wms_style = None
-        else:
-            wms_style = None
-
-        if not thumbnail_extent:
-            wms_extent = wms.contents[available_layers[0]].boundingBoxWGS84
-            # Not accessed
-            # cartopy_extent = [wms_extent[0], wms_extent[2], wms_extent[1], wms_extent[3]]
-
-            cartopy_extent_zoomed = [wms_extent[0] - wms_zoom_level,
-                                     wms_extent[2] + wms_zoom_level,
-                                     wms_extent[1] - wms_zoom_level,
-                                     wms_extent[3] + wms_zoom_level]
-        else:
-            cartopy_extent_zoomed = thumbnail_extent
-
-        max_extent = [-180.0, 180.0, -90.0, 90.0]
-
-        for i, extent in enumerate(cartopy_extent_zoomed):
-            if i % 2 == 0:
-                if extent < max_extent[i]:
-                    cartopy_extent_zoomed[i] = max_extent[i]
-            else:
-                if extent > max_extent[i]:
-                    cartopy_extent_zoomed[i] = max_extent[i]
-
-        subplot_kw = dict(projection=map_projection)
-        logger.info(subplot_kw)
-
-        fig, ax = plt.subplots(subplot_kw=subplot_kw)
-
-        # land_mask = cartopy.feature.NaturalEarthFeature(category='physical',
-        #                                                scale='50m',
-        #                                                facecolor='#cccccc',
-        #                                                name='land')
-        # ax.add_feature(land_mask, zorder=0, edgecolor='#aaaaaa',
-        #        linewidth=0.5)
-
-        # transparent background
-        ax.spines['geo'].set_visible(False)
-        # ax.outline_patch.set_visible(False)
-        # ax.background_patch.set_visible(False)
-        fig.patch.set_alpha(0)
-        fig.set_alpha(0)
-        fig.set_figwidth(4.5)
-        fig.set_figheight(4.5)
-        fig.set_dpi(100)
-        # ax.background_patch.set_alpha(1)
-
-        ax.add_wms(wms, wms_layer, wms_kwargs={
-                   'transparent': False, 'styles': wms_style})
-
-        if add_coastlines:
-            ax.coastlines(resolution="50m", linewidth=0.5)
-        if map_projection == ccrs.PlateCarree():
-            ax.set_extent(cartopy_extent_zoomed)
-        else:
-            ax.set_extent(cartopy_extent_zoomed, ccrs.PlateCarree())
-
-        thumbnail_fname = 'thumbnail_{}.png'.format(self.id)
-        fig.savefig(thumbnail_fname, format='png', bbox_inches='tight')
-        plt.close('all')
-
-        with open(thumbnail_fname, 'rb') as infile:
-            data = infile.read()
-            encode_string = base64.b64encode(data)
-
-        thumbnail_b64 = b'data:image/png;base64,' +\
-                        encode_string.decode('utf-8')
-
-        # Remove thumbnail
-        os.remove(thumbnail_fname)
-        return thumbnail_b64
 
     def create_ts_thumbnail(self):
         """ Create a base64 encoded thumbnail """
@@ -1492,7 +1363,6 @@ class IndexMMD:
         Use real-time get to fetch latest dataset
         based on id.
         """
-        print(self.authentication)
         res = None
         try:
             res = requests.get(self.solr_url + '/get?id=' +
@@ -1517,7 +1387,6 @@ class IndexMMD:
 
         myparent = self.get_dataset(parentid)
 
-        logger.info(myparent)
         if myparent is None:
             return False, "No parent found in index."
         else:

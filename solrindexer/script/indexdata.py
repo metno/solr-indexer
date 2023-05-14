@@ -28,6 +28,7 @@ import cartopy.crs as ccrs
 from time import sleep
 from requests.auth import HTTPBasicAuth
 from solrindexer.indexdata import MMD4SolR, IndexMMD
+from solrindexer.thumbnail import WMSThumbNail
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,7 @@ def main():
         cfg = yaml.load(ymlfile, Loader=yaml.FullLoader)
 
     # Specify map projection
+    mapprojection = ccrs.PlateCarree()  # Fallback
     if args.map_projection:
         map_projection = args.map_projection
     else:
@@ -151,7 +153,8 @@ def main():
         try:
             myfiles = os.listdir(args.directory)
         except Exception as e:
-            logger.error("Something went wrong in decoding cmd arguments: %s", e)
+            logger.error(
+                "Something went wrong in decoding cmd arguments: %s", e)
             return 1
 
     fileno = 0
@@ -189,10 +192,16 @@ def main():
         else:
             wms_coastlines = True
         if args.thumbnail_extent:
-            thumbnail_extent = [int(i) for i in args.thumbnail_extent[0].split(' ')]
+            thumbnail_extent = [int(i)
+                                for i in args.thumbnail_extent[0].split(' ')]
         else:
             thumbnail_extent = None
 
+        """Creating thumbnail generator class for use"""
+        thumbClass = WMSThumbNail(projection=mapprojection,
+                                  wmstimeout=120, wms_layer=wms_layer, wms_style=wms_style,
+                                  wms_zoom_level=wms_zoom_level, add_coastlines=wms_coastlines,
+                                  wms_timeout=cfg['wms-timeout'], thumbnail_extent=thumbnail_extent)
         # Index files
         logger.info('Processing file: %d - %s', fileno, myfile)
 
@@ -225,7 +234,8 @@ def main():
                 'http://data.npolar.no/dataset/', '')
             newdoc['related_dataset'] = newdoc['related_dataset'].replace(
                 'http://api.npolar.no/dataset/', '')
-            newdoc['related_dataset'] = newdoc['related_dataset'].replace('.xml', '')
+            newdoc['related_dataset'] = newdoc['related_dataset'].replace(
+                '.xml', '')
             # Skip if DOI is used to refer to parent, that isn't consistent.
             if 'doi.org' in newdoc['related_dataset']:
                 continue
@@ -234,7 +244,8 @@ def main():
             myparent = newdoc['related_dataset']
             for e in IDREPLS:
                 myparent = myparent.replace(e, '-')
-            myresults = mysolr.solrc.search('id:' + myparent, **{'wt': 'python', 'rows': 100})
+            myresults = mysolr.solrc.search(
+                'id:' + myparent, **{'wt': 'python', 'rows': 100})
             if len(myresults) == 0:
                 logger.warning("No parent found. Staging for second run.")
                 myfiles_pending.append(myfile)
@@ -246,20 +257,14 @@ def main():
                 continue
         logger.info("Indexing dataset: %s", myfile)
         if l2flg:
-            mysolr.add_level2(mydoc.tosolr(), addThumbnail=tflg, projection=mapprojection,
-                              wmstimeout=120, wms_layer=wms_layer, wms_style=wms_style,
-                              wms_zoom_level=wms_zoom_level, add_coastlines=wms_coastlines,
-                              wms_timeout=cfg['wms-timeout'], thumbnail_extent=thumbnail_extent)
+            mysolr.add_level2(
+                mydoc.tosolr(), addThumbnail=tflg, thumbClass=thumbClass)
         else:
             if tflg:
                 try:
                     status, msg = mysolr.index_record(input_record=mydoc.tosolr(),
-                                        addThumbnail=tflg,
-                                        wms_layer=wms_layer, wms_style=wms_style,
-                                        wms_zoom_level=wms_zoom_level,
-                                        add_coastlines=wms_coastlines, projection=mapprojection,
-                                        wms_timeout=cfg['wms-timeout'],
-                                        thumbnail_extent=thumbnail_extent)
+                                                      addThumbnail=tflg,
+                                                      thumbClass=thumbClass)
                 except Exception as e:
                     logger.warning('Something failed during indexing %s', e)
             else:
@@ -302,10 +307,8 @@ def main():
             continue
         logger.info("Indexing dataset: %s", myfile)
         # Ingest at level 2
-        mysolr.add_level2(mydoc.tosolr(), addThumbnail=tflg, projection=mapprojection,
-                          wmstimeout=120, wms_layer=wms_layer, wms_style=wms_style,
-                          wms_zoom_level=wms_zoom_level, add_coastlines=wms_coastlines,
-                          wms_timeout=cfg['wms-timeout'], thumbnail_extent=thumbnail_extent)
+        mysolr.add_level2(mydoc.tosolr(), addThumbnail=tflg,
+                          thumbClass=thumbClass)
         tflg = False
 
     # Report status
