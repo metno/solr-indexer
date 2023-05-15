@@ -159,9 +159,6 @@ def main():
 
     fileno = 0
     myfiles_pending = []
-    files2ingest = []
-    pendingfiles2ingest = []
-    parentids = set()
     for myfile in myfiles:
         myfile = myfile.strip()
         # Decide files to operate on
@@ -201,7 +198,8 @@ def main():
         thumbClass = WMSThumbNail(projection=mapprojection,
                                   wms_layer=wms_layer, wms_style=wms_style,
                                   wms_zoom_level=wms_zoom_level, add_coastlines=wms_coastlines,
-                                  wms_timeout=cfg['wms-timeout'], thumbnail_extent=thumbnail_extent)
+                                  wms_timeout=cfg['wms-timeout'], thumbnail_extent=thumbnail_extent
+                                  )
         # Index files
         logger.info('Processing file: %d - %s', fileno, myfile)
 

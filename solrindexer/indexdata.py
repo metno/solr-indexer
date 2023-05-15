@@ -1365,8 +1365,8 @@ class IndexMMD:
         """
         res = None
         try:
-            res = requests.get(self.solr_url + '/get?id=' +
-                               id, auth=self.authentication)
+            res = requests.get(self.solr_url + '/get?id=' + id,
+                               auth=self.authentication)
             res.raise_for_status()
         except requests.exceptions.HTTPError as errh:
             logger.error("Http Error: %s", errh)
