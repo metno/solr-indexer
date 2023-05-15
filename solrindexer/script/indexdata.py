@@ -25,7 +25,6 @@ import logging
 import argparse
 import cartopy.crs as ccrs
 
-from time import sleep
 from requests.auth import HTTPBasicAuth
 from solrindexer.indexdata import MMD4SolR, IndexMMD
 from solrindexer.thumb.thumbnail import WMSThumbNail
@@ -77,6 +76,14 @@ def parse_arguments():
     return args
 
 
+def parse_cfg(cfgfile):
+    # Read config file
+    print("Reading", cfgfile)
+    with open(cfgfile, 'r') as ymlfile:
+        cfgstr = yaml.full_load(ymlfile)
+    return cfgstr
+
+
 def main():
 
     # Parse command line arguments
@@ -86,18 +93,15 @@ def main():
         logger.error("Something failed in parsing arguments: %s", str(e))
         return 1
 
-    IDREPLS = [':', '/', '.']
+    # Parse configuration file
+    cfg = parse_cfg(args.cfgfile)
 
-    tflg = l2flg = nflg = False
-    """ FIXME
-    if args.level2:
-        l2flg = True
-    """
+    tflg = False
 
     # CONFIG START
     # Read config file, can be done as a CONFIG class, such that argparser can overwrite duplicates
-    with open(args.cfgfile, 'r') as ymlfile:
-        cfg = yaml.load(ymlfile, Loader=yaml.FullLoader)
+    # with open(args.cfgfile, 'r') as ymlfile:
+    #   cfg = yaml.load(ymlfile, Loader=yaml.FullLoader)
 
     # Specify map projection
     mapprojection = ccrs.PlateCarree()  # Fallback
@@ -158,7 +162,10 @@ def main():
             return 1
 
     fileno = 0
-    myfiles_pending = []
+    # myfiles_pending = []
+    files2ingest = []
+    # pendingfiles2ingest = []
+    parentids = set()
     for myfile in myfiles:
         myfile = myfile.strip()
         # Decide files to operate on
@@ -206,24 +213,40 @@ def main():
         try:
             mydoc = MMD4SolR(myfile)
         except Exception as e:
-            logger.warning('Could not handle file: %s', e)
+            logger.warning('Could not handle file: %s. Error: %s', myfile, e)
             continue
-        mydoc.check_mmd()
+        logger.info('Checking MMD elements.')
+
+        try:
+            mydoc.check_mmd()
+        except Exception as e:
+            logger.error(
+                'File: %s is not compliant with MMD specification. Error: %s', myfile, e)
+            continue
         fileno += 1
 
-        """ Do not search for metadata_identifier, always used id...  """
+        """
+        Convert to the SolR format needed
+        """
+        logger.info('Converting to SolR format.')
         try:
             newdoc = mydoc.tosolr()
         except Exception as e:
-            logger.warning('Could not process the file: %s', e)
+            logger.warning(
+                'Could not process the file: %s. Error: %s', myfile, e)
             continue
-        if (newdoc['metadata_status'] == "Inactive"):
-            continue
+
         if (not args.no_thumbnail) and ('data_access_url_ogc_wms' in newdoc):
             tflg = True
-        # Do not directly index children unless they are requested to be children. Do always
-        # assume that the parent is included in the indexing process so postpone the actual
-        # indexing to allow the parent to be properly indexed in SolR.
+        else:
+            tflg = False
+
+        """
+        Checking datasets to see if they are children.
+        Datasets that are not children are all set to parents.
+        Make some corrections based on experience for harvested records...
+        """
+        logger.info('Parsing parent/child relations.')
         if 'related_dataset' in newdoc:
             # Special fix for NPI
             newdoc['related_dataset'] = newdoc['related_dataset'].replace(
@@ -237,82 +260,85 @@ def main():
             # Skip if DOI is used to refer to parent, that isn't consistent.
             if 'doi.org' in newdoc['related_dataset']:
                 continue
-            # Fix special characters that SolR doesn't like
-
-            myparent = newdoc['related_dataset']
-            for e in IDREPLS:
-                myparent = myparent.replace(e, '-')
-            myresults = mysolr.solrc.search(
-                'id:' + myparent, **{'wt': 'python', 'rows': 100})
-            if len(myresults) == 0:
-                logger.warning("No parent found. Staging for second run.")
-                myfiles_pending.append(myfile)
-                continue
-            elif not l2flg:
-                logger.warning('Parent found, but assumes parent will be reindexed, thus'
-                               'postponing indexing of children until SolR is updated.')
-                myfiles_pending.append(myfile)
-                continue
-        logger.info("Indexing dataset: %s", myfile)
-        if l2flg:
-            mysolr.add_level2(
-                mydoc.tosolr(), addThumbnail=tflg, thumbClass=thumbClass)
+            # Create solr id from identifier
+            myparentid = newdoc['related_dataset']
+            parentid_solr = mysolr.to_solr_id(myparentid)
+            # If related_dataset is present,
+            # set this dataset as a child using isChild and dataset_type
+            newdoc.update({"isChild": "true"})
+            newdoc.update({"dataset_type": "Level-2"})
+            parentids.add(parentid_solr)
         else:
-            if tflg:
-                try:
-                    status, msg = mysolr.index_record(input_record=mydoc.tosolr(),
-                                                      addThumbnail=tflg,
-                                                      thumbClass=thumbClass)
-                except Exception as e:
-                    logger.warning('Something failed during indexing %s', e)
+            newdoc.update({"isParent": "false"})
+            newdoc.update({"dataset_type": "Level-1"})
+
+        # Update list of files to process
+        files2ingest.append(newdoc)
+
+    # Check if parents are in the existing list
+    for id in parentids:
+        if not any(d['id'] == id for d in files2ingest):
+            # Check if already ingested and update if so
+            # FIXME, need more robustness...
+            logger.warning(
+                'This part of parent/child relations is yet not tested.')
+            continue
+            parent = mysolr.get_dataset(id)
+            if parent is not None:
+                parent = mysolr.update_parent(parent)
             else:
-                try:
-                    status, msg = mysolr.index_record(input_record=mydoc.tosolr(),
-                                                      addThumbnail=tflg)
-                except Exception as e:
-                    logger.warning('Something failed during indexing %s', e)
-        if not args.level2:
-            l2flg = False
-        tflg = False
+                logger.error("Parent with id %s not found in index." % id)
+                return 1
+        else:
+            # Assuming found in the current batch of files, then set to parent...
+            # Not sure if this is needed onwards, but discussion on how isParent works is needed
+            # Øystein Godøy, METNO/FOU, 2023-03-31
+            i = 0
+            for rec in files2ingest:
+                if rec['id'] == id:
+                    if 'isParent' in rec:
+                        if rec['isParent'] == 'true':
+                            if rec['dataset_type'] == 'Level-1':
+                                continue
+                            else:
+                                files2ingest[i].update(
+                                    {'dataset_type': 'Level-1'})
+                    else:
+                        files2ingest[i].update({'isParent': 'true'})
+                        files2ingest[i].update({'dataset_type': 'Level-1'})
+                i += 1
 
-    # Now process all the level 2 files that failed in the previous
-    # sequence. If the Level 1 dataset is not available, this will fail at
-    # level 2. Meaning, the section below only ingests at level 2.
-    fileno = 0
-    if len(myfiles_pending) > 0 and not args.always_commit:
-        logger.info('Processing files that were not possible to process in first take.'
-                    'Waiting 20 minutes to allow SolR to update recently indexed parent datasets.')
-        sleep(20*60)
-    for myfile in myfiles_pending:
-        logger.info('Processing L2 file: %d - %s', fileno, myfile)
+    if len(files2ingest) == 0:
+        logger.warn('No files to ingest.')
+        return 1
+
+    # Do the ingestion FIXME
+    # Check if thumbnail specification need to be changed
+    logger.info("Indexing datasets")
+    """
+    Split list into sublists before indexing (and retrieving WMS thumbnails etc)
+    """
+    mystep = 2500
+    myrecs = 0
+    for i in range(0, len(files2ingest), mystep):
+        mylist = files2ingest[i:i+mystep]
+        myrecs += len(mylist)
         try:
-            mydoc = MMD4SolR(myfile)
+            mysolr.index_record(records2ingest=mylist,
+                                addThumbnail=tflg, thumbClass=thumbClass)
         except Exception as e:
-            logger.warning('Could not handle file: %s', e)
-            continue
-        mydoc.check_mmd()
-        fileno += 1
-        # Do not search for metadata_identifier, always use id
-        # Check if this can be used????
-        newdoc = mydoc.tosolr()
+            logger.warning('Something failed during indexing %s', e)
+        logger.info('%d records out of %d have been ingested...',
+                    myrecs, len(files2ingest))
+        del mylist
 
-        if 'data_access_resource' in newdoc.keys():
-            for e in newdoc['data_access_resource']:
-                if (not nflg) and "OGC WMS" in (''.join(e)):
-                    tflg = True
-        # Skip file if not a level 2 file
-        if 'related_dataset' not in newdoc:
-            continue
-        logger.info("Indexing dataset: %s", myfile)
-        # Ingest at level 2
-        mysolr.add_level2(mydoc.tosolr(), addThumbnail=tflg,
-                          thumbClass=thumbClass)
-        tflg = False
-
+    if myrecs != len(files2ingest):
+        logger.warning('Inconsistent number of records processed.')
     # Report status
     logger.info("Number of files processed were: %d", len(myfiles))
 
-    # add a commit to solr at end of run
+    # Add a commit to solr at end of run
+    logger.info("Committing the input to SolR. This may take some time.")
     mysolr.commit()
 
 
