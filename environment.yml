@@ -19,8 +19,6 @@ dependencies:
   - shapely>=2.0
   - lxml
   - geojson
-  - h5netcdf
-  - h5py
   - lxml
   - validators
   - certifi
