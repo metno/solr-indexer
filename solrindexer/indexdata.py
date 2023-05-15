@@ -1022,6 +1022,8 @@ class IndexMMD:
                 bool
         """
         self.thumbClass = thumbClass
+        if thumbClass is None:
+            addThumbnail = False
         if level == 1 or level is None:
             input_record.update({'dataset_type': 'Level-1'})
             # input_record.update({'isParent': 'false'})
