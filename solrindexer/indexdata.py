@@ -1250,7 +1250,6 @@ class IndexMMD:
         try:
             featureType = ds.getncattr('featureType')
         except AttributeError:
-            logger.warn("No featureType attribute found.")
             raise
         except Exception as e:
             logger.error("Something failed extracting featureType: %s", str(e))
@@ -1389,8 +1388,8 @@ class IndexMMD:
                 else:
                     logger.warn("Parent %s is not in the index. Make sure to index parent first.",
                                 parentid)
-                    return True, "WARNING!!! Parent is not in the index. \
-                Make sure to index parent and then the children for relation to be updated"
+                    return True, "WARNING!!! Parent is not in the index."
+                "Make sure to index parent and then the children for relation to be updated"
             logger.info("Got parent: %s",
                         myparent['doc']['metadata_identifier'])
             if bool(myparent['doc']['isParent']):

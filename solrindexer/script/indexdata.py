@@ -87,7 +87,7 @@ def parse_cfg(cfgfile):
 
 
 def main():
-
+    logger.debug("-- DEBUG LogLevel --")
     # Parse command line arguments
     try:
         args = parse_arguments()
@@ -98,6 +98,7 @@ def main():
     # Parse configuration file
     cfg = parse_cfg(args.cfgfile)
 
+    # Thumbnail generation default false
     tflg = False
 
     # CONFIG START
@@ -263,13 +264,13 @@ def main():
             # Create solr id from identifier
             myparentid = newdoc['related_dataset']
             parentid_solr = to_solr_id(myparentid)
+            logger.debug("Got parent dataset id %s", parentid_solr)
             # If related_dataset is present,
             # set this dataset as a child using isChild and dataset_type
-            newdoc.update({"isChild": "true"})
+            newdoc.update({"isChild": True})
             newdoc.update({"dataset_type": "Level-2"})
             parentids.add(parentid_solr)
         else:
-            newdoc.update({"isParent": "false"})
             newdoc.update({"dataset_type": "Level-1"})
 
         # Update list of files to process
@@ -282,30 +283,34 @@ def main():
             # FIXME, need more robustness...
             logger.warning(
                 'This part of parent/child relations is yet not tested.')
-            continue
-            parent = mysolr.get_dataset(id)
-            if parent is not None:
-                parent = mysolr.update_parent(parent)
+
+            logger.info("Checking index for parent %s", id)
+            status, msg = mysolr.update_parent(id)
+
+            if status:
+                logger.info(msg)
             else:
-                logger.error("Parent with id %s not found in index." % id)
-                return 1
+                logger.error(msg)
+
         else:
             # Assuming found in the current batch of files, then set to parent...
             # Not sure if this is needed onwards, but discussion on how isParent works is needed
             # Øystein Godøy, METNO/FOU, 2023-03-31
             i = 0
+            logger.debug("Updating parent in batch.")
             for rec in files2ingest:
                 if rec['id'] == id:
                     if 'isParent' in rec:
-                        if rec['isParent'] == 'true':
+                        if rec['isParent']:
                             if rec['dataset_type'] == 'Level-1':
                                 continue
                             else:
                                 files2ingest[i].update(
                                     {'dataset_type': 'Level-1'})
-                    else:
-                        files2ingest[i].update({'isParent': 'true'})
-                        files2ingest[i].update({'dataset_type': 'Level-1'})
+                        else:
+                            files2ingest[i].update({'isParent': True})
+                            files2ingest[i].update({'dataset_type': 'Level-1'})
+                            logger.debug("Parent %s updated." % id)
                 i += 1
 
     if len(files2ingest) == 0:
