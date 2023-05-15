@@ -298,15 +298,13 @@ class MMD4SolR:
         logger.info("Identifier and metadata_identifier")
         if isinstance(mmd['mmd:metadata_identifier'], dict):
             myid = mmd['mmd:metadata_identifier']['#text']
-            for e in IDREPLS:
-                myid = myid.replace(e, '-')
+            myid = self.to_solr_id(myid)
             mydict['id'] = myid
             mydict['metadata_identifier'] = \
                 mmd['mmd:metadata_identifier']['#text']
         else:
             myid = mmd['mmd:metadata_identifier']
-            for e in IDREPLS:
-                myid = myid.replace(e, '-')
+            myid = self.to_solr_id(myid)
             mydict['id'] = myid
             mydict['metadata_identifier'] = mmd['mmd:metadata_identifier']
 
@@ -705,18 +703,16 @@ class MMD4SolR:
                             if '#text' in dict(e):
                                 mydict['related_dataset'] = e['#text']
                                 mydict['related_dataset_id'] = mydict['related_dataset']
-                                for e in IDREPLS:
-                                    mydict['related_dataset_id'] = \
-                                        mydict['related_dataset_id'].replace(
-                                            e, '-')
+                                myid = self.to_solr_id(
+                                    mydict['related_dataset_id'])
+                                mydict['related_dataset_id'] = myid
             else:
                 # Not sure if this is used??
                 if '#text' in dict(mmd['mmd:related_dataset']):
                     mydict['related_dataset'] = mmd['mmd:related_dataset']['#text']
                     mydict['related_dataset_id'] = mydict['related_dataset']
-                    for e in IDREPLS:
-                        mydict['related_dataset_id'] = mydict['related_dataset_id'].replace(
-                            e, '-')
+                    myid = self.to_solr_id(mydict['related_dataset_id'])
+                    mydict['related_dataset_id'] = myid
 
         logger.info("Storage information")
         storage_information = mmd.get("mmd:storage_information", None)
@@ -1394,7 +1390,8 @@ class IndexMMD:
         else:
             if myparent['doc'] is None:
                 if fail_on_missing:
-                    return False, "No parent found in index. Index parent first"
+                    return False, "Parent %s is not in the index. Make sure to index parent first.",
+                    parentid
                 else:
                     logger.warn("Parent %s is not in the index. Make sure to index parent first.",
                                 parentid)
