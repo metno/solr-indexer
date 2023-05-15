@@ -27,6 +27,8 @@ import cartopy.crs as ccrs
 
 from requests.auth import HTTPBasicAuth
 from solrindexer.indexdata import MMD4SolR, IndexMMD
+from solrindexer.indexdata import to_solr_id
+
 from solrindexer.thumb.thumbnail import WMSThumbNail
 
 logger = logging.getLogger(__name__)
@@ -162,9 +164,7 @@ def main():
             return 1
 
     fileno = 0
-    # myfiles_pending = []
     files2ingest = []
-    # pendingfiles2ingest = []
     parentids = set()
     for myfile in myfiles:
         myfile = myfile.strip()
@@ -262,7 +262,7 @@ def main():
                 continue
             # Create solr id from identifier
             myparentid = newdoc['related_dataset']
-            parentid_solr = mysolr.to_solr_id(myparentid)
+            parentid_solr = to_solr_id(myparentid)
             # If related_dataset is present,
             # set this dataset as a child using isChild and dataset_type
             newdoc.update({"isChild": "true"})
@@ -324,8 +324,8 @@ def main():
         mylist = files2ingest[i:i+mystep]
         myrecs += len(mylist)
         try:
-            mysolr.index_record(records2ingest=mylist,
-                                addThumbnail=tflg, thumbClass=thumbClass)
+            mysolr.index_records(records2ingest=mylist,
+                                 addThumbnail=tflg, thumbClass=thumbClass)
         except Exception as e:
             logger.warning('Something failed during indexing %s', e)
         logger.info('%d records out of %d have been ingested...',

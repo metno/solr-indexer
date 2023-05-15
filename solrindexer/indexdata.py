@@ -41,7 +41,6 @@ import base64
 import pysolr
 import netCDF4
 import logging
-import warnings
 import xmltodict
 import requests
 import dateutil.parser
@@ -59,6 +58,17 @@ IDREPLS = [':', '/', '.']
 DATETIME_REGEX = re.compile(
     r"^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})T(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})(\.\d+)?Z$"  # NOQA: E501
 )
+
+
+def to_solr_id(id):
+    """Function that translate from metadata_identifier
+    to solr compatilbe id field syntax
+    """
+    solr_id = str(id)
+    for e in IDREPLS:
+        solr_id = solr_id.replace(e, '-')
+
+    return solr_id
 
 
 def getZones(lon, lat):
@@ -298,13 +308,13 @@ class MMD4SolR:
         logger.info("Identifier and metadata_identifier")
         if isinstance(mmd['mmd:metadata_identifier'], dict):
             myid = mmd['mmd:metadata_identifier']['#text']
-            myid = self.to_solr_id(myid)
+            myid = to_solr_id(myid)
             mydict['id'] = myid
             mydict['metadata_identifier'] = \
                 mmd['mmd:metadata_identifier']['#text']
         else:
             myid = mmd['mmd:metadata_identifier']
-            myid = self.to_solr_id(myid)
+            myid = to_solr_id(myid)
             mydict['id'] = myid
             mydict['metadata_identifier'] = mmd['mmd:metadata_identifier']
 
@@ -491,6 +501,31 @@ class MMD4SolR:
                 mydict['geographic_extent_rectangle_south'] = south
                 mydict['geographic_extent_rectangle_east'] = east
                 mydict['geographic_extent_rectangle_west'] = west
+
+                """
+                Check if bounding box is correct
+                """
+                if not mydict['geographic_extent_rectangle_north'] >= south:
+                    logger.warning(
+                        'Northernmost boundary is south of southernmost, will not process...')
+                    mydict['metadata_status'] = 'Inactive'
+                    raise Warning('Error in spatial bounds')
+                if not mydict['geographic_extent_rectangle_east'] >= west:
+                    logger.warning(
+                        'Easternmost boundary is west of westernmost, will not process...')
+                    mydict['metadata_status'] = 'Inactive'
+                    raise Warning('Error in spatial bounds')
+                if (east > 180 or west > 180 or east < -180 or west < -180):
+                    logger.warning(
+                        'Longitudes outside valid range, will not process...')
+                    mydict['metadata_status'] = 'Inactive'
+                    raise Warning('Error in longitude bounds')
+                if (north > 90 or south > 90 or north < -90 or south < -90):
+                    logger.warning(
+                        'Latitudes outside valid range, will not process...')
+                    mydict['metadata_status'] = 'Inactive'
+                    raise Warning('Error in latitude bounds')
+
                 srsname = mmd_geographic_extent['mmd:rectangle'].get(
                     '@srsName', None)
                 if srsname is not None:
@@ -594,10 +629,10 @@ class MMD4SolR:
             for personnel in personnel_elements:
                 role = personnel['mmd:role']
                 if not role:
-                    self.logger.warning('No role available for personnel')
+                    logger.warning('No role available for personnel')
                     break
                 if role not in personnel_role_LUT:
-                    self.logger.warning('Wrong role provided for personnel')
+                    logger.warning('Wrong role provided for personnel')
                     break
                 for entry in personnel:
                     entry_type = entry.split(':')[-1]
@@ -703,7 +738,7 @@ class MMD4SolR:
                             if '#text' in dict(e):
                                 mydict['related_dataset'] = e['#text']
                                 mydict['related_dataset_id'] = mydict['related_dataset']
-                                myid = self.to_solr_id(
+                                myid = to_solr_id(
                                     mydict['related_dataset_id'])
                                 mydict['related_dataset_id'] = myid
             else:
@@ -711,7 +746,7 @@ class MMD4SolR:
                 if '#text' in dict(mmd['mmd:related_dataset']):
                     mydict['related_dataset'] = mmd['mmd:related_dataset']['#text']
                     mydict['related_dataset_id'] = mydict['related_dataset']
-                    myid = self.to_solr_id(mydict['related_dataset_id'])
+                    myid = to_solr_id(mydict['related_dataset_id'])
                     mydict['related_dataset_id'] = myid
 
         logger.info("Storage information")
@@ -998,7 +1033,8 @@ class IndexMMD:
     def commit(self):
         self.solrc.commit()
 
-    def index_record(self, input_record, addThumbnail, level=None, thumbClass=None):
+    def index_record(self, input_record, addThumbnail=False,
+                     level=None, thumbClass=None):
         """ Add thumbnail to SolR
             Args:
                 input_record() : input MMD file to be indexed in SolR
@@ -1017,9 +1053,13 @@ class IndexMMD:
             Returns:
                 bool
         """
+
+        """Handle thumbnail generator"""
         self.thumbClass = thumbClass
         if thumbClass is None:
             addThumbnail = False
+
+        """ Handle dataset level parent/children relations"""
         if level == 1 or level is None:
             input_record.update({'dataset_type': 'Level-1'})
             # input_record.update({'isParent': 'false'})
@@ -1083,127 +1123,6 @@ class IndexMMD:
 
         return True, msg
 
-    def add_level2(self, myl2record, addThumbnail=False, thumbClass=None):
-        self.thumbClass = thumbClass
-        """ Add a level 2 dataset, i.e. update level 1 as well """
-        mmd_record2 = list()
-
-        # Fix for NPI data...
-        myl2record['related_dataset'] = myl2record['related_dataset'].replace(
-            'http://data.npolar.no/dataset/', '')
-        myl2record['related_dataset'] = myl2record['related_dataset'].replace(
-            'https://data.npolar.no/dataset/', '')
-        myl2record['related_dataset'] = myl2record['related_dataset'].replace(
-            'http://api.npolar.no/dataset/', '')
-        myl2record['related_dataset'] = myl2record['related_dataset'].replace(
-            '.xml', '')
-
-        # Add additonal helper fields for handling in SolR and Drupal
-        myl2record['isChild'] = 'true'
-
-        myfeature = None
-        if 'data_access_url_opendap' in myl2record:
-            # Thumbnail of timeseries to be added
-            # Or better do this as part of get_feature_type?
-            try:
-                myfeature = self.get_feature_type(
-                    myl2record['data_access_url_opendap'])
-            except Exception as e:
-                logger.error(
-                    "Something failed while retrieving feature type: %s", str(e))
-
-            if myfeature:
-                logger.info('feature_type found: %s', myfeature)
-                myl2record.update({'feature_type': myfeature})
-
-        self.id = myl2record['id']
-        # Add thumbnail for WMS supported datasets
-        if 'data_access_url_ogc_wms' in myl2record and addThumbnail:
-            logger.info("Checking tumbnails...")
-            if not myfeature:
-                self.thumbnail_type = 'wms'
-            if 'data_access_url_ogc_wms' in myl2record.keys():
-                getCapUrl = myl2record['data_access_url_ogc_wms']
-                try:
-                    thumbnail_data = self.add_thumbnail(url=getCapUrl)
-                except Exception as e:
-                    logger.error(
-                        "Something failed in adding thumbnail: %s", str(e))
-                    warnings.warning("Couldn't add thumbnail.")
-
-        if addThumbnail and thumbnail_data:
-            myl2record.update({'thumbnail_data': thumbnail_data})
-
-        mmd_record2.append(myl2record)
-
-        """ Retrieve level 1 record """
-        myparid = myl2record['related_dataset']
-        for e in IDREPLS:
-            myparid = myparid.replace(e, '-')
-        try:
-            myresults = self.solrc.search(
-                'id:' + myparid, **{'wt': 'python', 'rows': 100})
-        except Exception as e:
-            logger.error(
-                "Something failed in searching for parent dataset, " + str(e))
-
-        # Check that only one record is returned
-        if len(myresults) != 1:
-            logger.warning("Didn't find unique parent record, skipping record")
-            return
-        # Convert from pySolr results object to dict and return.
-        for result in myresults:
-            if 'full_text' in result:
-                result.pop('full_text')
-            if 'bbox__maxX' in result:
-                result.pop('bbox__maxX')
-            if 'bbox__maxY' in result:
-                result.pop('bbox__maxY')
-            if 'bbox__minX' in result:
-                result.pop('bbox__minX')
-            if 'bbox__minY' in result:
-                result.pop('bbox__minY')
-            if 'bbox_rpt' in result:
-                result.pop('bbox_rpt')
-            if 'ss_access' in result:
-                result.pop('ss_access')
-            if '_version_' in result:
-                result.pop('_version_')
-                myresults = result
-        myresults['isParent'] = 'true'
-
-        # Check that the parent found has related_dataset set and
-        # update this, but first check that it doesn't already exists
-        if 'related_dataset' in myresults:
-            myl2id = myl2record['metadata_identifier'].replace(':', '_')
-            # Need to check that this doesn't already exist...
-            if myl2id not in myresults['related_dataset']:
-                myresults['related_dataset'].append(myl2id)
-        else:
-            logger.info('This dataset was not found in parent, creating it...')
-            myresults['related_dataset'] = []
-            logger.info('Adding dataset with identifier %s to parent %s',
-                        myl2id,
-                        myl2record['related_dataset'])
-            myresults['related_dataset'].append(myl2id)
-        mmd_record1 = list()
-        mmd_record1.append(myresults)
-
-        logger.info("Index level 2 dataset")
-        try:
-            self.solrc.add(mmd_record2)
-        except Exception as e:
-            raise Exception("Something failed in SolR add level 2", str(e))
-        logger.info("Level 2 record successfully added.")
-
-        logger.info("Update level 1 record with id of this dataset")
-        try:
-            self.solrc.add(mmd_record1)
-        except Exception as e:
-            raise Exception(
-                "Something failed in SolR update level 1 for level 2", str(e))
-        logger.info("Level 1 record successfully updated.")
-
     def add_thumbnail(self, url, thumbnail_type='wms'):
         """ Add thumbnail to SolR
             Args:
@@ -1228,9 +1147,94 @@ class IndexMMD:
             logger.error('Invalid thumbnail type: {}'.format(thumbnail_type))
             return None
 
-    def create_ts_thumbnail(self):
-        """ Create a base64 encoded thumbnail """
-        pass
+    def index_records(self, records2ingest, addThumbnail, thumbClass=None):
+        # FIXME, update the text below Øystein Godøy, METNO/FOU, 2023-03-19
+        """ Add thumbnail to SolR
+            Args:
+                input_record() : input MMD file to be indexed in SolR
+                addThumbnail (bool): If thumbnail should be added or not
+                wms_layer (str): WMS layer name
+                wms_style (str): WMS style name
+                wms_zoom_level (float): Negative zoom. Fixed value added in
+                                        all directions (E,W,N,S)
+                add_coastlines (bool): If coastlines should be added
+                projection (ccrs): Cartopy projection object or name (i.e. string)
+                wms_timeout (int): timeout for WMS service
+                thumbnail_extent (list): Spatial extent of the thumbnail in
+                                      lat/lon [x0, x1, y0, y1]
+            Returns:
+                bool
+        """
+        """Handle thumbnail generator"""
+        self.thumbClass = thumbClass
+        if thumbClass is None:
+            addThumbnail = False
+
+        mmd_records = list()
+        norec = len(records2ingest)
+        i = 0
+        for input_record in records2ingest:
+            logger.info("====>")
+            logger.info("Processing record %d of %d", i, norec)
+            i += 1
+            # Do some checking of content
+            self.id = input_record['id']
+            if input_record['metadata_status'] == 'Inactive':
+                logger.warning('This record will be set inactive...')
+                # return False
+            myfeature = None
+            """
+            If OGC WMS is available, no point in looking for featureType in OPeNDAP.
+            """
+            if 'data_access_url_ogc_wms' in input_record and addThumbnail:
+                logger.info("Checking thumbnails...")
+                getCapUrl = input_record['data_access_url_ogc_wms']
+                if not myfeature:
+                    self.thumbnail_type = 'wms'
+                thumbnail_data = self.add_thumbnail(url=getCapUrl)
+
+                if not thumbnail_data:
+                    logger.warning(
+                        'Could not properly parse WMS GetCapabilities document')
+                    # If WMS is not available, remove this data_access element
+                    # from the XML that is indexed
+                    del input_record['data_access_url_ogc_wms']
+                else:
+                    input_record.update({'thumbnail_data': thumbnail_data})
+            elif 'data_access_url_opendap' in input_record:
+                # Thumbnail of timeseries to be added
+                # Or better do this as part of get_feature_type?
+                try:
+                    myfeature = self.get_feature_type(
+                        input_record['data_access_url_opendap'])
+                except Exception as e:
+                    logger.warning(
+                        "Something failed while retrieving feature type: %s", str(e))
+                if myfeature:
+                    logger.info('feature_type found: %s', myfeature)
+                    input_record.update({'feature_type': myfeature})
+            else:
+                logger.info(
+                    'Neither gridded nor discrete sampling geometry found in this record...')
+
+            logger.info("Adding records to list...")
+            mmd_records.append(input_record)
+
+        """
+        Send information to SolR
+        """
+        logger.info("Adding records to SolR core.")
+        try:
+            self.solrc.add(mmd_records)
+        except Exception as e:
+            logger.error(
+                "Something failed in SolR adding document: %s", str(e))
+            return False
+        logger.info("%d records successfully added...", len(mmd_records))
+
+        del mmd_records
+
+        return True
 
     def get_feature_type(self, myopendap):
         """ Set feature type from OPeNDAP """
@@ -1329,18 +1333,8 @@ class IndexMMD:
 
         return (mylinks)
 
-    def to_solr_id(self, id):
-        """Function that translate from metadata_identifier
-        to solr compatilbe id field syntax
-        """
-        solr_id = str(id)
-        for e in IDREPLS:
-            solr_id = solr_id.replace(e, '-')
-
-        return solr_id
-
     def delete(self, id, commit=False):
-        solr_id = self.to_solr_id(id)
+        solr_id = to_solr_id(id)
         doc_exsists = self.get_dataset(solr_id)
         if (doc_exsists["doc"] is None):
             return False, "Document %s not found in index." % id
@@ -1390,8 +1384,8 @@ class IndexMMD:
         else:
             if myparent['doc'] is None:
                 if fail_on_missing:
-                    return False, "Parent %s is not in the index. Make sure to index parent first.",
-                    parentid
+                    return False,
+                    "Parent %s is not in the index. Make sure to index parent first.", parentid
                 else:
                     logger.warn("Parent %s is not in the index. Make sure to index parent first.",
                                 parentid)
