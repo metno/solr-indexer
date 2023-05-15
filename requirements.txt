@@ -1,6 +1,7 @@
 lxml
 netCDF4
 pysolr
+python-dateutil
 PyYAML
 requests
 xmltodict
