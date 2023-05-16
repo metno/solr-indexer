@@ -434,7 +434,7 @@ class MMD4SolR:
 
         logger.info("Geographical extent")
         # Assumes longitudes positive eastwards and in the are -180:180
-        mmd_geographic_extent = mmd.get('mmd:geographic_excent', None)
+        mmd_geographic_extent = mmd.get('mmd:geographic_extent', None)
         if mmd_geographic_extent is not None:
             if isinstance(mmd_geographic_extent, list):
                 logger.warning('This is a challenge as multiple bounding boxes are not '
@@ -481,13 +481,12 @@ class MMD4SolR:
                     mydict['geographic_extent_rectangle_west'] = -180.
                     mydict['geographic_extent_rectangle_east'] = 180.
             else:
-                for item in mmd_geographic_extent['mmd:rectangle'].values:
+                for item in mmd_geographic_extent['mmd:rectangle']:
                     if item is None:
                         logger.warning(
                             'Missing geographical element, will not process the file.')
                         mydict['metadata_status'] = 'Inactive'
                         raise Warning('Missing spatial bounds')
-
                 north = float(
                     mmd_geographic_extent['mmd:rectangle']['mmd:north'])
                 south = float(
@@ -530,8 +529,8 @@ class MMD4SolR:
                 if srsname is not None:
                     mydict['geographic_extent_rectangle_srsName'] = srsname
 
-                mydict['bbox'] = "ENVELOPE("+west + "," + \
-                    east + "," + north + "," + south + ")"
+                mydict['bbox'] = "ENVELOPE(" + str(west) + "," + \
+                    str(east) + "," + str(north) + "," + str(south) + ")"
 
                 logger.info("Second conditition")
                 #  Check if we have a point or a boundingbox
