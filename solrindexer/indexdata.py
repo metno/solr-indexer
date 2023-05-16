@@ -1293,13 +1293,13 @@ class IndexMMD:
         else:
             if myparent['doc'] is None:
                 if fail_on_missing:
-                    return False,
-                    "Parent %s is not in the index. Make sure to index parent first.", parentid
+                    return False, "Parent %s is not in the index. Index parent first." % parentid
                 else:
                     logger.warn("Parent %s is not in the index. Make sure to index parent first.",
                                 parentid)
-                    return True, "WARNING!!! Parent is not in the index."
-                "Make sure to index parent and then the children for relation to be updated"
+                    return (True, "WARNING! Parent is not in the index. \
+                            Make sure to index parent and then the children \
+                            for relation to be updated")
             logger.info("Got parent: %s",
                         myparent['doc']['metadata_identifier'])
             if bool(myparent['doc']['isParent']):
