@@ -46,7 +46,6 @@ import requests
 import dateutil.parser
 import lxml.etree as ET
 
-
 from metvocab.mmdgroup import MMDGroup
 from shapely.geometry import box, mapping
 import shapely.geometry as shpgeo

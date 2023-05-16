@@ -20,7 +20,6 @@ permissions and limitations under the License.
 """
 
 import os
-import yaml
 import logging
 import argparse
 import cartopy.crs as ccrs
@@ -28,6 +27,7 @@ import cartopy.crs as ccrs
 from requests.auth import HTTPBasicAuth
 from solrindexer.indexdata import MMD4SolR, IndexMMD
 from solrindexer.indexdata import to_solr_id
+from solrindexer.searchindex import parse_cfg
 
 from solrindexer.thumb.thumbnail import WMSThumbNail
 
@@ -76,14 +76,6 @@ def parse_arguments():
         parser.exit()
 
     return args
-
-
-def parse_cfg(cfgfile):
-    # Read config file
-    print("Reading", cfgfile)
-    with open(cfgfile, 'r') as ymlfile:
-        cfgstr = yaml.full_load(ymlfile)
-    return cfgstr
 
 
 def main():
