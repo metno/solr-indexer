@@ -1033,96 +1033,6 @@ class IndexMMD:
     def commit(self):
         self.solrc.commit()
 
-    def index_record(self, input_record, addThumbnail=False,
-                     level=None, thumbClass=None):
-        """ Add thumbnail to SolR
-            Args:
-                input_record() : input MMD file to be indexed in SolR
-                addThumbnail (bool): If thumbnail should be added or not
-                level (int): 1 or 2 depending if MMD is Level-1 or Level-2,
-                            respectively. If None, assume to be Level-1
-                wms_layer (str): WMS layer name
-                wms_style (str): WMS style name
-                wms_zoom_level (float): Negative zoom. Fixed value added in
-                                        all directions (E,W,N,S)
-                add_coastlines (bool): If coastlines should be added
-                projection (ccrs): Cartopy projection object or name (i.e. string)
-                wms_timeout (int): timeout for WMS service
-                thumbnail_extent (list): Spatial extent of the thumbnail in
-                                      lat/lon [x0, x1, y0, y1]
-            Returns:
-                bool
-        """
-
-        """Handle thumbnail generator"""
-        self.thumbClass = thumbClass
-        if thumbClass is None:
-            addThumbnail = False
-
-        """ Handle dataset level parent/children relations"""
-        if level == 1 or level is None:
-            input_record.update({'dataset_type': 'Level-1'})
-            # input_record.update({'isParent': 'false'})
-        elif level == 2:
-            input_record.update({'dataset_type': 'Level-2'})
-            input_record.update({'isChild': True})
-        else:
-            logger.error(
-                'Invalid level given: {}. Hence terminating'.format(level))
-
-        if input_record['metadata_status'] == 'Inactive':
-            msg = 'Skipping record'
-            logger.warning(msg)
-            return False, msg
-        myfeature = None
-        if 'data_access_url_opendap' in input_record:
-            # Thumbnail of timeseries to be added
-            # Or better do this as part of get_feature_type?
-            try:
-                myfeature = self.get_feature_type(
-                    input_record['data_access_url_opendap'])
-            except AttributeError:
-                logger.warn("No featureType attribute found.")
-            except Exception as e:
-                logger.error(
-                    "Something failed while retrieving feature type: %s", str(e))
-            if myfeature:
-                logger.info('feature_type found: %s', myfeature)
-                input_record.update({'feature_type': myfeature})
-
-        self.id = input_record['id']
-        if 'data_access_url_ogc_wms' in input_record and addThumbnail:
-            logger.info("Checking thumbnails...")
-            getCapUrl = input_record['data_access_url_ogc_wms']
-            if not myfeature:
-                self.thumbnail_type = 'wms'
-            thumbnail_data = self.add_thumbnail(url=getCapUrl)
-
-            if not thumbnail_data:
-                logger.warning(
-                    'Could not properly parse WMS GetCapabilities document')
-                # If WMS is not available, remove this data_access element from the XML that
-                # is indexed
-                del input_record['data_access_url_ogc_wms']
-            else:
-                input_record.update({'thumbnail_data': thumbnail_data})
-
-        logger.info("Adding records to core...")
-
-        mmd_record = list()
-        mmd_record.append(input_record)
-
-        try:
-            self.solrc.add(mmd_record)
-        except Exception as e:
-            msg = "Something failed in SolR adding document: %s" % str(e)
-            logger.error(msg)
-            return False, msg
-        msg = "Record successfully added."
-        logger.info("Record successfully added.")
-
-        return True, msg
-
     def add_thumbnail(self, url, thumbnail_type='wms'):
         """ Add thumbnail to SolR
             Args:
@@ -1147,28 +1057,29 @@ class IndexMMD:
             logger.error('Invalid thumbnail type: {}'.format(thumbnail_type))
             return None
 
-    def index_records(self, records2ingest, addThumbnail, thumbClass=None):
+    def index_record(self, records2ingest, addThumbnail, level=None, thumbClass=None):
         # FIXME, update the text below Øystein Godøy, METNO/FOU, 2023-03-19
         """ Add thumbnail to SolR
             Args:
-                input_record() : input MMD file to be indexed in SolR
+                input_record : list of solr dicts or a single solr dict, to be indexed in SolR
                 addThumbnail (bool): If thumbnail should be added or not
-                wms_layer (str): WMS layer name
-                wms_style (str): WMS style name
-                wms_zoom_level (float): Negative zoom. Fixed value added in
-                                        all directions (E,W,N,S)
-                add_coastlines (bool): If coastlines should be added
-                projection (ccrs): Cartopy projection object or name (i.e. string)
-                wms_timeout (int): timeout for WMS service
-                thumbnail_extent (list): Spatial extent of the thumbnail in
-                                      lat/lon [x0, x1, y0, y1]
+                level (1,2,None): Explicitt tell indexer what level the record have.
+                thumbClass (Class): A class with the thumbnail genration.
+
             Returns:
-                bool
+                bool, msg
         """
+
+        # Check if we got a list of records or single record:
+        if not isinstance(records2ingest, list):
+            records2ingest = [records2ingest]
+
         """Handle thumbnail generator"""
         self.thumbClass = thumbClass
         if thumbClass is None:
             addThumbnail = False
+
+        logger.debug("Thumbnail flag is: %s", addThumbnail)
 
         mmd_records = list()
         norec = len(records2ingest)
@@ -1183,9 +1094,21 @@ class IndexMMD:
                 logger.warning('This record will be set inactive...')
                 # return False
             myfeature = None
+
+            """ Handle dataset level parent/children relations"""
+            if level == 1 or level is None:
+                input_record.update({'dataset_type': 'Level-1'})
+            elif level == 2:
+                input_record.update({'dataset_type': 'Level-2'})
+                input_record.update({'isChild': True})
+            else:
+                logger.error(
+                    'Invalid level given: {}. Hence terminating'.format(level))
+
             """
             If OGC WMS is available, no point in looking for featureType in OPeNDAP.
             """
+
             if 'data_access_url_ogc_wms' in input_record and addThumbnail:
                 logger.info("Checking thumbnails...")
                 getCapUrl = input_record['data_access_url_ogc_wms']
@@ -1227,14 +1150,15 @@ class IndexMMD:
         try:
             self.solrc.add(mmd_records)
         except Exception as e:
-            logger.error(
-                "Something failed in SolR adding document: %s", str(e))
-            return False
-        logger.info("%d records successfully added...", len(mmd_records))
+            msg = "Something failed in SolR adding document: %s" % str(e)
+            logger.error(msg)
+            return False, msg
+        msg = "Record successfully added."
+        logger.info("Record successfully added.")
 
         del mmd_records
 
-        return True
+        return True, msg
 
     def get_feature_type(self, myopendap):
         """ Set feature type from OPeNDAP """
@@ -1280,18 +1204,6 @@ class IndexMMD:
             raise
 
         logger.info("Record successfully deleted from Level 1 core")
-
-    def delete_level2(self, datasetid):
-        """ Require ID as input """
-        """ Rewrite to take full metadata record as input """
-        logger.info("Deleting %s from level 2.", datasetid)
-        try:
-            self.solr2.delete(id=datasetid)
-        except Exception as e:
-            logger.error("Something failed in SolR delete: %s", str(e))
-            raise
-
-        logger.info("Records successfully deleted from Level 2 core")
 
     def delete_thumbnail(self, datasetid):
         """ Require ID as input """
