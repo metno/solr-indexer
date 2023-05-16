@@ -48,6 +48,18 @@ logger = logging.getLogger(__name__)
 
 class WMSThumbNail:
 
+    """
+    wms_layer (str): WMS layer name
+    wms_style (str): WMS style name
+    wms_zoom_level (float): Negative zoom. Fixed value added in
+                            all directions (E,W,N,S)
+    add_coastlines (bool): If coastlines should be added
+    projection (ccrs): Cartopy projection object or name (i.e. string)
+    wms_timeout (int): timeout for WMS service
+    thumbnail_extent (list): Spatial extent of the thumbnail in
+                            lat/lon [x0, x1, y0, y1]
+    """
+
     def __init__(self, wms_layer=None, wms_style=None, wms_zoom_level=0,
                  wms_timeout=None, add_coastlines=None, projection=None,
                  thumbnail_type=None, thumbnail_extent=None):

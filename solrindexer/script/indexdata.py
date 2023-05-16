@@ -98,9 +98,6 @@ def main():
     # Parse configuration file
     cfg = parse_cfg(args.cfgfile)
 
-    # Thumbnail generation default false
-    tflg = False
-
     # CONFIG START
     # Read config file, can be done as a CONFIG class, such that argparser can overwrite duplicates
     # with open(args.cfgfile, 'r') as ymlfile:
@@ -164,6 +161,47 @@ def main():
                 "Something went wrong in decoding cmd arguments: %s", e)
             return 1
 
+    """Handeling thumbnail command line arguments"""
+    # FIXME, need a better way of handling this, WMS layers should be interpreted
+    # automatically, this way we need to know up front whether WMS makes sense or not and
+    # that won't work for harvesting
+    if args.thumbnail_layer:
+        wms_layer = args.thumbnail_layer
+    else:
+        wms_layer = None
+    if args.thumbnail_style:
+        wms_style = args.thumbnail_style
+    else:
+        wms_style = None
+    if args.thumbnail_zoom_level:
+        wms_zoom_level = args.thumbnail_zoom_level
+    else:
+        wms_zoom_level = 0
+    if args.add_coastlines:
+        wms_coastlines = args.add_coastlines
+    else:
+        wms_coastlines = True
+    if args.thumbnail_extent:
+        thumbnail_extent = [int(i)
+                            for i in args.thumbnail_extent[0].split(' ')]
+    else:
+        thumbnail_extent = None
+
+    """Creating thumbnail generator class for use"""
+    if not args.no_thumbnail:
+        tflg = True
+    else:
+        tflg = False
+    if tflg:
+        thumbClass = WMSThumbNail(projection=mapprojection,
+                                  wms_layer=wms_layer, wms_style=wms_style,
+                                  wms_zoom_level=wms_zoom_level, add_coastlines=wms_coastlines,
+                                  wms_timeout=cfg['wms-timeout'], thumbnail_extent=thumbnail_extent
+                                  )
+    else:
+        thumbClass = None
+    # EndCreatingThumbnail
+
     fileno = 0
     files2ingest = []
     parentids = set()
@@ -177,37 +215,6 @@ def main():
         if args.directory:
             myfile = os.path.join(args.directory, myfile)
 
-        # FIXME, need a better way of handling this, WMS layers should be interpreted
-        # automatically, this way we need to know up front whether WMS makes sense or not and
-        # that won't work for harvesting
-        if args.thumbnail_layer:
-            wms_layer = args.thumbnail_layer
-        else:
-            wms_layer = None
-        if args.thumbnail_style:
-            wms_style = args.thumbnail_style
-        else:
-            wms_style = None
-        if args.thumbnail_zoom_level:
-            wms_zoom_level = args.thumbnail_zoom_level
-        else:
-            wms_zoom_level = 0
-        if args.add_coastlines:
-            wms_coastlines = args.add_coastlines
-        else:
-            wms_coastlines = True
-        if args.thumbnail_extent:
-            thumbnail_extent = [int(i)
-                                for i in args.thumbnail_extent[0].split(' ')]
-        else:
-            thumbnail_extent = None
-
-        """Creating thumbnail generator class for use"""
-        thumbClass = WMSThumbNail(projection=mapprojection,
-                                  wms_layer=wms_layer, wms_style=wms_style,
-                                  wms_zoom_level=wms_zoom_level, add_coastlines=wms_coastlines,
-                                  wms_timeout=cfg['wms-timeout'], thumbnail_extent=thumbnail_extent
-                                  )
         # Index files
         logger.info('Processing file: %d - %s', fileno, myfile)
 
@@ -236,11 +243,6 @@ def main():
             logger.warning(
                 'Could not process the file: %s. Error: %s', myfile, e)
             continue
-
-        if (not args.no_thumbnail) and ('data_access_url_ogc_wms' in newdoc):
-            tflg = True
-        else:
-            tflg = False
 
         """
         Checking datasets to see if they are children.
@@ -329,8 +331,7 @@ def main():
         mylist = files2ingest[i:i+mystep]
         myrecs += len(mylist)
         try:
-            mysolr.index_records(records2ingest=mylist,
-                                 addThumbnail=tflg, thumbClass=thumbClass)
+            mysolr.index_record(mylist, addThumbnail=tflg, thumbClass=thumbClass)
         except Exception as e:
             logger.warning('Something failed during indexing %s', e)
         logger.info('%d records out of %d have been ingested...',
