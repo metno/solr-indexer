@@ -48,6 +48,18 @@ logger = logging.getLogger(__name__)
 
 class WMSThumbNail:
 
+    """
+    wms_layer (str): WMS layer name
+    wms_style (str): WMS style name
+    wms_zoom_level (float): Negative zoom. Fixed value added in
+                            all directions (E,W,N,S)
+    add_coastlines (bool): If coastlines should be added
+    projection (ccrs): Cartopy projection object or name (i.e. string)
+    wms_timeout (int): timeout for WMS service
+    thumbnail_extent (list): Spatial extent of the thumbnail in
+                            lat/lon [x0, x1, y0, y1]
+    """
+
     def __init__(self, wms_layer=None, wms_style=None, wms_zoom_level=0,
                  wms_timeout=None, add_coastlines=None, projection=None,
                  thumbnail_type=None, thumbnail_extent=None):
@@ -69,7 +81,7 @@ class WMSThumbNail:
             Returns:
                 thumbnail_b64: base64 string representation of image
         """
-        logger.debug("Creating thumbnail for url: %s" % url)
+
         wms_layer = self.wms_layer
         wms_style = self.wms_style
         wms_zoom_level = self.wms_zoom_level
@@ -103,8 +115,8 @@ class WMSThumbNail:
 
         if not thumbnail_extent:
             wms_extent = wms.contents[available_layers[0]].boundingBoxWGS84
-            # Not accessed
-            # cartopy_extent = [wms_extent[0], wms_extent[2], wms_extent[1], wms_extent[3]]
+            # cartopy_extent = [wms_extent[0], wms_extent[2],
+            #                  wms_extent[1], wms_extent[3]]
 
             cartopy_extent_zoomed = [wms_extent[0] - wms_zoom_level,
                                      wms_extent[2] + wms_zoom_level,
@@ -146,8 +158,9 @@ class WMSThumbNail:
         fig.set_dpi(100)
         # ax.background_patch.set_alpha(1)
 
-        ax.add_wms(wms, wms_layer, wms_kwargs={
-                   'transparent': False, 'styles': wms_style})
+        ax.add_wms(wms, wms_layer,
+                   wms_kwargs={'transparent': False,
+                               'styles': wms_style})
 
         if add_coastlines:
             ax.coastlines(resolution="50m", linewidth=0.5)
@@ -163,10 +176,15 @@ class WMSThumbNail:
         with open(thumbnail_fname, 'rb') as infile:
             data = infile.read()
             encode_string = base64.b64encode(data)
+            del data
 
-        thumbnail_b64 = b'data:image/png;base64,' +\
-                        encode_string.decode('utf-8')
+        thumbnail_b64 = (b'data:image/png;base64,', encode_string).decode('utf-8')
+        del encode_string
 
         # Remove thumbnail
         os.remove(thumbnail_fname)
         return thumbnail_b64
+
+    def create_ts_thumbnail(self):
+        """ Create a base64 encoded thumbnail """
+        pass
