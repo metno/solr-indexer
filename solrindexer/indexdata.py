@@ -1283,7 +1283,7 @@ class IndexMMD:
         else:
             return res.json()
 
-    def _solr_update_parent_doc(parent):
+    def _solr_update_parent_doc(self, parent):
         """
         Update the parent document we got from solr.
         some fields need to be removed for solr to accept the update.
