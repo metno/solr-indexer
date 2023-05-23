@@ -1283,6 +1283,31 @@ class IndexMMD:
         else:
             return res.json()
 
+    def _solr_update_parent_doc(parent):
+        """
+        Update the parent document we got from solr.
+        some fields need to be removed for solr to accept the update.
+        """
+        if 'full_text' in parent:
+            parent.pop('full_text')
+        if 'bbox__maxX' in parent:
+            parent.pop('bbox__maxX')
+        if 'bbox__maxY' in parent:
+            parent.pop('bbox__maxY')
+        if 'bbox__minX' in parent:
+            parent.pop('bbox__minX')
+        if 'bbox__minY' in parent:
+            parent.pop('bbox__minY')
+        if 'bbox_rpt' in parent:
+            parent.pop('bbox_rpt')
+        if 'ss_access' in parent:
+            parent.pop('ss_access')
+        if '_version_' in parent:
+            parent.pop('_version_')
+
+        parent['isParent'] = True
+        return parent
+
     def update_parent(self, parentid, fail_on_missing=False):
         """Search index for parent and update parent flag."""
 
@@ -1306,12 +1331,15 @@ class IndexMMD:
                 logger.info("Dataset already marked as parent.")
                 return True, "Already updated."
             else:
-                doc = {'id': parentid, 'isParent': True}
+                # doc = {'id': parentid, 'isParent': True} TODO: Fix schema so atomic updates works
+                doc = self._solr_update_parent_doc(myparent['doc'])
                 try:
-                    self.solrc.add([doc], fieldUpdates={'isParent': 'set'})
+                    # self.solrc.add([doc],fieldUpdates={'isParent': 'set'})TODO:fix atomic updates
+                    self.solrc.add([doc])
                 except Exception as e:
                     logger.error(
                         "Atomic update failed on parent %s. Error is: ", (parentid, e))
                     return False, e
                 logger.info("Parent sucessfully updated in SolR.")
                 return True, "Parent updated."
+
