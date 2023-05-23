@@ -1342,4 +1342,3 @@ class IndexMMD:
                     return False, e
                 logger.info("Parent sucessfully updated in SolR.")
                 return True, "Parent updated."
-
