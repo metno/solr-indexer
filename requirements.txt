@@ -2,6 +2,7 @@ lxml
 netCDF4
 pysolr
 python-dateutil
+validators
 PyYAML
 requests
 xmltodict
