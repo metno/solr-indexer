@@ -43,13 +43,17 @@ import netCDF4
 import logging
 import xmltodict
 import requests
+import validators
+import os.path
 import dateutil.parser
 import lxml.etree as ET
 
-from metvocab.mmdgroup import MMDGroup
-from shapely.geometry import box, mapping
+import shapely.wkt
 import shapely.geometry as shpgeo
 
+from metvocab.mmdgroup import MMDGroup
+from shapely.geometry import box, mapping
+from shapely.ops import transform
 
 logger = logging.getLogger(__name__)
 IDREPLS = [':', '/', '.']
@@ -57,6 +61,16 @@ IDREPLS = [':', '/', '.']
 DATETIME_REGEX = re.compile(
     r"^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})T(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})(\.\d+)?Z$"  # NOQA: E501
 )
+
+
+def flip(x, y):
+    """Flips the x and y coordinate values"""
+    return y, x
+
+
+def rewrap(x):
+    """Rewrap coordinates from 0-360 to -180-180"""
+    return (x + 180) % 360 - 180
 
 
 def to_solr_id(id):
@@ -338,6 +352,8 @@ class MMD4SolR:
                     lmu_type.append(e['mmd:type'])
                     if 'mmd:note' in e.keys():
                         lmu_note.append(e['mmd:note'])
+                    else:
+                        lmu_note.append('Not provided')
 
             for i, myel in enumerate(lmu_datetime):
                 if myel.endswith('Z'):
@@ -474,6 +490,8 @@ class MMD4SolR:
                         logger.info(bbox)
                         polygon = bbox.wkt
                         mydict['polygon_rpt'] = polygon
+                        if not mydict['bbox'] == "ENVELOPE(-180.0,180.0,90,-90)":
+                            mydict['geospatial_bounds'] = mydict['bbox']
 
                 else:
                     mydict['geographic_extent_rectangle_north'] = 90.
@@ -545,6 +563,8 @@ class MMD4SolR:
                     polygon = bbox.wkt
                     logger.info(polygon)
                     mydict['polygon_rpt'] = polygon
+                    if not mydict['bbox'] == "ENVELOPE(-180.0,180.0,90,-90)":
+                        mydict['geospatial_bounds'] = mydict['bbox']
 
         logger.info("Dataset production status")
         if 'mmd:dataset_production_status' in mmd:
@@ -1125,18 +1145,7 @@ class IndexMMD:
             elif 'data_access_url_opendap' in input_record:
                 # Thumbnail of timeseries to be added
                 # Or better do this as part of get_feature_type?
-                try:
-                    myfeature = self.get_feature_type(
-                        input_record['data_access_url_opendap'])
-                except Exception as e:
-                    logger.warning(
-                        "Something failed while retrieving feature type: %s", str(e))
-                if myfeature:
-                    logger.info('feature_type found: %s', myfeature)
-                    input_record.update({'feature_type': myfeature})
-            else:
-                logger.info(
-                    'Neither gridded nor discrete sampling geometry found in this record...')
+                input_record = self.process_feature_type(input_record)
 
             logger.info("Adding records to list...")
             mmd_records.append(input_record)
@@ -1190,6 +1199,82 @@ class IndexMMD:
             else:
                 logger.warning("The featureType found is a new typo...")
         return featureType
+
+    def process_feature_type(self, tmpdoc):
+        """
+        Look for feature type and update document
+        """
+        dapurl = None
+        tmpdoc_ = tmpdoc
+        if 'data_access_url_opendap' in tmpdoc:
+            dapurl = str(tmpdoc['data_access_url_opendap'])
+            valid = validators.url(dapurl)
+            # Special fix for nersc.
+            if dapurl.startswith("http://thredds.nersc"):
+                dapurl.replace("http:", "https:")
+
+            if not valid:
+                logger.warn("Opendap url not valid: %s", dapurl)
+                return tmpdoc_
+
+        if 'storage_information_file_location' in tmpdoc:
+            fileloc = tmpdoc['storage_information_file_location']
+            if os.path.isfile(fileloc):
+                dapurl = fileloc
+        if dapurl is not None:
+            try:
+                with netCDF4.Dataset(dapurl, 'r') as f:
+                    # if attribs is not None:
+                    for att in f.ncattrs():
+                        if att == 'featureType':
+                            featureType = getattr(f, att)
+                            if featureType not in ['point', 'timeSeries',
+                                                   'trajectory', 'profile',
+                                                   'timeSeriesProfile',
+                                                   'trajectoryProfile']:
+                                if featureType == "TimeSeries":
+                                    featureType = 'timeSeries'
+                                elif featureType == "timeseries":
+                                    featureType = 'timeSeries'
+                                elif featureType == "timseries":
+                                    featureType = 'timeSeries'
+                                else:
+                                    featureType = None
+                            if featureType:
+                                logger.info('feature_type found: %s', featureType)
+                                tmpdoc_.update({'feature_type': featureType})
+                            else:
+                                logger.info('Neither gridded nor discrete sampling \
+                                             geometry found in this record...')
+
+                        # Check if we have plogon.
+                        if att == 'geospatial_bounds':
+                            polygon = getattr(f, att)
+                            polygon_ = shapely.wkt.loads(polygon)
+                            logger.info("Got geospatial bounds: %s", polygon)
+                            type = polygon_.geom_type
+                            if type == 'Point':
+                                point = polygon_.wkt
+                                if shapely.has_z(polygon_):
+                                    point_ = shapely.force_2d(polygon_)
+                                    point = point_.wkt
+                                tmpdoc.update({'geospatial_bounds': point})
+                            else:
+                                polygon = transform(flip, polygon_)
+
+                                tmpdoc.update({'geospatial_bounds': polygon.wkt})
+                                tmpdoc.update({'polygon_rpt': polygon.wkt})
+                                # Check if we have plogon.
+                        if att == 'geospatial_bounds_crs':
+                            crs = getattr(f, att)
+                            tmpdoc_.update({'geographic_extent_polygon_srsName': crs})
+
+                    return tmpdoc_
+            except Exception as e:
+                print("Something failed reading netcdf %s" % e)
+                print(dapurl)
+
+        return tmpdoc_
 
     def delete_level1(self, datasetid):
         """ Require ID as input """
