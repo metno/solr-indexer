@@ -36,7 +36,6 @@ UPDATES:
 """
 
 import re
-import math
 import base64
 import pysolr
 import netCDF4
@@ -55,6 +54,10 @@ from metvocab.mmdgroup import MMDGroup
 from shapely.geometry import box, mapping
 from shapely.ops import transform
 
+
+from solrindexer.tools import flip, rewrap
+from solrindexer.tools import to_solr_id
+
 logger = logging.getLogger(__name__)
 IDREPLS = [':', '/', '.']
 
@@ -63,63 +66,18 @@ DATETIME_REGEX = re.compile(
 )
 
 
-def flip(x, y):
-    """Flips the x and y coordinate values"""
-    return y, x
-
-
-def rewrap(x):
-    """Rewrap coordinates from 0-360 to -180-180"""
-    return (x + 180) % 360 - 180
-
-
-def to_solr_id(id):
-    """Function that translate from metadata_identifier
-    to solr compatilbe id field syntax
-    """
-    solr_id = str(id)
-    for e in IDREPLS:
-        solr_id = solr_id.replace(e, '-')
-
-    return solr_id
-
-
-def getZones(lon, lat):
-    "get UTM zone number from latitude and longitude"
-    if lat >= 72.0 and lat < 84.0:
-        if lon >= 0.0 and lon < 9.0:
-            return 31
-        if lon >= 9.0 and lon < 21.0:
-            return 33
-        if lon >= 21.0 and lon < 33.0:
-            return 35
-        if lon >= 33.0 and lon < 42.0:
-            return 37
-    if lat >= 56 and lat < 64.0 and lon >= 3 and lon <= 12:
-        return 32
-    return math.floor((lon + 180) / 6) + 1
-
-
 class MMD4SolR:
     """ Read and check MMD files, convert to dictionary """
 
-    def __init__(self, filename, file=None):
+    def __init__(self, filename):
         logger.info('Creating an instance of MMD4SolR')
-        """ set variables in class """
-        if file is None:
-            self.filename = filename
-            try:
-                with open(self.filename, encoding='utf-8') as fd:
-                    self.mydoc = xmltodict.parse(fd.read())
-            except Exception as e:
-                logger.error('Could not open file: %s; %s', self.filename, e)
-                raise
-        else:
-            try:
-                self.mydoc = xmltodict.parse(file)
-            except Exception as e:
-                logger.error('Could read incoming file: %s', e)
-                raise
+        self.filename = filename
+        try:
+            with open(self.filename, encoding='utf-8') as fd:
+                self.mydoc = xmltodict.parse(fd.read())
+        except Exception as e:
+            logger.error('Could not open file: %s.\n Reason: %s', self.filename, e)
+            raise
 
     def check_mmd(self):
         """ Check and correct MMD if needed """
@@ -152,10 +110,10 @@ class MMD4SolR:
         mmd = self.mydoc['mmd:mmd']
         for requirement in mmd_requirements.keys():
             if requirement in mmd:
-                logger.info('Checking for: %s', requirement)
+                logger.debug('Checking for: %s', requirement)
                 if requirement in mmd:
                     if mmd[requirement] is not None:
-                        logger.info('%s is present and non empty', requirement)
+                        logger.debug('%s is present and non empty', requirement)
                         mmd_requirements[requirement] = True
                     else:
                         logger.warning('Required element %s is missing, setting it to unknown',
@@ -186,7 +144,7 @@ class MMD4SolR:
             'mmd:quality_control': mmd_quality_control,
         }
         for element in mmd_controlled_elements.keys():
-            logger.info(
+            logger.debug(
                 'Checking %s for compliance with controlled vocabulary', element)
             if element in mmd:
                 if isinstance(mmd[element], list):
@@ -318,7 +276,7 @@ class MMD4SolR:
         # and other characters like / etc by _ in the id field, let metadata_identifier be
         # the correct one.
 
-        logger.info("Identifier and metadata_identifier")
+        logger.debug("Identifier and metadata_identifier")
         if isinstance(mmd['mmd:metadata_identifier'], dict):
             myid = mmd['mmd:metadata_identifier']['#text']
             myid = to_solr_id(myid)
@@ -331,7 +289,7 @@ class MMD4SolR:
             mydict['id'] = myid
             mydict['metadata_identifier'] = mmd['mmd:metadata_identifier']
 
-        logger.info("Last metadata update")
+        logger.debug("Last metadata update")
         if 'mmd:last_metadata_update' in mmd:
             last_metadata_update = mmd['mmd:last_metadata_update']
             lmu_datetime = []
@@ -361,17 +319,27 @@ class MMD4SolR:
                 else:
                     lmu_datetime[i-1] = myel+'Z'
 
+            # Check  and fixdate format validity
+            for i, date in enumerate(lmu_datetime):
+                test = re.match(DATETIME_REGEX, date)
+                if not test:
+                    if re.search(r'\+\d\d:\d\dZ$', date) is not None:
+                        date = re.sub(r'\+\d\d:\d\d', '', date)
+                    newdate = dateutil.parser.parse(date)
+                    date = newdate.strftime('%Y-%m-%dT%H:%M:%SZ')
+                    lmu_datetime[i] = date
+
             mydict['last_metadata_update_datetime'] = lmu_datetime
             mydict['last_metadata_update_type'] = lmu_type
             mydict['last_metadata_update_note'] = lmu_note
 
-        logger.info("Metadata status")
+        logger.debug("Metadata status")
         if isinstance(mmd['mmd:metadata_status'], dict):
             mydict['metadata_status'] = mmd['mmd:metadata_status']['#text']
         else:
             mydict['metadata_status'] = mmd['mmd:metadata_status']
 
-        logger.info("Collection")
+        logger.debug("Collection")
         if 'mmd:collection' in mmd:
             mydict['collection'] = []
             if isinstance(mmd['mmd:collection'], list):
@@ -383,7 +351,7 @@ class MMD4SolR:
             else:
                 mydict['collection'] = mmd['mmd:collection']
 
-        logger.info("Title")
+        logger.debug("Title")
         if isinstance(mmd['mmd:title'], list):
             for e in mmd['mmd:title']:
                 if '@xml:lang' in e:
@@ -403,7 +371,7 @@ class MMD4SolR:
             else:
                 mydict['title'] = str(mmd['mmd:title'])
 
-        logger.info("Abstract")
+        logger.debug("Abstract")
         if isinstance(mmd['mmd:abstract'], list):
             for e in mmd['mmd:abstract']:
                 if '@xml:lang' in e:
@@ -423,7 +391,7 @@ class MMD4SolR:
             else:
                 mydict['abstract'] = str(mmd['mmd:abstract'])
 
-        logger.info("Temporal extent")
+        logger.debug("Temporal extent")
         if 'mmd:temporal_extent' in mmd:
             if isinstance(mmd['mmd:temporal_extent'], list):
                 maxtime = dateutil.parser.parse('1000-01-01T00:00:00Z')
@@ -448,7 +416,7 @@ class MMD4SolR:
                         mydict["temporal_extent_end_date"] = str(
                             mmd['mmd:temporal_extent']['mmd:end_date'])
 
-        logger.info("Geographical extent")
+        logger.debug("Geographical extent")
         # Assumes longitudes positive eastwards and in the are -180:180
         mmd_geographic_extent = mmd.get('mmd:geographic_extent', None)
         if mmd_geographic_extent is not None:
@@ -471,6 +439,18 @@ class MMD4SolR:
                 if len(latvals) > 0 and len(lonvals) > 0:
                     mydict['geographic_extent_rectangle_north'] = max(latvals)
                     mydict['geographic_extent_rectangle_south'] = min(latvals)
+
+                    # Test for numbers < -180 and > 180, and fix.
+                    minlon = min(lonvals)
+                    if minlon < -180.0:
+                        minlon = rewrap(minlon)
+                    maxlon = max(lonvals)
+                    if maxlon > 180.0:
+                        maxlon = rewrap(maxlon)
+                    lonvals.clear()
+                    lonvals.append(minlon)
+                    lonvals.append(maxlon)
+
                     mydict['geographic_extent_rectangle_west'] = min(lonvals)
                     mydict['geographic_extent_rectangle_east'] = max(lonvals)
                     mydict['bbox'] = "ENVELOPE("+str(min(lonvals))+","+str(max(lonvals))+"," +\
@@ -482,12 +462,12 @@ class MMD4SolR:
                             point = shpgeo.Point(float(e['mmd:rectangle']['mmd:east']),
                                                  float(e['mmd:rectangle']['mmd:north']))
                             mydict['polygon_rpt'] = point.wkt
-                            logger.info(mapping(point))
+                            logger.debug(mapping(point))
                     else:
                         bbox = box(min(lonvals), min(latvals),
                                    max(lonvals), max(latvals))
-                        logger.info("First conditition")
-                        logger.info(bbox)
+                        logger.debug("First conditition")
+                        logger.debug(bbox)
                         polygon = bbox.wkt
                         mydict['polygon_rpt'] = polygon
                         if not mydict['bbox'] == "ENVELOPE(-180.0,180.0,90,-90)":
@@ -505,6 +485,20 @@ class MMD4SolR:
                             'Missing geographical element, will not process the file.')
                         mydict['metadata_status'] = 'Inactive'
                         raise Warning('Missing spatial bounds')
+
+                # Test for numbers < -180 and > 180, and fix.
+                minlon = float(
+                    self.mydoc['mmd:mmd']['mmd:geographic_extent']['mmd:rectangle']['mmd:west'])
+                if minlon < -180.0:
+                    minlon = rewrap(minlon)
+                maxlon = float(
+                    self.mydoc['mmd:mmd']['mmd:geographic_extent']['mmd:rectangle']['mmd:east'])
+                if maxlon > 180.0:
+                    maxlon = rewrap(maxlon)
+                lonvals = []
+                lonvals.append(minlon)
+                lonvals.append(maxlon)
+
                 north = float(
                     mmd_geographic_extent['mmd:rectangle']['mmd:north'])
                 south = float(
@@ -550,23 +544,23 @@ class MMD4SolR:
                 mydict['bbox'] = "ENVELOPE(" + str(west) + "," + \
                     str(east) + "," + str(north) + "," + str(south) + ")"
 
-                logger.info("Second conditition")
+                logger.debug("Second conditition")
                 #  Check if we have a point or a boundingbox
                 if south == north:
                     if east == west:
                         point = shpgeo.Point(east, north)
                         mydict['polygon_rpt'] = point.wkt
-                        logger.info(mapping(point))
+                        logger.debug(mapping(point))
 
                 else:
                     bbox = box(west, south, east, north, ccw=False)
                     polygon = bbox.wkt
-                    logger.info(polygon)
+                    logger.debug(polygon)
                     mydict['polygon_rpt'] = polygon
                     if not mydict['bbox'] == "ENVELOPE(-180.0,180.0,90,-90)":
                         mydict['geospatial_bounds'] = mydict['bbox']
 
-        logger.info("Dataset production status")
+        logger.debug("Dataset production status")
         if 'mmd:dataset_production_status' in mmd:
             if isinstance(mmd['mmd:dataset_production_status'], dict):
                 mydict['dataset_production_status'] = mmd['mmd:dataset_production_status']['#text']
@@ -574,19 +568,19 @@ class MMD4SolR:
                 mydict['dataset_production_status'] = str(
                     mmd['mmd:dataset_production_status'])
 
-        logger.info("Dataset language")
+        logger.debug("Dataset language")
         if 'mmd:dataset_language' in mmd:
             mydict['dataset_language'] = str(mmd['mmd:dataset_language'])
 
-        logger.info("Operational status")
+        logger.debug("Operational status")
         if 'mmd:operational_status' in mmd:
             mydict['operational_status'] = str(mmd['mmd:operational_status'])
 
-        logger.info("Access constraints")
+        logger.debug("Access constraints")
         if 'mmd:access_constraint' in mmd:
             mydict['access_constraint'] = str(mmd['mmd:access_constraint'])
 
-        logger.info("Use constraint")
+        logger.debug("Use constraint")
         use_constraint = mmd.get('mmd:use_constraint', None)
         if use_constraint is not None:
             # Need both identifier and resource for use constraint
@@ -604,7 +598,7 @@ class MMD4SolR:
                 mydict['use_constraint_license_text'] = str(
                     use_constraint['mmd:license_text'])
 
-        logger.info("Personnel")
+        logger.debug("Personnel")
         if 'mmd:personnel' in self.mydoc['mmd:mmd']:
             personnel_elements = self.mydoc['mmd:mmd']['mmd:personnel']
 
@@ -688,7 +682,7 @@ class MMD4SolR:
                                    format(personnel_role_LUT[role], entry_type)] \
                                 .append(personnel[entry])
 
-        logger.info("Data center")
+        logger.debug("Data center")
         if 'mmd:data_center' in mmd:
             data_center_elements = mmd['mmd:data_center']
             # Only one element
@@ -718,7 +712,7 @@ class MMD4SolR:
                         else:
                             mydict[element_name].append(value)
 
-        logger.info("Data access")
+        logger.debug("Data access")
         # NOTE: This is identical to method above. Should in be simplified as method
         if 'mmd:data_access' in mmd:
             data_access_elements = mmd['mmd:data_access']
@@ -740,7 +734,7 @@ class MMD4SolR:
                     # old version was [i for i in data_access_wms_layers.values()][0]
                     mydict[data_access_wms_layers_string] = data_access_wms_layers[0]
 
-        logger.info("Related dataset")
+        logger.debug("Related dataset")
         # TODO
         # Remember to add type of relation in the future ØG
         # Only interpreting parent for now since SolR doesn't take more
@@ -767,7 +761,7 @@ class MMD4SolR:
                     myid = to_solr_id(mydict['related_dataset_id'])
                     mydict['related_dataset_id'] = myid
 
-        logger.info("Storage information")
+        logger.debug("Storage information")
         storage_information = mmd.get("mmd:storage_information", None)
         if storage_information is not None:
             file_name = storage_information.get("mmd:file_name", None)
@@ -801,7 +795,7 @@ class MMD4SolR:
                     logger.warning(
                         "Checksum type is not specified, skipping field")
 
-        logger.info("Related information")
+        logger.debug("Related information")
         if 'mmd:related_information' in mmd:
             related_information_elements = mmd['mmd:related_information']
 
@@ -821,7 +815,7 @@ class MMD4SolR:
                             mydict[f'related_url_{related_information_LUT[value]}_desc'] = \
                                 related_information['mmd:description']
 
-        logger.info("ISO TopicCategory")
+        logger.debug("ISO TopicCategory")
 
         if 'mmd:iso_topic_category' in mmd:
             mydict['iso_topic_category'] = []
@@ -832,7 +826,7 @@ class MMD4SolR:
                 mydict['iso_topic_category'].append(
                     mmd['mmd:iso_topic_category'])
 
-        logger.info("Keywords")
+        logger.debug("Keywords")
         # Added double indexing of GCMD keywords. keywords_gcmd (and keywords_wigos) are for
         # faceting in SolR. What is shown in data portal is keywords_keyword.
         if 'mmd:keywords' in mmd:
@@ -890,7 +884,7 @@ class MMD4SolR:
                 mydict['keywords_keyword'].append(
                     mmd['mmd:keywords']['mmd:keyword'])
 
-        logger.info("Project")
+        logger.debug("Project")
         mydict['project_short_name'] = []
         mydict['project_long_name'] = []
         if 'mmd:project' in mmd:
@@ -915,7 +909,7 @@ class MMD4SolR:
                 else:
                     mydict['project_long_name'].append('Not provided')
 
-        logger.info("Platform")
+        logger.debug("Platform")
         # FIXME add check for empty sub elements...
         if 'mmd:platform' in mmd:
             platform_elements = mmd['mmd:platform']
@@ -953,7 +947,7 @@ class MMD4SolR:
                 if initial_platform.startswith('Sentinel'):
                     mydict['platform_sentinel'] = initial_platform[:-1]
 
-        logger.info("Activity type")
+        logger.debug("Activity type")
         if 'mmd:activity_type' in mmd:
             mydict['activity_type'] = []
             if isinstance(mmd['mmd:activity_type'], list):
@@ -962,7 +956,7 @@ class MMD4SolR:
             else:
                 mydict['activity_type'].append(mmd['mmd:activity_type'])
 
-        logger.info("Dataset citation")
+        logger.debug("Dataset citation")
         if 'mmd:dataset_citation' in mmd:
             dataset_citation_elements = mmd['mmd:dataset_citation']
             # Only one element
