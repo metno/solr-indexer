@@ -1,7 +1,7 @@
 import pytest
 
-from solrindexer.indexdata import getZones
-from solrindexer.indexdata import to_solr_id
+from solrindexer.tools import getZones
+from solrindexer.tools import to_solr_id
 
 
 @pytest.mark.indexdata
