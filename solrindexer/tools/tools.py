@@ -17,10 +17,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import os
 import re
 import math
+import fnmatch
+import logging
 import dateutil.parser
 
+# Logging Setup
+logger = logging.getLogger(__name__)
 
 IDREPLS = [':', '/', '.']
 
@@ -50,20 +55,34 @@ def to_solr_id(id):
     return solr_id
 
 
-def parse_date(date):
+def parse_date(_date):
     """Function that tries to parse date from mmd
     into correct solr date format string"""
 
-    test = re.match(DATETIME_REGEX, date)
+    date = str(_date).strip()
 
-    if not test:
-        if re.search(r'\+\d\d:\d\dZ$', date) is not None:
-            date = re.sub(r'\+\d\d:\d\d', '', date)
-            newdate = dateutil.parser.parse(date)
-            date = newdate.strftime('%Y-%m-%dT%H:%M:%SZ')
+    logger.debug("parsing date: %s", date)
+    test = checkDateFormat(date)
+    if test:
+        logger.debug("date already solr compatible.")
+        return date
+    else:
+        parsed_date = dateutil.parser.parse(_date)
+        date = parsed_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+        logger.debug(date)
+        test = checkDateFormat(date)
+        if test:
+            logger.debug("parsed solr date: %s", date)
             return date
-
-    return date
+        else:
+            logger.debug("dateformat not solr compatible. fixing...")
+            if re.search(r'\+\d\d:\d\dZ$', date) is not None:
+                date = re.sub(r'\+\d\d:\d\d', '', date)
+                newdate = dateutil.parser.parse(date)
+                date = newdate.strftime('%Y-%m-%dT%H:%M:%SZ')
+                logger.debug("parsed solr date: %s", date)
+                return date
 
 
 def getZones(lon, lat):
@@ -80,3 +99,31 @@ def getZones(lon, lat):
     if lat >= 56 and lat < 64.0 and lon >= 3 and lon <= 12:
         return 32
     return math.floor((lon + 180) / 6) + 1
+
+
+def checkDateFormat(date):
+    """Function that use regex on the provided
+    datestring and return True if in solr format.
+    Return False otherwise
+    """
+    return bool(re.match(DATETIME_REGEX, date))
+
+
+def getListOfFiles(dirName):
+    """
+    create a list of file and sub directories
+    names in the given directory
+    """
+    listOfFiles = list()
+    for (dirpath, dirnames, filenames) in os.walk(dirName):
+        for filename in fnmatch.filter(filenames, '*.xml'):
+            listOfFiles.append(os.path.join(dirpath, filename))
+
+    if len(listOfFiles) == 0:
+        return None
+    return listOfFiles
+
+
+def flatten(mylist):
+    """Flatten a multi-dementional list"""
+    return [item for sublist in mylist for item in sublist]

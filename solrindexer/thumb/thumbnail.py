@@ -178,7 +178,7 @@ class WMSThumbNail:
             encode_string = base64.b64encode(data)
             del data
 
-        thumbnail_b64 = (b'data:image/png;base64,', encode_string).decode('utf-8')
+        thumbnail_b64 = str((b'data:image/png;base64,', encode_string)).encode().decode('utf-8')
         del encode_string
 
         # Remove thumbnail

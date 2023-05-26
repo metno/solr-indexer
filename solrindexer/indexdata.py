@@ -35,7 +35,7 @@ UPDATES:
         Refactoring
 """
 
-import re
+
 import base64
 import pysolr
 import netCDF4
@@ -56,14 +56,9 @@ from shapely.ops import transform
 
 
 from solrindexer.tools import flip, rewrap
-from solrindexer.tools import to_solr_id
+from solrindexer.tools import to_solr_id, parse_date
 
 logger = logging.getLogger(__name__)
-IDREPLS = [':', '/', '.']
-
-DATETIME_REGEX = re.compile(
-    r"^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})T(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})(\.\d+)?Z$"  # NOQA: E501
-)
 
 
 class MMD4SolR:
@@ -313,21 +308,10 @@ class MMD4SolR:
                     else:
                         lmu_note.append('Not provided')
 
-            for i, myel in enumerate(lmu_datetime):
-                if myel.endswith('Z'):
-                    continue
-                else:
-                    lmu_datetime[i-1] = myel+'Z'
-
             # Check  and fixdate format validity
-            for i, date in enumerate(lmu_datetime):
-                test = re.match(DATETIME_REGEX, date)
-                if not test:
-                    if re.search(r'\+\d\d:\d\dZ$', date) is not None:
-                        date = re.sub(r'\+\d\d:\d\d', '', date)
-                    newdate = dateutil.parser.parse(date)
-                    date = newdate.strftime('%Y-%m-%dT%H:%M:%SZ')
-                    lmu_datetime[i] = date
+            for i, _date in enumerate(lmu_datetime):
+                date = parse_date(_date)
+                lmu_datetime[i] = date
 
             mydict['last_metadata_update_datetime'] = lmu_datetime
             mydict['last_metadata_update_type'] = lmu_type
@@ -462,6 +446,7 @@ class MMD4SolR:
                             point = shpgeo.Point(float(e['mmd:rectangle']['mmd:east']),
                                                  float(e['mmd:rectangle']['mmd:north']))
                             mydict['polygon_rpt'] = point.wkt
+                            mydict['geospatial_bounds'] = mydict['bbox']
                             logger.debug(mapping(point))
                     else:
                         bbox = box(min(lonvals), min(latvals),
@@ -550,6 +535,7 @@ class MMD4SolR:
                     if east == west:
                         point = shpgeo.Point(east, north)
                         mydict['polygon_rpt'] = point.wkt
+                        mydict['geospatial_bounds'] = point.wkt
                         logger.debug(mapping(point))
 
                 else:
@@ -970,16 +956,8 @@ class MMD4SolR:
                     # Fix issue between MMD and SolR schema, SolR requires full datetime, MMD not.
                     if element_suffix == 'publication_date':
                         if v is not None:
-                            solrdate = re.match(DATETIME_REGEX, v)
-                            if not solrdate:
-                                v += 'T12:00:00Z'
-                            test = re.match(DATETIME_REGEX, v)
-                            if not test:
-                                # print(type(date))
-                                if re.search(r'\+\d\d:\d\dZ$', v) is not None:
-                                    date = re.sub(r'\+\d\d:\d\d', '', v)
-                                    newdate = dateutil.parser.parse(date)
-                                    v = newdate.strftime('%Y-%m-%dT%H:%M:%SZ')
+                            logger.debug("Got publication date %s", v)
+                            v = parse_date(v)
 
                     mydict['dataset_citation_{}'.format(element_suffix)] = v
 
@@ -1152,7 +1130,7 @@ class IndexMMD:
             self.solrc.add(mmd_records)
         except Exception as e:
             msg = "Something failed in SolR adding document: %s" % str(e)
-            logger.error(msg)
+            logger.critical(msg)
             return False, msg
         msg = "Record successfully added."
         logger.info("Record successfully added.")
@@ -1194,7 +1172,8 @@ class IndexMMD:
                 logger.warning("The featureType found is a new typo...")
         return featureType
 
-    def process_feature_type(self, tmpdoc):
+    @staticmethod
+    def process_feature_type(tmpdoc):
         """
         Look for feature type and update document
         """
@@ -1362,7 +1341,8 @@ class IndexMMD:
         else:
             return res.json()
 
-    def _solr_update_parent_doc(self, parent):
+    @staticmethod
+    def _solr_update_parent_doc(parent):
         """
         Update the parent document we got from solr.
         some fields need to be removed for solr to accept the update.
