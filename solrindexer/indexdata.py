@@ -64,15 +64,22 @@ logger = logging.getLogger(__name__)
 class MMD4SolR:
     """ Read and check MMD files, convert to dictionary """
 
-    def __init__(self, filename):
-        logger.info('Creating an instance of MMD4SolR')
+    def __init__(self, filename=None, mydoc=None, bulkFile=None):
+        logger.debug('Creating an instance of MMD4SolR')
+        logger.debug("filename is %s. mydoc is %s", filename, type(mydoc))
         self.filename = filename
-        try:
-            with open(self.filename, encoding='utf-8') as fd:
-                self.mydoc = xmltodict.parse(fd.read())
-        except Exception as e:
-            logger.error('Could not open file: %s.\n Reason: %s', self.filename, e)
-            raise
+        if filename is not None:
+            try:
+                with open(self.filename, encoding='utf-8') as fd:
+                    self.mydoc = xmltodict.parse(fd.read())
+            except Exception as e:
+                logger.error('Could not open file: %s.\n Reason: %s', self.filename, e)
+                raise
+
+        if mydoc is not None and isinstance(mydoc, dict):
+            logger.debug("Storing mydoc.")
+            self.filename = bulkFile
+            self.mydoc = mydoc
 
     def check_mmd(self):
         """ Check and correct MMD if needed """
@@ -119,7 +126,7 @@ class MMD4SolR:
                                    requirement)
                     mmd[requirement] = 'Unknown'
 
-        logger.info("Checking controlled vocabularies")
+        logger.debug("Checking controlled vocabularies")
         # Should be collected from
         #    https://github.com/steingod/scivocab/tree/master/metno
         #  Is fetched from vocab.met.no via https://github.com/metno/met-vocab-tools
@@ -1073,7 +1080,7 @@ class IndexMMD:
 
         mmd_records = list()
         norec = len(records2ingest)
-        i = 0
+        i = 1
         for input_record in records2ingest:
             logger.info("====>")
             logger.info("Processing record %d of %d", i, norec)
@@ -1106,7 +1113,7 @@ class IndexMMD:
                     self.thumbnail_type = 'wms'
                 thumbnail_data = self.add_thumbnail(url=getCapUrl)
 
-                if not thumbnail_data:
+                if thumbnail_data is None:
                     logger.warning(
                         'Could not properly parse WMS GetCapabilities document')
                     # If WMS is not available, remove this data_access element
@@ -1114,9 +1121,11 @@ class IndexMMD:
                     del input_record['data_access_url_ogc_wms']
                 else:
                     input_record.update({'thumbnail_data': thumbnail_data})
-            elif 'data_access_url_opendap' in input_record:
+
+            if 'data_access_url_opendap' in input_record:
                 # Thumbnail of timeseries to be added
                 # Or better do this as part of get_feature_type?
+                logger.info("Processing feature type")
                 input_record = self.process_feature_type(input_record)
 
             logger.info("Adding records to list...")
@@ -1224,7 +1233,7 @@ class IndexMMD:
                         if att == 'geospatial_bounds':
                             polygon = getattr(f, att)
                             polygon_ = shapely.wkt.loads(polygon)
-                            logger.info("Got geospatial bounds: %s", polygon)
+                            logger.debug("Got geospatial bounds: %s", polygon)
                             type = polygon_.geom_type
                             if type == 'Point':
                                 point = polygon_.wkt
@@ -1244,8 +1253,7 @@ class IndexMMD:
 
                     return tmpdoc_
             except Exception as e:
-                print("Something failed reading netcdf %s" % e)
-                print(dapurl)
+                logger.error("Something failed reading netcdf %s. Readon %s", dapurl, e)
 
         return tmpdoc_
 

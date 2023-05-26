@@ -21,11 +21,11 @@ import pysolr
 import logging
 import threading
 
-from indexdata import MMD4SolR
-from indexdata import IndexMMD
-from tools import checkDateFormat, to_solr_id
-from multithread.io import load_file
-from multithread.threads import concurrently
+from solrindexer.indexdata import MMD4SolR
+from solrindexer.indexdata import IndexMMD
+from solrindexer.tools import to_solr_id
+from solrindexer.multithread.io import load_file
+from solrindexer.multithread.threads import concurrently
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -52,6 +52,7 @@ class BulkIndexer:
 
     def __init__(self, inputList, solr_url, threads=20, chunksize=2500, auth=None):
         """ Initialize BulkIndexer"""
+        logger.debug("Initializing BulkIndexer.")
         self.inputList = inputList
         self.threads = threads
         self.chunksize = chunksize
@@ -71,7 +72,7 @@ class BulkIndexer:
         if mmd is None:
             logger.warning("File %s was not parsed" % file)
             return (None, status)
-        mydoc = MMD4SolR(mmd)
+        mydoc = MMD4SolR(filename=file, mydoc=mmd, bulkFile=file)
         try:
             mydoc.check_mmd()
         except Exception as e:
@@ -87,10 +88,11 @@ class BulkIndexer:
                 "File %s could not be converted to solr document. Reason: %s" % (file, e))
             return (None, status)
 
-        # File could not be processed
+        """ Do some sanity checking of the documents and skip docs with problems"""
         if tmpdoc is None:
             logger.warning("Solr document for file %s was empty" % (file))
             return (None, status)
+
         if 'id' not in tmpdoc:
             logger.warning("File %s have no id. Missing metadata_identifier?" % file)
             return (None, status)
@@ -99,38 +101,10 @@ class BulkIndexer:
             logger.warning(
                 "Skipping process file %s. Metadata identifier: Unknown, or missing" % file)
             return (None, status)
-        try:
-            (start_date,) = tmpdoc['temporal_extent_start_date']
-        except Exception as e:
-            logger.error("Could not find start date in  %s. Reason: %s" % (file, e))
+
+        if 'temporal_extent_start_date' not in tmpdoc:
+            logger.error("Could not find start date in  %s.", file)
             return (None, status)
-
-        test = checkDateFormat(start_date)
-        if not test:
-            logger.error('Incomaptible start date %s in document % s, file: %s' % (
-                tmpdoc['temporal_extent_start_date'], tmpdoc['metadata_identifier'], file))
-
-            return (None, status)
-        if 'temporal_extent_end_date' in tmpdoc:
-            try:
-                (end_date,) = tmpdoc['temporal_extent_end_date']
-            except Exception as e:
-                logger.error("Could extract end date in  %s. Reason: %s" % (file, e))
-                return (None, status)
-
-            test = checkDateFormat(end_date)
-            if not test:
-                logger.error('Incomaptible end date %s in document %s ' % (
-                    tmpdoc['temporal_extent_start_date'], tmpdoc['metadata_identifier']))
-                return (None, status)
-
-        # # Override frature_type if set in config
-        # if feature_type != "Skip" and feature_type is not None:
-        #     tmpdoc.update({'feature_type': feature_type})
-        # # If we got level2 flag from cmd arguments we make it a child/Level-2
-        # if l2flg:
-        #     tmpdoc.update({'dataset_type': 'Level-2'})
-        #     tmpdoc.update({'isChild': True})
 
         if 'related_dataset' in tmpdoc:
             logger.debug("got related dataset")
@@ -188,7 +162,7 @@ class BulkIndexer:
         msg_callback("%s, PID: %s completed indexing %s documents!" % (
             threading.current_thread().name, threading.get_native_id(), len(docs)))
 
-    def msg_callback(msg):
+    def msg_callback(self, msg):
         """Message logging callback function"""
         logger.info(msg)
 
@@ -462,8 +436,17 @@ class BulkIndexer:
                     # Remove from pending list
                     if pid in parent_ids_pending:
                         parent_ids_pending.remove(pid)
-
-        return (list(set(parent_ids_found)),
-                list(set(parent_ids_pending)),
-                list(set(parent_ids_processed)),
-                set(doc_ids_processed), docs_skipped, docs_indexed, files_processed)
+        parent_ids_found_ = parent_ids_found
+        parent_ids_pending_ = parent_ids_pending
+        parent_ids_processed_ = parent_ids_processed
+        doc_ids_processed_ = doc_ids_processed
+        docs_failed_ = docs_skipped
+        docs_indexed_ = docs_indexed
+        files_processed_ = files_processed
+        return (parent_ids_found_,
+                parent_ids_pending_,
+                parent_ids_processed_,
+                doc_ids_processed_,
+                docs_failed_,
+                docs_indexed_,
+                files_processed_)

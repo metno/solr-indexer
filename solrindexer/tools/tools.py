@@ -66,7 +66,7 @@ def parse_date(_date):
     if test:
         logger.debug("date already solr compatible.")
         return date
-    else:
+    elif not test:
         parsed_date = dateutil.parser.parse(_date)
         date = parsed_date.strftime('%Y-%m-%dT%H:%M:%SZ')
 
@@ -83,6 +83,8 @@ def parse_date(_date):
                 date = newdate.strftime('%Y-%m-%dT%H:%M:%SZ')
                 logger.debug("parsed solr date: %s", date)
                 return date
+    else:
+        return None
 
 
 def getZones(lon, lat):
@@ -114,11 +116,12 @@ def getListOfFiles(dirName):
     create a list of file and sub directories
     names in the given directory
     """
+    logger.debug("Creating list of files traversing %s", dirName)
     listOfFiles = list()
     for (dirpath, dirnames, filenames) in os.walk(dirName):
         for filename in fnmatch.filter(filenames, '*.xml'):
             listOfFiles.append(os.path.join(dirpath, filename))
-
+    logger.debug("Found %d files.", len(listOfFiles))
     if len(listOfFiles) == 0:
         return None
     return listOfFiles

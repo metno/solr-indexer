@@ -212,7 +212,7 @@ def main():
         logger.info('-- Processing file: %d - %s', fileno, myfile)
 
         try:
-            mydoc = MMD4SolR(myfile)
+            mydoc = MMD4SolR(filename=myfile)
         except Exception as e:
             logger.warning('Could not handle file: %s. Error: %s', myfile, e)
             continue

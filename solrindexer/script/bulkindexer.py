@@ -29,7 +29,7 @@ import cartopy.crs as ccrs
 from requests.auth import HTTPBasicAuth
 from solrindexer.tools import getListOfFiles, flatten
 from solrindexer.searchindex import parse_cfg
-from multithread import BulkIndexer
+from solrindexer.multithread.bulkindexer import BulkIndexer
 
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures import as_completed
@@ -174,7 +174,7 @@ def main():
         except Exception as e:
             logger.error(
                 "Something went wrong in decoding cmd arguments: %s", e)
-            return 1
+            sys.exit(1)
     else:
         logger.error("No valid inputlist or input directory given")
         sys.exit(1)
@@ -231,7 +231,9 @@ def main():
     pst = time.process_time()
 
     """ Create an instance of the BulkIndexer"""
-    bulkindexer = BulkIndexer(mySolRc, threads=threads, chunksize=chunksize, auth=authentication)
+    logger.debug("Creating bulkindexer.")
+    bulkindexer = BulkIndexer(myfiles, mySolRc, threads=threads,
+                              chunksize=chunksize, auth=authentication)
     """
     Indexing start. The inputlist is split into as many lists as input workers.
     Each worker will process the lists and return back the information needed to track the
@@ -247,7 +249,9 @@ def main():
     docs_indexed = 0
 
     # Start the indexing
-    logger.info("Indexing with batch size %s and %s worker processes", (chunksize, workers))
+    logger.info(
+        "Indexing with batch size %d and %d worker processes with %d",
+        chunksize, workers, threads)
     # We only do multiprocessing if workers is 2 or moree
     workerlistsize = round(len(myfiles)/workers)
     if workers > 1:
@@ -261,28 +265,37 @@ def main():
                 future = executor.submit(bulkindexer.bulkindex, fileList, chunksize)
                 futures_list.append(future)
             for f in as_completed(futures_list):
-                (parent_ids_found_, parent_ids_pending_,
-                    parent_ids_processed_, doc_ids_processed_, docs_failed_,
-                    docs_indexed_, processed_) = f.result()
+                (parent_ids_found_,
+                    parent_ids_pending_,
+                    doc_ids_processed_,
+                    parent_ids_processed_,
+                    docs_failed_,
+                    docs_indexed_,
+                    files_processed_) = f.result()
                 parent_ids_found.extend(parent_ids_found_)
                 parent_ids_pending.extend(parent_ids_pending_)
                 parent_ids_processed.extend(parent_ids_processed_)
                 doc_ids_processed.update(doc_ids_processed_)
-                processed += processed_
+                processed += files_processed_
                 docs_failed += docs_failed_
                 docs_indexed += docs_indexed_
                 logger.info("%s docs indexed so far." % docs_indexed)
 
     # Bulkindex using main process.
     else:
-        (parent_ids_found_, parent_ids_pending_,
-            parent_ids_processed_, doc_ids_processed_, docs_failed_,
-            docs_indexed_, processed_) = bulkindexer.bulkindex(myfiles, chunksize)
-        parent_ids_found.extend(list(set(parent_ids_found_)))
-        parent_ids_pending.extend(list(set(parent_ids_pending_)))
-        parent_ids_processed.extend(list(set(parent_ids_processed_)))
+        (parent_ids_found_,
+            parent_ids_pending_,
+            doc_ids_processed_,
+            parent_ids_processed_,
+            docs_failed_,
+            docs_indexed_,
+            files_processed_) = bulkindexer.bulkindex(myfiles)
+
+        parent_ids_found.extend(parent_ids_found_)
+        parent_ids_pending.extend(parent_ids_pending_)
+        parent_ids_processed.extend(parent_ids_processed_)
         doc_ids_processed.update(doc_ids_processed_)
-        processed += processed_
+        processed += files_processed_
         docs_failed += docs_failed_
         docs_indexed += docs_indexed_
 
@@ -316,7 +329,7 @@ def main():
                     parent_ids_pending.remove(pid)
 
     logger.info("====== BATCH END ===== %s files processed with %s workers and batch size %s ==",
-                (len(myfiles), workers, chunksize))
+                len(myfiles), workers, chunksize)
     logger.info("Parent ids found: %s" % len(set(parent_ids_found)))
     logger.info("Parent ids pending: %s" % len(set(parent_ids_pending)))
     logger.info("Parent ids processed: %s" % len(set(parent_ids_processed)))
@@ -325,14 +338,15 @@ def main():
 
     # summary of possible missing parents
     missing = list(set(parent_ids_found) - set(parent_ids_processed))
-    logger.warning('Missing parents in input. %s' % missing)
+    if len(missing) != 0:
+        logger.warning('Missing parents in input. %s' % missing)
     docs_failed = len(myfiles) - docs_indexed
     if docs_failed != 0:
         logger.warning('%d documents could not be indexed. check output and logfile.', docs_failed)
 
     logger.info("===================================================================")
     logger.info("%s files processed and %s documents indexed. %s documents was skipped",
-                (processed, docs_indexed, docs_failed))
+                processed, docs_indexed, docs_failed)
     logger.info("===================================================================")
     logger.info("Total files given as input: %d " % len(myfiles))
 
@@ -343,8 +357,8 @@ def main():
     pelt = pet - pst
     logger.info("Processed %s documents" % processed)
     logger.info("Files / documents failed: %s" % docs_failed)
-    logger.info('Execution time:', time.strftime("%H:%M:%S", time.gmtime(elapsed_time)))
-    logger.info('CPU time:', time.strftime("%H:%M:%S", time.gmtime(pelt)))
+    logger.info('Execution time: %s', time.strftime("%H:%M:%S", time.gmtime(elapsed_time)))
+    logger.info('CPU time: %s', time.strftime("%H:%M:%S", time.gmtime(pelt)))
     if end_solr_commit:
         st = time.perf_counter()
         bulkindexer.mysolr.commit()
