@@ -26,7 +26,7 @@ import cartopy.crs as ccrs
 
 from requests.auth import HTTPBasicAuth
 from solrindexer.indexdata import MMD4SolR, IndexMMD
-from solrindexer.indexdata import to_solr_id
+from solrindexer.tools import to_solr_id
 from solrindexer.searchindex import parse_cfg
 
 from solrindexer.thumb.thumbnail import WMSThumbNail
@@ -71,7 +71,7 @@ def parse_arguments():
     if args.cfgfile is None:
         parser.print_help()
         parser.exit()
-    if not args.input_file and not args.directory and not args.list_file and not args.remove:
+    if not args.input_file and not args.directory and not args.list_file:
         parser.print_help()
         parser.exit()
 
@@ -194,9 +194,10 @@ def main():
         thumbClass = None
     # EndCreatingThumbnail
 
-    fileno = 0
+    fileno = 1
     files2ingest = []
     parentids = set()
+    logger.info("Got %d input files.", len(myfiles))
     for myfile in myfiles:
         myfile = myfile.strip()
         # Decide files to operate on
@@ -208,10 +209,10 @@ def main():
             myfile = os.path.join(args.directory, myfile)
 
         # Index files
-        logger.info('Processing file: %d - %s', fileno, myfile)
+        logger.info('-- Processing file: %d - %s', fileno, myfile)
 
         try:
-            mydoc = MMD4SolR(myfile)
+            mydoc = MMD4SolR(filename=myfile)
         except Exception as e:
             logger.warning('Could not handle file: %s. Error: %s', myfile, e)
             continue

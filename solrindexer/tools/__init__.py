@@ -1,5 +1,5 @@
 """
-SOLR-indexer : Main Package Init
+SOLR-indexer : Tools Package Init
 ================================
 
 Copyright MET Norway
@@ -17,9 +17,19 @@ implied. See the License for the specific language governing
 permissions and limitations under the License.
 """
 
-from .thumbnail import WMSThumbNail
+from .tools import flip
+from .tools import flatten
+from .tools import rewrap
+from .tools import to_solr_id
+from .tools import getZones
+from .tools import parse_date
+from .tools import checkDateFormat
+from .tools import getListOfFiles
 
-__package__ = "wmsthumbnail"
+
+__package__ = "tools"
 __version__ = "2.0.0"
 __date__ = "2023-12-13"
-__all__ = ["WMSThumbNail"]
+__all__ = ["flip", "rewrap", "to_solr_id",
+           "parse_date", "getZones", "checkDateFormat",
+           "getListOfFiles", "flatten"]

@@ -39,7 +39,8 @@ def _init_logging(log_obj):
     if hasattr(logging, want_level):
         log_level = getattr(logging, want_level)
     else:
-        print("Invalid logging level '%s' in environment variable DMCI_LOGLEVEL" % want_level)
+        print(
+            "Invalid logging level '%s' in environment variable SOLRINDEXER_LOGLEVEL" % want_level)
         log_level = logging.INFO
 
     if log_level < logging.INFO:

@@ -1,5 +1,5 @@
 """
-SOLR-indexer : Main Package Init
+SOLR-indexer : Multithreaded Bulkindexer
 ================================
 
 Copyright MET Norway
@@ -17,9 +17,13 @@ implied. See the License for the specific language governing
 permissions and limitations under the License.
 """
 
-from .thumbnail import WMSThumbNail
+from .bulkindexer import BulkIndexer
+from .io import load_file, load_files
+from .threads import concurrently
 
-__package__ = "wmsthumbnail"
+
+__package__ = "multithread"
 __version__ = "2.0.0"
 __date__ = "2023-12-13"
-__all__ = ["WMSThumbNail"]
+__all__ = ["BulkIndexer", "load_file", "load_files",
+           "concurrently"]
