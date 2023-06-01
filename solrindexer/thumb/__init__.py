@@ -23,4 +23,3 @@ __package__ = "wmsthumbnail"
 __version__ = "2.0.0"
 __date__ = "2023-12-13"
 __all__ = ["WMSThumbNail"]
-
