@@ -249,6 +249,7 @@ def main():
     docs_indexed = 0
 
     # Start the indexing
+    logger.info("Got %d input files.", len(myfiles))
     logger.info(
         "Indexing with batch size %d and %d worker processes with %d",
         chunksize, workers, threads)
