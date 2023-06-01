@@ -1200,7 +1200,7 @@ class IndexMMD:
                 return tmpdoc_
 
         if 'storage_information_file_location' in tmpdoc:
-            fileloc = tmpdoc['storage_information_file_location']
+            fileloc = str(tmpdoc['storage_information_file_location']).strip()
             if os.path.isfile(fileloc):
                 dapurl = fileloc
         if dapurl is not None:
