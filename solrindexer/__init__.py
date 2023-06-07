@@ -22,7 +22,8 @@ import logging
 
 from .indexdata import IndexMMD
 from .indexdata import MMD4SolR
-from .bulkindexer import BulkIndexer 
+from .bulkindexer import BulkIndexer
+
 __package__ = "solrindexer"
 __version__ = "2.0.0"
 __date__ = "2023-12-13"
