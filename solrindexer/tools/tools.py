@@ -21,8 +21,13 @@ import os
 import re
 import math
 import fnmatch
+import shapely
 import logging
+import validators
+import netCDF4
 import dateutil.parser
+
+from shapely.ops import transform
 
 # Logging Setup
 logger = logging.getLogger(__name__)
@@ -32,6 +37,16 @@ IDREPLS = [':', '/', '.']
 DATETIME_REGEX = re.compile(
     r"^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})T(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})(\.\d+)?Z$"  # NOQA: E501
 )
+
+# Global thumb class
+global thumbClass
+thumbClass = None
+
+
+def initThumb(thumb):
+    """Initialise configured thumbnail class"""
+    global thumbClass
+    thumbClass = thumb
 
 
 def flip(x, y):
@@ -130,3 +145,130 @@ def getListOfFiles(dirName):
 def flatten(mylist):
     """Flatten a multi-dementional list"""
     return [item for sublist in mylist for item in sublist]
+
+
+def process_feature_type(tmpdoc):
+    """
+    Look for feature type and update document
+    """
+    dapurl = None
+    tmpdoc_ = tmpdoc
+    if 'data_access_url_opendap' in tmpdoc:
+        dapurl = str(tmpdoc['data_access_url_opendap']).strip()
+        valid = validators.url(dapurl)
+        # Special fix for nersc.
+        if dapurl.startswith("http://thredds.nersc"):
+            dapurl.replace("http:", "https:")
+
+        if not valid:
+            logger.warn("Opendap url not valid: %s", dapurl)
+            return tmpdoc_
+
+    # if 'storage_information_file_location' in tmpdoc:
+    #     fileloc = str(tmpdoc['storage_information_file_location']).strip()
+    #     if os.path.isfile(fileloc):
+    #         dapurl = fileloc
+    #         logger.debug("Setting dapurl to read from lustre location: %s", dapurl)
+    if dapurl is not None:
+        logger.debug("Trying to open netCDF file: %s", dapurl)
+        try:
+            ds = netCDF4.Dataset(dapurl, 'r')
+        except Exception as e:
+            logger.error("Something failed reading netcdf %s. Reason: %s", dapurl, e)
+
+        # Try to get the global attribute featureType
+        featureType = None
+        try:
+            featureType = ds.getncattr('featureType')
+        except AttributeError:
+            pass
+        except Exception as e:
+            logger.error("Something failed extracting featureType: %s", str(e))
+            raise
+        if featureType is not None:
+            logger.debug("Got featuretype: %s", featureType)
+            if featureType not in ['point', 'timeSeries',
+                                   'trajectory', 'profile', 'timeSeriesProfile',
+                                   'trajectoryProfile']:
+                logger.warning(
+                    "The featureType found - %s - is not valid", featureType)
+                logger.warning("Fixing this locally")
+            if featureType.lower() == "timeseries":
+                featureType = 'timeSeries'
+            elif featureType == "timseries":
+                featureType = 'timeSeries'
+
+            if featureType is not None:
+                logger.info('feature_type found: %s', featureType)
+                tmpdoc_.update({'feature_type': featureType})
+            else:
+                logger.info('Neither gridded nor discrete sampling \
+                            geometry found in this record...')
+
+        polygon = None
+        try:
+            polygon = ds.getncattr('geospatial_bounds')
+        except AttributeError:
+            pass
+        except Exception as e:
+            logger.error("Something failed extracting geospatial_bounds: %s", str(e))
+            raise
+            # Check if we have plogon.
+
+        if polygon is not None:
+            logger.debug("Reading geospatial_bounds")
+            polygon_ = shapely.wkt.loads(polygon)
+            logger.debug("Got geospatial bounds: %s", polygon)
+            type = polygon_.geom_type
+            if type == 'Point':
+                point = polygon_.wkt
+                if shapely.has_z(polygon_):
+                    point_ = shapely.force_2d(polygon_)
+                    point = point_.wkt
+                tmpdoc_.update({'geospatial_bounds': point})
+            else:
+                polygon = transform(flip, polygon_)
+
+                tmpdoc_.update({'geospatial_bounds': polygon.wkt})
+                tmpdoc_.update({'polygon_rpt': polygon.wkt})
+
+        bounds_crs = None
+        try:
+            bounds_crs = ds.getncattr('geospatial_bounds_crs')
+        except AttributeError:
+            pass
+        except Exception as e:
+            logger.error("Something failed extracting geospatial_bounds_crs: %s", str(e))
+            raise
+            # Check if we have plogon.
+        if bounds_crs is not None:
+            crs = str(bounds_crs).strip()
+            logger.debug("Got geospatial bounds CRS: %s", crs)
+            tmpdoc_.update({'geographic_extent_polygon_srsName': crs})
+
+        logger.debug("Closing netCDF file.")
+        ds.close()
+        return tmpdoc_
+
+    return tmpdoc_
+
+
+def create_wms_thumbnail(doc):
+    """ Add thumbnail to SolR
+        Args:
+            type: solr document
+        Returns:
+            solr document with thumbnail
+    """
+    global thumbClass
+    doc_ = doc
+    url = str(doc['data_access_url_ogc_wms']).strip()
+    logger.debug("adding thumbnail for: %s", url)
+    id = str(doc['id']).strip()
+    try:
+        thumbnail_data = thumbClass.create_wms_thumbnail(url, id)
+        doc_.update({'thumbnail_data': thumbnail_data})
+    except Exception as e:
+        logger.error("Thumbnail creation from OGC WMS failed: %s", e)
+        pass
+    return doc_

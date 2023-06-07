@@ -27,9 +27,9 @@ import argparse
 import cartopy.crs as ccrs
 
 from requests.auth import HTTPBasicAuth
-from solrindexer.tools import getListOfFiles, flatten
+from solrindexer.tools import getListOfFiles, flatten, initThumb
 from solrindexer.searchindex import parse_cfg
-from solrindexer.multithread.bulkindexer import BulkIndexer
+from solrindexer.bulkindexer import BulkIndexer
 
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures import as_completed
@@ -221,9 +221,12 @@ def main():
                                   wms_zoom_level=wms_zoom_level, add_coastlines=wms_coastlines,
                                   wms_timeout=cfg['wms-timeout'], thumbnail_extent=thumbnail_extent
                                   )
+        initThumb(thumbClass)
     else:
         thumbClass = None
-    logger.info("Thumb class is %s", thumbClass)
+
+    logger.debug("Create Thumbnails?  %s", tflg)
+    logger.debug("Thumb class is %s", thumbClass)
     # EndCreatingThumbnail
 
     """ Start timer"""
@@ -233,16 +236,17 @@ def main():
     """ Create an instance of the BulkIndexer"""
     logger.debug("Creating bulkindexer.")
     bulkindexer = BulkIndexer(myfiles, mySolRc, threads=threads,
-                              chunksize=chunksize, auth=authentication)
+                              chunksize=chunksize, auth=authentication,
+                              tflg=tflg, thumbClass=thumbClass)
     """
     Indexing start. The inputlist is split into as many lists as input workers.
     Each worker will process the lists and return back the information needed to track the
     progress and parent ids
     """
     # Define some lists to keep track of the processing
-    parent_ids_pending = list()  # Keep track of pending parent ids
-    parent_ids_processed = list()  # Keep track parent ids already processed
-    parent_ids_found = list()    # Keep track of parent ids found
+    parent_ids_pending = set()  # Keep track of pending parent ids
+    parent_ids_processed = set()  # Keep track parent ids already processed
+    parent_ids_found = set()    # Keep track of parent ids found
     doc_ids_processed = set()    # Keep track of all doc ids processed
     processed = 0
     docs_failed = 0
@@ -256,45 +260,55 @@ def main():
     # We only do multiprocessing if workers is 2 or moree
     workerlistsize = round(len(myfiles)/workers)
     if workers > 1:
+        logger.debug("Using multiple processes.")
         # Split the inputfiles into lists for each worker.
         workerFileLists = [
             myfiles[i: i + workerlistsize] for i in range(0, len(myfiles), workerlistsize)]
         logger.debug("Input list: %s" % len(flatten(workerFileLists)))
-        with ProcessPoolExecutor(max_workers=workers) as executor:
-            futures_list = list()
-            for fileList in workerFileLists:
-                future = executor.submit(bulkindexer.bulkindex, fileList, chunksize)
-                futures_list.append(future)
-            for f in as_completed(futures_list):
-                (parent_ids_found_,
-                    parent_ids_pending_,
-                    doc_ids_processed_,
-                    parent_ids_processed_,
-                    docs_failed_,
-                    docs_indexed_,
-                    files_processed_) = f.result()
-                parent_ids_found.extend(parent_ids_found_)
-                parent_ids_pending.extend(parent_ids_pending_)
-                parent_ids_processed.extend(parent_ids_processed_)
-                doc_ids_processed.update(doc_ids_processed_)
-                processed += files_processed_
-                docs_failed += docs_failed_
-                docs_indexed += docs_indexed_
-                logger.info("%s docs indexed so far." % docs_indexed)
+        futures_list = list()
+        job = 1
+        executor = ProcessPoolExecutor(max_workers=workers)
+        for fileList in workerFileLists:
+            logger.debug("Submitting worker job: %d", job)
+            bulkidx = BulkIndexer(fileList, mySolRc, threads=threads,
+                                  chunksize=chunksize, auth=authentication,
+                                  tflg=tflg, thumbClass=thumbClass)
+            future = executor.submit(bulkidx.bulkindex, fileList)
+            futures_list.append(future)
+            job = job+1
+
+        for f in as_completed(futures_list):
+            (parent_ids_found_,
+                parent_ids_pending_,
+                parent_ids_processed_,
+                doc_ids_processed_,
+                docs_failed_,
+                docs_indexed_,
+                files_processed_) = f.result()
+            # logger.debug(f.result())
+            parent_ids_found.update(parent_ids_found_)
+            parent_ids_pending.update(parent_ids_pending_)
+            parent_ids_processed.update(parent_ids_processed_)
+            doc_ids_processed.update(doc_ids_processed_)
+            processed += files_processed_
+            docs_failed += docs_failed_
+            docs_indexed += docs_indexed_
+            logger.info("%s docs indexed so far." % docs_indexed)
 
     # Bulkindex using main process.
     else:
+        logger.debug("Using ONE process.")
         (parent_ids_found_,
-            parent_ids_pending_,
-            doc_ids_processed_,
-            parent_ids_processed_,
-            docs_failed_,
-            docs_indexed_,
-            files_processed_) = bulkindexer.bulkindex(myfiles)
+         parent_ids_pending_,
+         parent_ids_processed_,
+         doc_ids_processed_,
+         docs_failed_,
+         docs_indexed_,
+         files_processed_) = bulkindexer.bulkindex(myfiles)
 
-        parent_ids_found.extend(parent_ids_found_)
-        parent_ids_pending.extend(parent_ids_pending_)
-        parent_ids_processed.extend(parent_ids_processed_)
+        parent_ids_found.update(parent_ids_found_)
+        parent_ids_pending.update(parent_ids_pending_)
+        parent_ids_processed.update(parent_ids_processed_)
         doc_ids_processed.update(doc_ids_processed_)
         processed += files_processed_
         docs_failed += docs_failed_
@@ -303,38 +317,39 @@ def main():
     # TODO: Add last parent missing index check here. after refactor this logic
     # summary of possible missing parents
     missing = list(set(parent_ids_found) - set(parent_ids_processed))
-    logger.info("The last parents should be in index")
-    for pid in missing:
-        myparent = None
-        myparent = bulkindexer.mysolr.get_dataset(pid)
+    if len(missing) > 0:
+        logger.info("The last parents should be in index")
+        for pid in missing:
+            myparent = None
+            myparent = bulkindexer.mysolr.get_dataset(pid)
 
-        if myparent['doc'] is not None:
-            logger.info(
-                "parent found in index: %s, isParent: %s",
-                (myparent['doc']['id'], myparent['doc']['isParent']))
-            # Check if already flagged
-            if myparent['doc']['isParent'] is False:
-                logger.info('Update on indexed parent %s, isParent: True' % pid)
-                mydoc = bulkindexer.mysolr._solr_update_parent_doc(myparent['doc'])
-                doc_ = mydoc
-                try:
-                    bulkindexer.solrcon.add([doc_])
-                except Exception as e:
-                    logger.errors("Could not update parent on index. reason %s", e)
+            if myparent['doc'] is not None:
+                logger.info(
+                    "parent found in index: %s, isParent: %s",
+                    (myparent['doc']['id'], myparent['doc']['isParent']))
+                # Check if already flagged
+                if myparent['doc']['isParent'] is False:
+                    logger.info('Update on indexed parent %s, isParent: True' % pid)
+                    mydoc = bulkindexer.mysolr._solr_update_parent_doc(myparent['doc'])
+                    doc_ = mydoc
+                    try:
+                        bulkindexer.solrcon.add([doc_])
+                    except Exception as e:
+                        logger.errors("Could not update parent on index. reason %s", e)
 
-                # Update lists
-                parent_ids_processed.append(pid)
+                    # Update lists
+                    parent_ids_processed.add(pid)
 
-                # Remove from pending list
-                if pid in parent_ids_pending:
-                    parent_ids_pending.remove(pid)
+                    # Remove from pending list
+                    if pid in parent_ids_pending:
+                        parent_ids_pending.remove(pid)
 
     logger.info("====== BATCH END ===== %s files processed with %s workers and batch size %s ==",
                 len(myfiles), workers, chunksize)
-    logger.info("Parent ids found: %s" % len(set(parent_ids_found)))
-    logger.info("Parent ids pending: %s" % len(set(parent_ids_pending)))
-    logger.info("Parent ids processed: %s" % len(set(parent_ids_processed)))
-    logger.info("Parent ids pending list: %s" % len(set(parent_ids_pending)))
+    logger.info("Parent ids found: %s" % len(parent_ids_found))
+    logger.info("Parent ids pending: %s" % len(parent_ids_pending))
+    logger.info("Parent ids processed: %s" % len(parent_ids_processed))
+    logger.info("Document ids processed: %s" % len(doc_ids_processed))
     logger.info("===============================================================================")
 
     # summary of possible missing parents
@@ -361,9 +376,7 @@ def main():
     logger.info('Execution time: %s', time.strftime("%H:%M:%S", time.gmtime(elapsed_time)))
     logger.info('CPU time: %s', time.strftime("%H:%M:%S", time.gmtime(pelt)))
     if end_solr_commit:
-        st = time.perf_counter()
         bulkindexer.mysolr.commit()
-        et = time.perf_counter()
 
 
 def _main():  # pragma: no cover

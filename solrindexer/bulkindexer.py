@@ -23,16 +23,18 @@ import threading
 
 from solrindexer.indexdata import MMD4SolR
 from solrindexer.indexdata import IndexMMD
-from solrindexer.tools import to_solr_id
+from solrindexer.tools import to_solr_id, process_feature_type
+from solrindexer.tools import create_wms_thumbnail
 from solrindexer.multithread.io import load_file
 from solrindexer.multithread.threads import concurrently
 
 from concurrent.futures import ThreadPoolExecutor
+from concurrent import futures as Futures
 
 logger = logging.getLogger(__name__)
 
 
-class BulkIndexer:
+class BulkIndexer(object):
     """ Do multithreaded bulkindexing given a list of file names.
     ...
 
@@ -50,7 +52,8 @@ class BulkIndexer:
         valid authentication object for SolR
     """
 
-    def __init__(self, inputList, solr_url, threads=20, chunksize=2500, auth=None):
+    def __init__(self, inputList, solr_url, threads=20, chunksize=2500, auth=None,
+                 tflg=False, thumbClass=None):
         """ Initialize BulkIndexer"""
         logger.debug("Initializing BulkIndexer.")
         self.inputList = inputList
@@ -60,6 +63,11 @@ class BulkIndexer:
 
         self.solrcon = pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=auth)
         self.mysolr = IndexMMD(solr_url, False, authentication=auth)
+
+        """Initialize thumbnail generator"""
+        self.tflg = tflg
+        #     self.thumb = thumbClass
+        #     initThumb(thumbClass)
 
     def mmd2solr(self, mmd, status, file):
         """
@@ -132,6 +140,7 @@ class BulkIndexer:
                     tmpdoc.update({'related_dataset': myparentid.strip()})
                     mysolrparentid = to_solr_id(myparentid)
                     tmpdoc.update({'related_dataset_id': mysolrparentid})
+                    status = mysolrparentid
 
         else:
             # Assume we have level-1 doc that are not parent
@@ -172,9 +181,9 @@ class BulkIndexer:
         logger.debug("Got %d input files", len(filelist))
         logger.debug("Processing with batchsize %d", chunksize)
         # Define some lists to keep track of the processing
-        parent_ids_pending = list()  # Keep track of pending parent ids
-        parent_ids_processed = list()  # Keep track parent ids already processed
-        parent_ids_found = list()    # Keep track of parent ids found
+        parent_ids_pending = set()  # Keep track of pending parent ids
+        parent_ids_processed = set()  # Keep track parent ids already processed
+        parent_ids_found = set()    # Keep track of parent ids found
 
         # keep track of batch process
         indexthreads = list()
@@ -185,6 +194,7 @@ class BulkIndexer:
         doc_ids_processed = set()
         # print("######### BATCH START ###########################")
         for i in range(0, len(filelist), chunksize):
+            logger.info("---- Batch run %d ----", i+1)
             # select a chunk
             files = filelist[i:(i + chunksize)]
             docs = list()
@@ -194,7 +204,9 @@ class BulkIndexer:
             # Load each file using multiple threads, and process documents as files are loaded
             ###################################################################
             """
-            for (file, mmd) in concurrently(fn=load_file, inputs=files):
+            logger.info("---- Reading files concurrently ----")
+            for (file, mmd) in concurrently(fn=load_file, inputs=files,
+                                            max_concurrency=self.threads):
 
                 # Get the processed document and its status
                 doc, status = self.mmd2solr(mmd, None, file)
@@ -203,19 +215,19 @@ class BulkIndexer:
                 docs.append(doc)
                 statuses.append(status)
             """################################## THREADS FINISHED ##################"""
-
+            Futures.ALL_COMPLETED
             # Check if we got some children in the batch pointing to a parent id
             parentids = set(
                 [element for element in statuses if element is not None])
-            # print(parentids)
+            logger.debug(parentids)
 
             # Check if the parent(s) of the children(s) was found before.
             # If not, we add them to found.
             for pid in parentids:
                 if pid not in parent_ids_found:
-                    parent_ids_found.append(pid)
+                    parent_ids_found.add(pid)
                 if pid not in parent_ids_pending and pid not in parent_ids_processed:
-                    parent_ids_pending.append(pid)
+                    parent_ids_pending.add(pid)
 
             # Check if the parent(s) of the children(s) we found was processed.
             # If so, we do not process agian
@@ -239,21 +251,37 @@ class BulkIndexer:
 
             # keep track of all document ids we have indexed, so we do not have to check solr
             # for a parent more than we need
-            docids_ = [doc['id'] for doc in docs]
+            docids_ = set([doc['id'] for doc in docs])
             doc_ids_processed.update(docids_)
 
-            # TODO: SEGFAULT NEED TO INVESTIGATE
             # Process feature types here, using the concurrently function,
             dap_docs = [
                 doc for doc in docs if 'data_access_url_opendap' in doc]
             """######################## STARTING THREADS ########################
             # Load each file using multiple threads, and process documents as files are loaded
             ###################################################################"""
-            for (doc, newdoc) in concurrently(fn=self.mysolr.process_feature_type,
-                                              inputs=dap_docs, max_concurrency=10):
+            logger.info("---- Process featureType concurrently ----")
+            for (doc, newdoc) in concurrently(fn=process_feature_type,
+                                              inputs=dap_docs,
+                                              max_concurrency=self.threads):
                 docs.remove(doc)
                 docs.append(newdoc)
             """################################## THREADS FINISHED ##################"""
+            Futures.ALL_COMPLETED
+            """TODO: Add wms thumbnail batch creation here."""
+            if self.tflg is True:
+                thumb_docs = [
+                    doc for doc in docs if 'data_access_url_ogc_wms' in doc]
+                """######################## STARTING THREADS ########################
+                # Load each file using multiple threads, and process documents as files are loaded
+                ###################################################################"""
+                logger.debug("---- Creating thumbnails concurrently ----")
+                for (doc, newdoc) in concurrently(fn=create_wms_thumbnail,
+                                                  inputs=thumb_docs,
+                                                  max_concurrency=self.threads):
+                    docs.remove(doc)
+                    docs.append(newdoc)
+                """################################## THREADS FINISHED ##################"""
 
             # Run over the list of parentids found in this chunk, and look for the parent
             parent_found = False
@@ -272,7 +300,7 @@ class BulkIndexer:
                     parent_found = True
                     if myparent['isParent'] is False:
                         logger.debug('found pending parent %s in this job.' % pid)
-                        logger.debug('updating pending parent')
+                        logger.debug('updating parent')
 
                         docs.remove(myparent)  # Remove original
                         myparent_.update({'isParent': True})
@@ -283,7 +311,7 @@ class BulkIndexer:
                             parent_ids_pending.remove(pid)
 
                         # add to processed list for reference
-                        parent_ids_processed.append(pid)
+                        parent_ids_processed.add(pid)
 
                 # Check if the parent is already in the index, and flag
                 # it as parent if not done already
@@ -296,7 +324,7 @@ class BulkIndexer:
                             if pid not in parent_ids_pending:
                                 logger.debug(
                                     'parent %s not found in index. storing it for later' % pid)
-                                parent_ids_pending.append(pid)
+                                parent_ids_pending.add(pid)
 
                         # If found in index we update the parent
                         else:
@@ -318,7 +346,7 @@ class BulkIndexer:
                                             "Could update parent on index. reason %s", e)
 
                                     # Update lists
-                                    parent_ids_processed.append(pid)
+                                    parent_ids_processed.add(pid)
 
                                     # Remove from pending list
                                     if pid in parent_ids_pending:
@@ -326,58 +354,59 @@ class BulkIndexer:
 
             # Last we check if parents pending previous chunks is in this chunk
             ppending = set(parent_ids_pending)
-            logger.debug(" == Checking Pending == ")
-            for pid in ppending:
-                # Firs we check if the parent dataset are in our jobs
-                myparent = None
-                parent = [el for el in docs if el['id'] == pid]
+            if len(ppending) > 0:
+                logger.debug(" == Checking Pending == ")
+                for pid in ppending:
+                    # Firs we check if the parent dataset are in our jobs
+                    myparent = None
+                    parent = [el for el in docs if el['id'] == pid]
 
-                if len(parent) > 0:
-                    myparent = parent.pop()
-                    myparent_ = myparent
-                    logger.debug("pending parent found in current chunk: %s ", myparent['id'])
-                    parent_found = True
-                    if myparent['isParent'] is False:
-                        logger.debug('found unprocessed pending parent %s in this job.' % pid)
-                        logger.debug('updating parent')
+                    if len(parent) > 0:
+                        myparent = parent.pop()
+                        myparent_ = myparent
+                        logger.debug("pending parent found in current chunk: %s ", myparent['id'])
+                        parent_found = True
+                        if myparent['isParent'] is False:
+                            logger.debug('found unprocessed pending parent %s in this job.' % pid)
+                            logger.debug('updating parent')
 
-                        docs.remove(myparent)  # Remove original
-                        myparent_.update({'isParent': True})
-                        docs.append(myparent_)
-
-                        # Remove from pending list
-                        if pid in parent_ids_pending:
-                            parent_ids_pending.remove(pid)
-
-                        # add to processed list for reference
-                        parent_ids_processed.append(pid)
-
-                # If the parent was proccesd, asume it was indexed before flagged
-                if pid in doc_ids_processed and not parent_found:
-                    myparent = self.mysolr.get_dataset(pid)
-
-                    # If we did not find the parent in this job, check if it was already indexed
-                    if myparent['doc'] is not None:
-                        logger.debug("pending parent found in index: %s, isParent: %s",
-                                     (myparent['doc']['id'], myparent['doc']['isParent']))
-
-                        if myparent['doc']['isParent'] is False:
-                            logger.debug('Update on indexed parent %s, isParent: True' % pid)
-                            mydoc_ = self.mysolr._solr_update_parent_doc(myparent['doc'])
-                            mydoc = mydoc_
-                            # doc = {'id': pid, 'isParent': True}
-                            try:
-                                self.solrcon.add([mydoc])
-                            except Exception as e:
-                                logger.error(
-                                    "Could not update parent on index. reason %s", e)
-
-                            # Update lists
-                            parent_ids_processed.append(pid)
+                            docs.remove(myparent)  # Remove original
+                            myparent_.update({'isParent': True})
+                            docs.append(myparent_)
 
                             # Remove from pending list
                             if pid in parent_ids_pending:
                                 parent_ids_pending.remove(pid)
+
+                            # add to processed list for reference
+                            parent_ids_processed.add(pid)
+
+                    # If the parent was proccesd, asume it was indexed before flagged
+                    if pid in doc_ids_processed and not parent_found:
+                        myparent = self.mysolr.get_dataset(pid)
+
+                        # If we did not find the parent in this job, check if it was already indexed
+                        if myparent['doc'] is not None:
+                            logger.debug("pending parent found in index: %s, isParent: %s",
+                                         (myparent['doc']['id'], myparent['doc']['isParent']))
+
+                            if myparent['doc']['isParent'] is False:
+                                logger.debug('Update on indexed parent %s, isParent: True' % pid)
+                                mydoc_ = self.mysolr._solr_update_parent_doc(myparent['doc'])
+                                mydoc = mydoc_
+                                # doc = {'id': pid, 'isParent': True}
+                                try:
+                                    self.solrcon.add([mydoc])
+                                except Exception as e:
+                                    logger.error(
+                                        "Could not update parent on index. reason %s", e)
+
+                                # Update lists
+                                parent_ids_processed.add(pid)
+
+                                # Remove from pending list
+                                if pid in parent_ids_pending:
+                                    parent_ids_pending.remove(pid)
 
             # TODO: Add posibility to not index datasets that are already in the index
                 # 1. Generate a list of doc ids from the docs to be indexed.
@@ -394,12 +423,16 @@ class BulkIndexer:
             indexthread = threading.Thread(target=self.add2solr, name="Index thread %s" % (
                 len(indexthreads)+1), args=(docs, self.msg_callback))
             indexthreads.append(indexthread)
+            logger.debug("Starting thread: %s", indexthread.getName())
             indexthread.start()
 
             # If we have reached maximum threads, we wait until finished
+            # if len(indexthreads) >= self.threads:
+            #     thr = indexthreads.pop(0)
+            #     thr.join()
             if len(indexthreads) >= self.threads:
-                thr = indexthreads.pop(0)
-                thr.join()
+                for thr in indexthreads:
+                    thr.join()
 
         #   print("===================================")
         #   print("Added %s documents to solr. Total: %s" % (len(docs),docs_indexed))
@@ -412,30 +445,32 @@ class BulkIndexer:
 
         # Last we assume all pending parents are in the index
         ppending = set(parent_ids_pending)
-        logger.debug("The last parents should be in index, or was processed by another worker.")
-        for pid in ppending:
+        if len(ppending) > 0:
+            logger.debug("The last parents should be in index, or was processed by another worker.")
+            for pid in ppending:
 
-            myparent = None
-            myparent = self.mysolr.get_dataset(pid)
-            if myparent['doc'] is not None:
-                logger.debug("pending parent found in index: %s, isParent: %s",
-                             (myparent['doc']['id'], myparent['doc']['isParent']))
+                myparent = None
+                myparent = self.mysolr.get_dataset(pid)
+                if myparent['doc'] is not None:
+                    logger.debug("pending parent found in index: %s, isParent: %s",
+                                 (myparent['doc']['id'], myparent['doc']['isParent']))
 
-                if myparent['doc']['isParent'] is False:
-                    logger.debug('Update on indexed parent %s, isParent: True' % pid)
-                    mydoc_ = self.mysolr._solr_update_parent_doc(myparent['doc'])
+                    if myparent['doc']['isParent'] is False:
+                        logger.debug('Update on indexed parent %s, isParent: True' % pid)
+                        mydoc_ = self.mysolr._solr_update_parent_doc(myparent['doc'])
 
-                    # doc = {'id': pid, 'isParent': True}
-                    try:
-                        self.solrcon.add([mydoc_])
-                    except Exception as e:
-                        logger.error("Could not update parent on index. reason %s", e)
-                        # Update lists
-                    parent_ids_processed.append(pid)
+                        # doc = {'id': pid, 'isParent': True}
+                        try:
+                            self.solrcon.add([mydoc_])
+                        except Exception as e:
+                            logger.error("Could not update parent on index. reason %s", e)
+                            # Update lists
+                        parent_ids_processed.add(pid)
 
-                    # Remove from pending list
-                    if pid in parent_ids_pending:
-                        parent_ids_pending.remove(pid)
+                        # Remove from pending list
+                        if pid in parent_ids_pending:
+                            parent_ids_pending.remove(pid)
+
         parent_ids_found_ = parent_ids_found
         parent_ids_pending_ = parent_ids_pending
         parent_ids_processed_ = parent_ids_processed

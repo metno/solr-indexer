@@ -36,3 +36,4 @@ def concurrently(fn, inputs, *, max_concurrency=5):
             for input in itertools.islice(fn_inputs, len(done)):
                 fut = executor.submit(fn, input)
                 futures[fut] = input
+

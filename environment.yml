@@ -6,7 +6,7 @@ dependencies:
   - matplotlib>=3.1
   - numpy>=1.17
   - scipy>=1.2
-  - netcdf4>=1.6.3
+  - netcdf4>=1.6.4
   - pyproj>=2.3
   - cartopy
   - pip
@@ -16,6 +16,7 @@ dependencies:
   - yaml
   - owslib
   - ipython
+  - cython
   - shapely>=2.0
   - lxml
   - geojson
@@ -23,3 +24,4 @@ dependencies:
   - validators
   - certifi
   - urllib3
+  - requests

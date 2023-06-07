@@ -31,7 +31,7 @@ def load_file(filename):
     """
     Load xml file and convert to dict using xmltodict
     """
-    filename = filename.strip()
+    filename = str(filename).strip().rstrip()
     try:
         file = Path(filename)
     except Exception as e:

@@ -39,11 +39,14 @@ import logging
 import base64
 
 import cartopy.crs as ccrs
+import matplotlib
 import matplotlib.pyplot as plt
 
 from owslib.wms import WebMapService
 
 logger = logging.getLogger(__name__)
+
+matplotlib.use('agg')
 
 
 class WMSThumbNail:

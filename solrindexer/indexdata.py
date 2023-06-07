@@ -860,7 +860,8 @@ class MMD4SolR:
                                     elem['@vocabulary'])
                                 mydict['keywords_keyword'].append(keyword)
                         else:
-                            if mmd['mmd:keywords'][i]['@vocabulary'] == "GCMDSK":
+                            logger.debug(type(elem))
+                            if elem['@vocabulary'] == "None" or elem['@vocabulary'] == "GCMDSK":
                                 mydict['keywords_gcmd'].append(
                                     elem['mmd:keyword'])
                             mydict['keywords_vocabulary'].append(
@@ -1181,6 +1182,24 @@ class IndexMMD:
                 logger.warning("The featureType found is a new typo...")
         return featureType
 
+    def create_thumbnail(self, doc):
+        """ Add thumbnail to SolR
+            Args:
+                type: solr document
+            Returns:
+                solr document with thumbnail
+        """
+        url = str(doc['data_access_url_ogc_wms']).strip()
+        logger.debug("adding thumbnail for: %s", url)
+        id = str(doc['id']).strip()
+        try:
+            thumbnail_data = self.thumbClass.create_wms_thumbnail(url, id)
+            doc.update({'thumbnail_data': thumbnail_data})
+            return doc
+        except Exception as e:
+            logger.error("Thumbnail creation from OGC WMS failed: %s", e)
+            return doc
+
     @staticmethod
     def process_feature_type(tmpdoc):
         """
@@ -1189,7 +1208,7 @@ class IndexMMD:
         dapurl = None
         tmpdoc_ = tmpdoc
         if 'data_access_url_opendap' in tmpdoc:
-            dapurl = str(tmpdoc['data_access_url_opendap'])
+            dapurl = str(tmpdoc['data_access_url_opendap']).strip()
             valid = validators.url(dapurl)
             # Special fix for nersc.
             if dapurl.startswith("http://thredds.nersc"):
@@ -1347,7 +1366,8 @@ class IndexMMD:
         if res is None:
             return None
         else:
-            return res.json()
+            dataset = res.json()
+            return dataset
 
     @staticmethod
     def _solr_update_parent_doc(parent):

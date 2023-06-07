@@ -17,7 +17,7 @@ implied. See the License for the specific language governing
 permissions and limitations under the License.
 """
 
-from .bulkindexer import BulkIndexer
+# from .bulkindexer import BulkIndexer
 from .io import load_file, load_files
 from .threads import concurrently
 
@@ -25,5 +25,5 @@ from .threads import concurrently
 __package__ = "multithread"
 __version__ = "2.0.0"
 __date__ = "2023-12-13"
-__all__ = ["BulkIndexer", "load_file", "load_files",
+__all__ = ["load_file", "load_files",
            "concurrently"]
