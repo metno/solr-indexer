@@ -385,7 +385,7 @@ class BulkIndexer(object):
                     if pid in doc_ids_processed and not parent_found:
                         myparent = self.mysolr.get_dataset(pid)
 
-                        # If we did not find the parent in this job, check if it was already indexed
+                        # If we did not find the parent in this job, check the index
                         if myparent['doc'] is not None:
                             logger.debug("pending parent found in index: %s, isParent: %s",
                                          (myparent['doc']['id'], myparent['doc']['isParent']))
@@ -446,7 +446,8 @@ class BulkIndexer(object):
         # Last we assume all pending parents are in the index
         ppending = set(parent_ids_pending)
         if len(ppending) > 0:
-            logger.debug("The last parents should be in index, or was processed by another worker.")
+            logger.debug(
+                "The last parents should be in index, or was processed by another worker.")
             for pid in ppending:
 
                 myparent = None
