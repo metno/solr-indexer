@@ -234,6 +234,7 @@ def process_feature_type(tmpdoc):
             ds = netCDF4.Dataset(dapurl, 'r')
         except Exception as e:
             logger.error("Something failed reading netcdf %s. Reason: %s", dapurl, e)
+
             return tmpdoc_
 
         # Try to get the global attribute featureType
@@ -244,7 +245,9 @@ def process_feature_type(tmpdoc):
             pass
         except Exception as e:
             logger.error("Something failed extracting featureType: %s", str(e))
-            raise
+            ds.close()
+            return tmpdoc_
+
         if featureType is not None:
             logger.debug("Got featuretype: %s", featureType)
             if featureType not in ['point', 'timeSeries',
@@ -272,7 +275,8 @@ def process_feature_type(tmpdoc):
             pass
         except Exception as e:
             logger.error("Something failed extracting geospatial_bounds: %s", str(e))
-            raise
+            ds.close()
+            return tmpdoc_
             # Check if we have plogon.
 
         if polygon is not None:
@@ -299,7 +303,8 @@ def process_feature_type(tmpdoc):
             pass
         except Exception as e:
             logger.error("Something failed extracting geospatial_bounds_crs: %s", str(e))
-            raise
+            ds.close()
+            return tmpdoc_
             # Check if we have plogon.
         if bounds_crs is not None:
             crs = str(bounds_crs).strip()
