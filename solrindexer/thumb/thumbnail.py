@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 matplotlib.use('agg')
 
 
-class WMSThumbNail:
+class WMSThumbNail(object):
 
     """
     wms_layer (str): WMS layer name
