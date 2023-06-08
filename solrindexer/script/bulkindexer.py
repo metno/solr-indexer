@@ -365,11 +365,11 @@ def main():
     if len(missing) > 0:
         logger.warning("Make sure to index the missing parents and then index the children")
 
-    logger.info("====== BATCH END ===== %s files processed with %s workers and batch size %s ==",
+    logger.info("====== INDEX END ===== %s files processed with %s workers and batch size %s ==",
                 len(myfiles), workers, chunksize)
     logger.info("Parent ids found: %s" % len(parent_ids_found))
-    logger.info("Parent ids pending: %s" % len(parent_ids_pending))
     logger.info("Parent ids processed: %s" % len(parent_ids_processed))
+    logger.info("Parent ids pending: %s" % len(parent_ids_pending))
     logger.info("Document ids processed: %s" % len(doc_ids_processed))
     logger.info("===============================================================================")
 
