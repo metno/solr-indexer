@@ -30,8 +30,12 @@ import dateutil.parser
 
 from shapely.ops import transform
 
+from threading import Lock
+
 # Logging Setup
 logger = logging.getLogger(__name__)
+
+lock = Lock()
 
 IDREPLS = [':', '/', '.']
 
@@ -230,6 +234,7 @@ def process_feature_type(tmpdoc):
     #         logger.debug("Setting dapurl to read from lustre location: %s", dapurl)
     if dapurl is not None:
         logger.debug("Trying to open netCDF file: %s", dapurl)
+        lock.acquire()
         try:
             ds = netCDF4.Dataset(dapurl, 'r')
         except Exception as e:
@@ -313,6 +318,7 @@ def process_feature_type(tmpdoc):
 
         logger.debug("Closing netCDF file.")
         ds.close()
+        lock.release()
         return tmpdoc_
 
     return tmpdoc_
