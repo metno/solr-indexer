@@ -335,5 +335,6 @@ def create_wms_thumbnail(doc):
         doc_.update({'thumbnail_data': thumbnail_data})
     except Exception as e:
         logger.error("Thumbnail creation from OGC WMS failed: %s", e)
-        pass
-    return doc_
+
+    finally:
+        return doc_
