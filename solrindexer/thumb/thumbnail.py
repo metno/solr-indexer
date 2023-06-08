@@ -42,11 +42,15 @@ import cartopy.crs as ccrs
 import matplotlib
 import matplotlib.pyplot as plt
 
+from threading import Lock
+
 from owslib.wms import WebMapService
 
 logger = logging.getLogger(__name__)
 
 matplotlib.use('agg')
+
+lock = Lock()
 
 
 class WMSThumbNail(object):
@@ -74,6 +78,8 @@ class WMSThumbNail(object):
         self.projection = projection
         self.thumbnail_type = thumbnail_type
         self.thumbnail_extent = thumbnail_extent
+
+        matplotlib.use('Agg')
 
     def create_wms_thumbnail(self, url, id):
         """ Create a base64 encoded thumbnail by means of cartopy.
@@ -141,6 +147,7 @@ class WMSThumbNail(object):
         subplot_kw = dict(projection=map_projection)
         logger.debug(subplot_kw)
 
+        lock.acquire()
         fig, ax = plt.subplots(subplot_kw=subplot_kw)
 
         # land_mask = cartopy.feature.NaturalEarthFeature(category='physical',
@@ -175,6 +182,7 @@ class WMSThumbNail(object):
         thumbnail_fname = 'thumbnail_{}.png'.format(id)
         fig.savefig(thumbnail_fname, format='png', bbox_inches='tight')
         plt.close('all')
+        lock.release()
 
         with open(thumbnail_fname, 'rb') as infile:
             data = infile.read()
