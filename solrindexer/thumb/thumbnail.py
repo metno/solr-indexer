@@ -99,6 +99,9 @@ class WMSThumbNail(object):
         map_projection = self.projection
         thumbnail_extent = self.thumbnail_extent
 
+        # Make sure url does not provide request attributes
+        url = url.split('?')[0]
+
         # map projection string to ccrs projection
         if isinstance(map_projection, str):
             map_projection = getattr(ccrs, map_projection)()

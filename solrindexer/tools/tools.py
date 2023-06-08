@@ -338,3 +338,11 @@ def create_wms_thumbnail(doc):
 
     finally:
         return doc_
+
+
+def main():
+    logger.info("Tools Main")
+
+
+if __name__ == "__main__":  # pragma: no cover
+    main()
