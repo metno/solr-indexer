@@ -103,6 +103,7 @@ class WMSThumbNail(object):
         if isinstance(map_projection, str):
             map_projection = getattr(ccrs, map_projection)()
 
+        logger.debug("Opening wms url %s with timeout %d", url, wms_timeout)
         wms = WebMapService(url, timeout=wms_timeout)
         available_layers = list(wms.contents.keys())
 
