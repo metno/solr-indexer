@@ -149,6 +149,7 @@ class WMSThumbNail(object):
         logger.debug(subplot_kw)
 
         lock.acquire()
+        logger.debug("Aquire lock - creating subplot.")
         fig, ax = plt.subplots(subplot_kw=subplot_kw)
 
         # land_mask = cartopy.feature.NaturalEarthFeature(category='physical',
@@ -168,7 +169,7 @@ class WMSThumbNail(object):
         fig.set_figheight(4.5)
         fig.set_dpi(100)
         # ax.background_patch.set_alpha(1)
-
+        logger.debug("ax.add_wms().")
         ax.add_wms(wms, wms_layer,
                    wms_kwargs={'transparent': False,
                                'styles': wms_style})
@@ -183,6 +184,7 @@ class WMSThumbNail(object):
         thumbnail_fname = 'thumbnail_{}.png'.format(id)
         fig.savefig(thumbnail_fname, format='png', bbox_inches='tight')
         plt.close('all')
+        logger.debug("plot closed. releasing lock.")
         lock.release()
 
         with open(thumbnail_fname, 'rb') as infile:
