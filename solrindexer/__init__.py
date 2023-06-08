@@ -45,7 +45,7 @@ def _init_logging(log_obj):
         log_level = logging.INFO
 
     if log_level < logging.INFO:
-        msg_format = "[{asctime:}] [%{thread}d] [%{threadName}s"
+        msg_format = "[{asctime:}] [%(thread)d] [%(threadName)s]"
         msg_format += " {name:>28}:{lineno:<4d} {levelname:8s} {message:}"
     else:
         msg_format = "{levelname:8s} {message:}"
