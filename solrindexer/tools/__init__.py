@@ -27,7 +27,10 @@ from .tools import checkDateFormat
 from .tools import getListOfFiles
 from .tools import process_feature_type
 from .tools import initThumb
+from .tools import initSolr
 from .tools import create_wms_thumbnail
+from .tools import get_dataset, solr_add, solr_commit
+
 
 __package__ = "tools"
 __version__ = "2.0.0"
@@ -35,4 +38,5 @@ __date__ = "2023-12-13"
 __all__ = ["flip", "rewrap", "to_solr_id",
            "parse_date", "getZones", "checkDateFormat",
            "getListOfFiles", "flatten", "process_feature_type",
-           "initThumb", "create_wms_thumbnail"]
+           "initThumb", "create_wms_thumbnail", "initSolr",
+           "get_dataset", "solr_add", "solr_commit"]

@@ -102,7 +102,7 @@ class WMSThumbNail:
 
         if wms_layer not in available_layers:
             wms_layer = available_layers[0]
-            logger.info(
+            logger.debug(
                 'Creating WMS thumbnail for layer: {}'.format(wms_layer))
 
         # Checking styles
@@ -139,7 +139,7 @@ class WMSThumbNail:
                     cartopy_extent_zoomed[i] = max_extent[i]
 
         subplot_kw = dict(projection=map_projection)
-        logger.info(subplot_kw)
+        logger.debug(subplot_kw)
 
         fig, ax = plt.subplots(subplot_kw=subplot_kw)
 

@@ -23,6 +23,7 @@ import math
 import fnmatch
 import shapely
 import logging
+import requests
 import validators
 import netCDF4
 import dateutil.parser
@@ -42,11 +43,69 @@ DATETIME_REGEX = re.compile(
 global thumbClass
 thumbClass = None
 
+# Global Solr connection
+global solr_endpoint
+solr_endpoint = None
+
+global solr_pysolr
+solr_pysolr = None
+
+global authClass
+authClass = None
+
 
 def initThumb(thumb):
     """Initialise configured thumbnail class"""
     global thumbClass
     thumbClass = thumb
+
+
+def initSolr(solrc, solrcon, auth):
+    """Initialize Solr"""
+    global solr_endpoint
+    solr_endpoint = solrc
+
+    global solr_pysolr
+    solr_pysolr = solrcon
+
+    global authClass
+    authClass = auth
+
+
+def get_dataset(id):
+    """
+    Use real-time get to fetch latest dataset
+    based on id.
+    """
+    res = None
+    try:
+        res = requests.get(solr_endpoint + '/get?id=' + id,
+                           auth=authClass)
+        res.raise_for_status()
+    except requests.exceptions.HTTPError as errh:
+        logger.error("Http Error: %s", errh)
+    except requests.exceptions.ConnectionError as errc:
+        logger.error("Error Connecting: %s", errc)
+    except requests.exceptions.Timeout as errt:
+        logger.error("Timeout Error: %s", errt)
+    except requests.exceptions.RequestException as err:
+        logger.error("OOps: Something Else went wrong: %s", err)
+
+    if res is None:
+        return None
+    else:
+        dataset = res.json()
+        return dataset
+
+
+def solr_add(docs):
+    """Add documents to solr"""
+    solr_pysolr.add(docs)
+
+
+def solr_commit():
+    """Commit solr transaction and open new searcher"""
+    solr_pysolr.commit()
 
 
 def flip(x, y):
@@ -175,6 +234,7 @@ def process_feature_type(tmpdoc):
             ds = netCDF4.Dataset(dapurl, 'r')
         except Exception as e:
             logger.error("Something failed reading netcdf %s. Reason: %s", dapurl, e)
+            return tmpdoc_
 
         # Try to get the global attribute featureType
         featureType = None

@@ -860,7 +860,7 @@ class MMD4SolR:
                                     elem['@vocabulary'])
                                 mydict['keywords_keyword'].append(keyword)
                         else:
-                            logger.debug(type(elem))
+                            # logger.debug(type(elem))
                             if elem['@vocabulary'] == "None" or elem['@vocabulary'] == "GCMDSK":
                                 mydict['keywords_gcmd'].append(
                                     elem['mmd:keyword'])
@@ -1328,6 +1328,7 @@ class IndexMMD:
         return (mylinks)
 
     def delete(self, id, commit=False):
+        """Delete document with given metadata identifier"""
         solr_id = to_solr_id(id)
         doc_exsists = self.get_dataset(solr_id)
         if (doc_exsists["doc"] is None):

@@ -22,14 +22,17 @@ permissions and limitations under the License.
 import os
 import sys
 import time
+import pysolr
 import logging
 import argparse
 import cartopy.crs as ccrs
 
 from requests.auth import HTTPBasicAuth
-from solrindexer.tools import getListOfFiles, flatten, initThumb
+from solrindexer.tools import getListOfFiles, flatten, initThumb, initSolr
+from solrindexer.tools import solr_commit, solr_add, get_dataset
 from solrindexer.searchindex import parse_cfg
 from solrindexer.bulkindexer import BulkIndexer
+from solrindexer.indexdata import IndexMMD
 
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures import as_completed
@@ -138,6 +141,11 @@ def main():
     chunksize = 2500
     threads = 20
     workers = 10
+
+    # Initialize Solr
+    initSolr(mySolRc,
+             pysolr.Solr(mySolRc, always_commit=False, timeout=1020, auth=authentication),
+             authentication)
 
     # Bulkinder defaults override from config
     if 'batch-size' in cfg:
@@ -269,11 +277,12 @@ def main():
         job = 1
         executor = ProcessPoolExecutor(max_workers=workers)
         for fileList in workerFileLists:
-            logger.debug("Submitting worker job: %d", job)
+            logger.info("Submitting worker job %d - with %d files", job, len(fileList))
             bulkidx = BulkIndexer(fileList, mySolRc, threads=threads,
                                   chunksize=chunksize, auth=authentication,
                                   tflg=tflg, thumbClass=thumbClass)
             future = executor.submit(bulkidx.bulkindex, fileList)
+
             futures_list.append(future)
             job = job+1
 
@@ -321,19 +330,19 @@ def main():
         logger.info("The last parents should be in index")
         for pid in missing:
             myparent = None
-            myparent = bulkindexer.mysolr.get_dataset(pid)
+            myparent = get_dataset(pid)
 
             if myparent['doc'] is not None:
                 logger.info(
                     "parent found in index: %s, isParent: %s",
-                    (myparent['doc']['id'], myparent['doc']['isParent']))
+                    myparent['doc']['id'], myparent['doc']['isParent'])
                 # Check if already flagged
                 if myparent['doc']['isParent'] is False:
                     logger.info('Update on indexed parent %s, isParent: True' % pid)
-                    mydoc = bulkindexer.mysolr._solr_update_parent_doc(myparent['doc'])
+                    mydoc = IndexMMD._solr_update_parent_doc(myparent['doc'])
                     doc_ = mydoc
                     try:
-                        bulkindexer.solrcon.add([doc_])
+                        solr_add([doc_])
                     except Exception as e:
                         logger.errors("Could not update parent on index. reason %s", e)
 
@@ -343,6 +352,18 @@ def main():
                     # Remove from pending list
                     if pid in parent_ids_pending:
                         parent_ids_pending.remove(pid)
+                else:
+                    logger.info("Parent %s present and marked as parent", pid)
+                    # Update lists
+                    parent_ids_processed.add(pid)
+
+                    # Remove from pending list
+                    if pid in parent_ids_pending:
+
+                        parent_ids_pending.remove(pid)
+    missing = list(set(parent_ids_found) - set(parent_ids_processed))
+    if len(missing) > 0:
+        logger.warning("Make sure to index the missing parents and then index the children")
 
     logger.info("====== BATCH END ===== %s files processed with %s workers and batch size %s ==",
                 len(myfiles), workers, chunksize)
@@ -376,7 +397,7 @@ def main():
     logger.info('Execution time: %s', time.strftime("%H:%M:%S", time.gmtime(elapsed_time)))
     logger.info('CPU time: %s', time.strftime("%H:%M:%S", time.gmtime(pelt)))
     if end_solr_commit:
-        bulkindexer.mysolr.commit()
+        solr_commit()
 
 
 def _main():  # pragma: no cover

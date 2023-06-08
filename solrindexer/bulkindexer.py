@@ -17,14 +17,14 @@ implied. See the License for the specific language governing
 permissions and limitations under the License.
 """
 
-import pysolr
 import logging
 import threading
 
 from solrindexer.indexdata import MMD4SolR
 from solrindexer.indexdata import IndexMMD
+
 from solrindexer.tools import to_solr_id, process_feature_type
-from solrindexer.tools import create_wms_thumbnail
+from solrindexer.tools import create_wms_thumbnail, get_dataset, solr_add
 from solrindexer.multithread.io import load_file
 from solrindexer.multithread.threads import concurrently
 
@@ -61,8 +61,8 @@ class BulkIndexer(object):
         self.chunksize = chunksize
         self.total_in = len(inputList)
 
-        self.solrcon = pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=auth)
-        self.mysolr = IndexMMD(solr_url, False, authentication=auth)
+        # self.solrcon = pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=auth)
+        # self.mysolr = IndexMMD(solr_url, False, authentication=auth)
 
         """Initialize thumbnail generator"""
         self.tflg = tflg
@@ -165,7 +165,7 @@ class BulkIndexer(object):
     def add2solr(self, docs, msg_callback):
         """ Add documents to SolR"""
         try:
-            self.solrcon.add(docs)
+            solr_add(docs)
         except Exception as e:
             logger.error("Some documents failed to be added to solr. reason: %s" % e)
         msg_callback("%s, PID: %s completed indexing %s documents!" % (
@@ -316,7 +316,7 @@ class BulkIndexer(object):
                 # Check if the parent is already in the index, and flag
                 # it as parent if not done already
                 if pid in doc_ids_processed and not parent_found:
-                    myparent = self.mysolr.get_dataset(pid)
+                    myparent = get_dataset(pid)
 
                     if myparent is not None:
                         # if not found in the index, we store it for later
@@ -336,11 +336,11 @@ class BulkIndexer(object):
                                 if myparent['doc']['isParent'] is False:
                                     logger.debug(
                                         'Update on indexed parent %s, isParent: True', pid)
-                                    mydoc = self.mysolr._solr_update_parent_doc(myparent['doc'])
+                                    mydoc = IndexMMD._solr_update_parent_doc(myparent['doc'])
                                     # print(mydoc)
                                     doc_ = mydoc
                                     try:
-                                        self.solrcon.add([doc_])
+                                        solr_add([doc_])
                                     except Exception as e:
                                         logger.error(
                                             "Could update parent on index. reason %s", e)
@@ -383,7 +383,7 @@ class BulkIndexer(object):
 
                     # If the parent was proccesd, asume it was indexed before flagged
                     if pid in doc_ids_processed and not parent_found:
-                        myparent = self.mysolr.get_dataset(pid)
+                        myparent = get_dataset(pid)
 
                         # If we did not find the parent in this job, check the index
                         if myparent['doc'] is not None:
@@ -392,11 +392,11 @@ class BulkIndexer(object):
 
                             if myparent['doc']['isParent'] is False:
                                 logger.debug('Update on indexed parent %s, isParent: True' % pid)
-                                mydoc_ = self.mysolr._solr_update_parent_doc(myparent['doc'])
+                                mydoc_ = IndexMMD._solr_update_parent_doc(myparent['doc'])
                                 mydoc = mydoc_
                                 # doc = {'id': pid, 'isParent': True}
                                 try:
-                                    self.solrcon.add([mydoc])
+                                    solr_add([mydoc])
                                 except Exception as e:
                                     logger.error(
                                         "Could not update parent on index. reason %s", e)
@@ -451,18 +451,18 @@ class BulkIndexer(object):
             for pid in ppending:
 
                 myparent = None
-                myparent = self.mysolr.get_dataset(pid)
+                myparent = get_dataset(pid)
                 if myparent['doc'] is not None:
                     logger.debug("pending parent found in index: %s, isParent: %s",
                                  (myparent['doc']['id'], myparent['doc']['isParent']))
 
                     if myparent['doc']['isParent'] is False:
                         logger.debug('Update on indexed parent %s, isParent: True' % pid)
-                        mydoc_ = self.mysolr._solr_update_parent_doc(myparent['doc'])
+                        mydoc_ = IndexMMD._solr_update_parent_doc(myparent['doc'])
 
                         # doc = {'id': pid, 'isParent': True}
                         try:
-                            self.solrcon.add([mydoc_])
+                            solr_add([mydoc_])
                         except Exception as e:
                             logger.error("Could not update parent on index. reason %s", e)
                             # Update lists
@@ -472,6 +472,7 @@ class BulkIndexer(object):
                         if pid in parent_ids_pending:
                             parent_ids_pending.remove(pid)
 
+        # Store the tracking information and return back to calling script
         parent_ids_found_ = parent_ids_found
         parent_ids_pending_ = parent_ids_pending
         parent_ids_processed_ = parent_ids_processed
@@ -479,6 +480,11 @@ class BulkIndexer(object):
         docs_failed_ = docs_skipped
         docs_indexed_ = docs_indexed
         files_processed_ = files_processed
+
+        # Close the connection
+        # self.solrcon.session.close()
+        # self.mysolr.solrc.session.close()
+
         return (parent_ids_found_,
                 parent_ids_pending_,
                 parent_ids_processed_,
