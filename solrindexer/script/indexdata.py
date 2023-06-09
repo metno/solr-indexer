@@ -20,6 +20,7 @@ permissions and limitations under the License.
 """
 
 import os
+import sys
 import logging
 import argparse
 import cartopy.crs as ccrs
@@ -46,6 +47,8 @@ def parse_arguments():
                         help='File with datasets to be ingested specified.')
     parser.add_argument('-d', '--directory',
                         help='Directory to ingest')
+    parser.add_argument('-parent', '--mark_parent', required=False,
+                        help="Enter metadata id of existing solr document to mark as parent")
     parser.add_argument('-t', '--thumbnail', action='store_true',
                         help='Create and index thumbnail, do not update the main content.')
     parser.add_argument('-n', '--no_thumbnail', action='store_true',
@@ -71,7 +74,7 @@ def parse_arguments():
     if args.cfgfile is None:
         parser.print_help()
         parser.exit()
-    if not args.input_file and not args.directory and not args.list_file:
+    if not args.input_file and not args.directory and not args.list_file and not args.mark_parent:
         parser.print_help()
         parser.exit()
 
@@ -133,6 +136,11 @@ def main():
     mysolr = IndexMMD(mySolRc, args.always_commit, authentication)
 
     # CONFIG DONE
+    if args.mark_parent:
+        meta_id = str(args.mark_parent).strip()
+        logger.debug("Got mark parent argument with meta id: %s", meta_id)
+        status, msg = mysolr.update_parent(to_solr_id(meta_id))
+        sys.exit()
 
     # Find files to process
     if args.input_file:
@@ -259,7 +267,7 @@ def main():
             # Create solr id from identifier
             myparentid = newdoc['related_dataset']
             parentid_solr = to_solr_id(myparentid)
-            logger.debug("Got parent dataset id %s", parentid_solr)
+            logger.info("Got parent dataset id %s", parentid_solr)
             # If related_dataset is present,
             # set this dataset as a child using isChild and dataset_type
             newdoc.update({"isChild": True})
@@ -272,18 +280,17 @@ def main():
         files2ingest.append(newdoc)
 
     # Check if parents are in the existing list
+    pending = parentids.copy()
     for id in parentids:
+        logger.debug(len(pending))
         if not any(d['id'] == id for d in files2ingest):
             # Check if already ingested and update if so
-            # FIXME, need more robustness...
-            logger.warning(
-                'This part of parent/child relations is yet not tested.')
-
             logger.info("Checking index for parent %s", id)
             status, msg = mysolr.update_parent(id)
 
-            if status:
+            if status is True:
                 logger.info(msg)
+                pending.remove(id)
             else:
                 logger.error(msg)
 
@@ -292,20 +299,17 @@ def main():
             # Not sure if this is needed onwards, but discussion on how isParent works is needed
             # Øystein Godøy, METNO/FOU, 2023-03-31
             i = 0
-            logger.debug("Updating parent in batch.")
+            logger.info("Update parents in batch.")
             for rec in files2ingest:
                 if rec['id'] == id:
                     if 'isParent' in rec:
-                        if rec['isParent']:
-                            if rec['dataset_type'] == 'Level-1':
-                                continue
-                            else:
-                                files2ingest[i].update(
-                                    {'dataset_type': 'Level-1'})
+                        if rec['isParent'] is True:
+                            logger.info("Parent %s already updated.", id)
                         else:
                             files2ingest[i].update({'isParent': True})
                             files2ingest[i].update({'dataset_type': 'Level-1'})
-                            logger.debug("Parent %s updated." % id)
+                            logger.info("Parent %s updated." % id)
+                            pending.remove(id)
                 i += 1
 
     if len(files2ingest) == 0:
@@ -338,6 +342,9 @@ def main():
 
     # Add a commit to solr at end of run
     logger.info("Committing the input to SolR. This may take some time.")
+    if len(pending) > 0:
+        logger.warning("Missing parents in input and/or index")
+        logger.info(pending)
     mysolr.commit()
 
 

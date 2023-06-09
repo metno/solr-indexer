@@ -1093,15 +1093,12 @@ class IndexMMD:
                 # return False
             myfeature = None
 
-            """ Handle dataset level parent/children relations"""
-            if level == 1 or level is None:
+            """ Handle explicit dataset level parent/children relations"""
+            if level == 1:
                 input_record.update({'dataset_type': 'Level-1'})
-            elif level == 2:
+            if level == 2:
                 input_record.update({'dataset_type': 'Level-2'})
                 input_record.update({'isChild': True})
-            else:
-                logger.error(
-                    'Invalid level given: {}. Hence terminating'.format(level))
 
             """
             If OGC WMS is available, no point in looking for featureType in OPeNDAP.
@@ -1396,7 +1393,7 @@ class IndexMMD:
         parent['isParent'] = True
         return parent
 
-    def update_parent(self, parentid, fail_on_missing=False):
+    def update_parent(self, parentid, fail_on_missing=False, handle_missing_status=False):
         """Search index for parent and update parent flag."""
 
         myparent = self.get_dataset(parentid)
@@ -1410,9 +1407,11 @@ class IndexMMD:
                 else:
                     logger.warn("Parent %s is not in the index. Make sure to index parent first.",
                                 parentid)
-                    return (True, "WARNING! Parent is not in the index. \
-                            Make sure to index parent and then the children \
-                            for relation to be updated")
+                    msg = "WARNING! Parent is not in the index. "
+                    msg += "Make sure to index parent and then the children "
+                    msg += "for relation to be updated."
+                    return (handle_missing_status, msg)
+
             logger.info("Got parent: %s",
                         myparent['doc']['metadata_identifier'])
             if bool(myparent['doc']['isParent']):

@@ -26,7 +26,7 @@ from solrindexer.indexdata import IndexMMD
 from solrindexer.tools import to_solr_id, process_feature_type
 from solrindexer.tools import create_wms_thumbnail, get_dataset, solr_add
 from solrindexer.multithread.io import load_file
-from solrindexer.multithread.threads import concurrently
+from solrindexer.multithread.threads import concurrently, multiprocess
 
 from concurrent.futures import ThreadPoolExecutor
 from concurrent import futures as Futures
@@ -276,13 +276,13 @@ class BulkIndexer(object):
                 # Load each file using multiple threads, and process documents as files are loaded
                 ###################################################################"""
                 logger.debug("---- Creating thumbnails concurrently ----")
-                for (doc, newdoc) in concurrently(fn=create_wms_thumbnail,
+                for (doc, newdoc) in multiprocess(fn=create_wms_thumbnail,
                                                   inputs=thumb_docs,
                                                   max_concurrency=self.threads):
                     docs.remove(doc)
                     docs.append(newdoc)
                 """################################## THREADS FINISHED ##################"""
-
+            Futures.ALL_COMPLETED
             # Run over the list of parentids found in this chunk, and look for the parent
             parent_found = False
             for pid in parentids:

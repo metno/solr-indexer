@@ -34,7 +34,8 @@ UPDATES:
     Johannes Langvatn, METNO/SUV, 2023-02-07
         Refactoring
 """
-import os
+
+import io
 import logging
 import base64
 
@@ -151,8 +152,9 @@ class WMSThumbNail(object):
         subplot_kw = dict(projection=map_projection)
         logger.debug(subplot_kw)
 
-        lock.acquire()
-        logger.debug("Aquire lock - creating subplot.")
+        # logger.debug("Aquire lock - creating subplot.")
+        # lock.acquire()
+
         fig, ax = plt.subplots(subplot_kw=subplot_kw)
 
         # land_mask = cartopy.feature.NaturalEarthFeature(category='physical',
@@ -184,23 +186,20 @@ class WMSThumbNail(object):
         else:
             ax.set_extent(cartopy_extent_zoomed, ccrs.PlateCarree())
 
-        thumbnail_fname = 'thumbnail_{}.png'.format(id)
-        fig.savefig(thumbnail_fname, format='png', bbox_inches='tight')
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight')
+        buf.seek(0)
+        encode_string = base64.b64encode(buf.read())
+        buf.close()
         plt.close('all')
-        logger.debug("plot closed. releasing lock.")
-        lock.release()
-
-        with open(thumbnail_fname, 'rb') as infile:
-            data = infile.read()
-            encode_string = base64.b64encode(data)
-            del data
+        # logger.debug("plot closed. releasing lock.")
+        # lock.release()
 
         # thumbnail_b64 = str((b'data:image/png;base64,', encode_string)).encode().decode('utf-8')
         thumbnail_b64 = (b'data:image/png;base64,' + encode_string).decode('utf-8')
+        logger.debug(thumbnail_b64)
         del encode_string
 
-        # Remove thumbnail
-        os.remove(thumbnail_fname)
         return thumbnail_b64
 
     def create_ts_thumbnail(self):

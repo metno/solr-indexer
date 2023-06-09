@@ -20,10 +20,11 @@ permissions and limitations under the License.
 # from .bulkindexer import BulkIndexer
 from .io import load_file, load_files
 from .threads import concurrently
+from .threads import multiprocess
 
 
 __package__ = "multithread"
 __version__ = "2.0.0"
 __date__ = "2023-12-13"
 __all__ = ["load_file", "load_files",
-           "concurrently"]
+           "concurrently", "multiprocess"]
