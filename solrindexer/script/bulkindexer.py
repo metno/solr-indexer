@@ -265,9 +265,14 @@ def main():
     logger.info(
         "Indexing with batch size %d and %d worker processes with %d",
         chunksize, workers, threads)
-    # We only do multiprocessing if workers is 2 or moree
-    workerlistsize = round(len(myfiles)/workers)
+
+    # We run only one worker if input files are less than 1000
+    if len(myfiles) <= 1000:
+        workers = 1
+        chunksize = len(myfiles)/2
+    # We only do multiprocessing if workers is 2 or more
     if workers > 1:
+        workerlistsize = round(len(myfiles)/workers)
         logger.debug("Using multiple processes.")
         # Split the inputfiles into lists for each worker.
         workerFileLists = [
