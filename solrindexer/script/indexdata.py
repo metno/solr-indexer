@@ -133,9 +133,16 @@ def main():
 
     # Set up connection to SolR server
     mySolRc = SolrServer+myCore
+    logger.info("Connecting to solr %s",  mySolRc)
     mysolr = IndexMMD(mySolRc, args.always_commit, authentication)
 
+    end_solr_commit = False
+    if 'end-solr-commit' in cfg:
+        end_solr_commit = cfg['end-solr-commit']
+
     # CONFIG DONE
+
+    # HANDLE ARGUMENTS
     if args.mark_parent:
         meta_id = str(args.mark_parent).strip()
         logger.debug("Got mark parent argument with meta id: %s", meta_id)
@@ -340,12 +347,15 @@ def main():
     # Report status
     logger.info("Number of files processed were: %d", len(myfiles))
 
-    # Add a commit to solr at end of run
-    logger.info("Committing the input to SolR. This may take some time.")
+    # Check for missing parents in batch or index
     if len(pending) > 0:
         logger.warning("Missing parents in input and/or index")
         logger.info(pending)
-    mysolr.commit()
+
+    if end_solr_commit is True:
+        # Add a commit to solr at end of run
+        logger.info("Committing the input to SolR. This may take some time.")
+        mysolr.commit()
 
 
 def _main():  # pragma: no cover

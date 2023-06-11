@@ -234,12 +234,12 @@ def process_feature_type(tmpdoc):
     #         logger.debug("Setting dapurl to read from lustre location: %s", dapurl)
     if dapurl is not None:
         logger.debug("Trying to open netCDF file: %s", dapurl)
-        lock.acquire()
+        # lock.acquire()
         try:
             ds = netCDF4.Dataset(dapurl, 'r')
         except Exception as e:
             logger.error("Something failed reading netcdf %s. Reason: %s", dapurl, e)
-
+            # lock.release()
             return tmpdoc_
 
         # Try to get the global attribute featureType
@@ -251,6 +251,7 @@ def process_feature_type(tmpdoc):
         except Exception as e:
             logger.error("Something failed extracting featureType: %s", str(e))
             ds.close()
+            # lock.release()
             return tmpdoc_
 
         if featureType is not None:
@@ -281,6 +282,7 @@ def process_feature_type(tmpdoc):
         except Exception as e:
             logger.error("Something failed extracting geospatial_bounds: %s", str(e))
             ds.close()
+            # lock.release()
             return tmpdoc_
             # Check if we have plogon.
 
@@ -309,6 +311,7 @@ def process_feature_type(tmpdoc):
         except Exception as e:
             logger.error("Something failed extracting geospatial_bounds_crs: %s", str(e))
             ds.close()
+            # lock.release()
             return tmpdoc_
             # Check if we have plogon.
         if bounds_crs is not None:
@@ -318,7 +321,7 @@ def process_feature_type(tmpdoc):
 
         logger.debug("Closing netCDF file.")
         ds.close()
-        lock.release()
+        # lock.release()
         return tmpdoc_
 
     return tmpdoc_

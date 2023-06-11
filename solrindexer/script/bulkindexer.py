@@ -143,6 +143,7 @@ def main():
     workers = 10
 
     # Initialize Solr
+    logger.info("Connecting to solr: %s", mySolRc)
     initSolr(mySolRc,
              pysolr.Solr(mySolRc, always_commit=False, timeout=1020, auth=authentication),
              authentication)

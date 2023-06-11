@@ -290,7 +290,7 @@ class MMD4SolR:
             myid = to_solr_id(myid)
             mydict['id'] = myid
             mydict['metadata_identifier'] = mmd['mmd:metadata_identifier']
-
+        logger.debug("Got metadata_identifier: %s", mydict['metadata_identifier'])
         logger.debug("Last metadata update")
         if 'mmd:last_metadata_update' in mmd:
             last_metadata_update = mmd['mmd:last_metadata_update']

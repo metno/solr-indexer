@@ -133,7 +133,7 @@ class BulkIndexer(object):
                     # Update document with child specific fields
                     tmpdoc.update({'dataset_type': 'Level-2'})
                     tmpdoc.update({'isChild': True})
-                    tmpdoc.update({'isParent': False})
+                    # tmpdoc.update({'isParent': False})
 
                     # Fix special characters that SolR doesn't like
                     myparentid = tmpdoc['related_dataset']
@@ -430,9 +430,9 @@ class BulkIndexer(object):
             # if len(indexthreads) >= self.threads:
             #     thr = indexthreads.pop(0)
             #     thr.join()
-            if len(indexthreads) >= self.threads:
-                for thr in indexthreads:
-                    thr.join()
+            # if len(indexthreads) >= self.threads:
+            #    for thr in indexthreads:
+            #        thr.join()
 
         #   print("===================================")
         #   print("Added %s documents to solr. Total: %s" % (len(docs),docs_indexed))

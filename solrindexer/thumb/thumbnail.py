@@ -40,6 +40,7 @@ import logging
 import base64
 
 import cartopy.crs as ccrs
+
 import matplotlib
 import matplotlib.pyplot as plt
 
@@ -52,6 +53,8 @@ logger = logging.getLogger(__name__)
 matplotlib.use('agg')
 
 lock = Lock()
+
+blackListLayers = ('latitude', 'longitude', 'lat', 'lon')
 
 
 class WMSThumbNail(object):
@@ -80,7 +83,7 @@ class WMSThumbNail(object):
         self.thumbnail_type = thumbnail_type
         self.thumbnail_extent = thumbnail_extent
 
-        matplotlib.use('Agg')
+        # matplotlib.use('Agg')
 
     def create_wms_thumbnail(self, url, id):
         """ Create a base64 encoded thumbnail by means of cartopy.
@@ -100,35 +103,62 @@ class WMSThumbNail(object):
         map_projection = self.projection
         thumbnail_extent = self.thumbnail_extent
 
+        """Some debugging"""
+        logger.debug("wms_layer: %s", wms_layer)
+        logger.debug("wms_style: %s", wms_style)
+        logger.debug("wmz_zoom_level: %d", wms_zoom_level)
+        logger.debug("add_coastlines: %s", add_coastlines)
+        logger.debug("map_projection:  %s", map_projection)
+        logger.debug("thumbnail_extent: %s", thumbnail_extent)
+
         # Make sure url does not provide request attributes
         url = url.split('?')[0]
 
         # map projection string to ccrs projection
         if isinstance(map_projection, str):
             map_projection = getattr(ccrs, map_projection)()
-
+            logger.debug("map_projection:  %s", map_projection)
         logger.debug("Opening wms url %s with timeout %d", url, wms_timeout)
         wms = WebMapService(url, timeout=wms_timeout)
+
+        """Some debugging"""
+        logger.debug("Title: %s", wms.identification.title)
+        logger.debug("Type: %s", wms.identification.type)
+        logger.debug("Operations: %s", [op.name for op in wms.operations])
+        logger.debug("GetMap options: %s", wms.getOperationByName("GetMap").formatOptions)
         available_layers = list(wms.contents.keys())
+        logger.debug("Available layers :%s", available_layers)
+
+        for layer in blackListLayers:
+            try:
+                available_layers.remove(layer)
+            except ValueError:
+                pass
 
         if wms_layer not in available_layers:
             wms_layer = available_layers[0]
             logger.debug(
                 'Creating WMS thumbnail for layer: {}'.format(wms_layer))
+        logger.debug("layer: %s", wms_layer)
+        # logger.debug("Abstract: ", wms_layer.abstract)
+        # logger.debug("BBox: ", wms_layer.boundingBoxWGS84)
+        # logger.debug("CRS: ", wms_layer.crsOptions)
+        # logger.debug("Styles: ", wms_layer.styles)
+        # logger.debug("Timestamps: ", wms_layer.timepositions)
 
         # Checking styles
         available_styles = list(wms.contents[wms_layer].styles.keys())
-
+        logger.debug("Input style: %s  . Available Styles: %s", wms_style, available_styles)
         if available_styles:
             if wms_style not in available_styles:
                 wms_style = [available_styles[0]]
-            else:
-                wms_style = None
         else:
             wms_style = None
+        logger.debug("Selected style: %s", wms_style)
 
         if not thumbnail_extent:
             wms_extent = wms.contents[available_layers[0]].boundingBoxWGS84
+            logger.debug("Wms extent, %s", wms_extent)
             # cartopy_extent = [wms_extent[0], wms_extent[2],
             #                  wms_extent[1], wms_extent[3]]
 
@@ -156,7 +186,9 @@ class WMSThumbNail(object):
         # lock.acquire()
 
         fig, ax = plt.subplots(subplot_kw=subplot_kw)
-
+        logger.debug(type(ax))
+        logger.debug(ax)
+        logger.debug(ax.get_extent())
         # land_mask = cartopy.feature.NaturalEarthFeature(category='physical',
         #                                                scale='50m',
         #                                                facecolor='#cccccc',
@@ -174,8 +206,8 @@ class WMSThumbNail(object):
         fig.set_figheight(4.5)
         fig.set_dpi(100)
         # ax.background_patch.set_alpha(1)
-        logger.debug("ax.add_wms().")
-        ax.add_wms(wms, wms_layer,
+        logger.debug("ax.add_wms(layer=%s, style=%s).", wms_layer, wms_style)
+        ax.add_wms(wms=url, layers=[wms_layer],
                    wms_kwargs={'transparent': False,
                                'styles': wms_style})
 
@@ -186,10 +218,17 @@ class WMSThumbNail(object):
         else:
             ax.set_extent(cartopy_extent_zoomed, ccrs.PlateCarree())
 
+        # For DEBUGGING
+        # thumbnail_fname = 'thumbnail_{}.png'.format(id)
+        # fig.savefig(thumbnail_fname, format='png', bbox_inches='tight')
+        # END DEBUG
+
+        # Save figure to IO Buffer
         buf = io.BytesIO()
         fig.savefig(buf, format='png', bbox_inches='tight')
         buf.seek(0)
-        encode_string = base64.b64encode(buf.read())
+        encode_string = base64.b64encode(buf.getbuffer())
+        # logger.debug(encode_string)
         buf.close()
         plt.close('all')
         # logger.debug("plot closed. releasing lock.")
@@ -197,7 +236,7 @@ class WMSThumbNail(object):
 
         # thumbnail_b64 = str((b'data:image/png;base64,', encode_string)).encode().decode('utf-8')
         thumbnail_b64 = (b'data:image/png;base64,' + encode_string).decode('utf-8')
-        logger.debug(thumbnail_b64)
+        # logger.debug(thumbnail_b64)
         del encode_string
 
         return thumbnail_b64
