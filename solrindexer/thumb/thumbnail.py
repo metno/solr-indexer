@@ -209,7 +209,7 @@ class WMSThumbNail(object):
         logger.debug("ax.add_wms(layer=%s, style=%s).", wms_layer, wms_style)
         ax.add_wms(wms=url, layers=[wms_layer],
                    wms_kwargs={'transparent': False,
-                               'styles': wms_style})
+                               'styles': [wms_style]})
 
         if add_coastlines:
             ax.coastlines(resolution="50m", linewidth=0.5)

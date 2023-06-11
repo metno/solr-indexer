@@ -473,10 +473,10 @@ class BulkIndexer(object):
                             parent_ids_pending.remove(pid)
 
         # Store the tracking information and return back to calling script
-        parent_ids_found_ = parent_ids_found
-        parent_ids_pending_ = parent_ids_pending
-        parent_ids_processed_ = parent_ids_processed
-        doc_ids_processed_ = doc_ids_processed
+        parent_ids_found_ = parent_ids_found.copy()
+        parent_ids_pending_ = parent_ids_pending.copy()
+        parent_ids_processed_ = parent_ids_processed.copy()
+        doc_ids_processed_ = doc_ids_processed.copy()
         docs_failed_ = docs_skipped
         docs_indexed_ = docs_indexed
         files_processed_ = files_processed
