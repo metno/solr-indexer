@@ -114,6 +114,9 @@ class WMSThumbNail(object):
         # Make sure url does not provide request attributes
         url = url.split('?')[0]
 
+        if url.startswith("http://thredds.nersc"):
+            url.replace("http:", "https:")
+
         # map projection string to ccrs projection
         if isinstance(map_projection, str):
             map_projection = getattr(ccrs, map_projection)()

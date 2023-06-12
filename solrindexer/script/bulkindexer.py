@@ -36,6 +36,7 @@ from solrindexer.indexdata import IndexMMD
 
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures import as_completed
+from concurrent import futures as Futures
 
 from solrindexer.thumb.thumbnail import WMSThumbNail
 
@@ -180,12 +181,19 @@ def main():
             sys.exit(1)
         try:
             myfiles = getListOfFiles(args.directory)
+            if myfiles is not None:
+                logger.info("Processing directory: %s",
+                            args.directory)
         except Exception as e:
             logger.error(
                 "Something went wrong in decoding cmd arguments: %s", e)
             sys.exit(1)
     else:
         logger.error("No valid inputlist or input directory given")
+        sys.exit(1)
+
+    if myfiles is None:
+        logger.error('No files to process. exiting')
         sys.exit(1)
 
     """ Do some extra input list validation"""
@@ -267,7 +275,7 @@ def main():
     # We run only one worker if input files are less than 1000
     if len(myfiles) <= 1000:
         workers = 1
-        chunksize = len(myfiles)/2
+        chunksize = 1000
 
     logger.info(
         "Indexing with batch size %d and %d worker processes with %d threads",
@@ -331,6 +339,7 @@ def main():
         docs_failed += docs_failed_
         docs_indexed += docs_indexed_
 
+    Futures.ALL_COMPLETED
     # TODO: Add last parent missing index check here. after refactor this logic
     # summary of possible missing parents
     missing = list(set(parent_ids_found) - set(parent_ids_processed))
@@ -352,7 +361,7 @@ def main():
                     try:
                         solr_add([doc_])
                     except Exception as e:
-                        logger.errors("Could not update parent on index. reason %s", e)
+                        logger.error("Could not update parent on index. reason %s", e)
 
                     # Update lists
                     parent_ids_processed.add(pid)
@@ -367,8 +376,10 @@ def main():
 
                     # Remove from pending list
                     if pid in parent_ids_pending:
-
-                        parent_ids_pending.remove(pid)
+                        try:
+                            parent_ids_pending.remove(pid)
+                        except KeyError:
+                            pass
     # LOOP END
     missing = list(set(parent_ids_found) - set(parent_ids_processed))
     if len(missing) > 0:
@@ -402,7 +413,10 @@ def main():
 
                     # Remove from pending list
                     if pid in parent_ids_pending:
-                        parent_ids_pending.remove(pid)
+                        try:
+                            parent_ids_pending.remove(pid)
+                        except KeyError:
+                            pass
                 else:
                     logger.info("Parent %s present and marked as parent", pid)
                     # Update lists
@@ -410,8 +424,10 @@ def main():
 
                     # Remove from pending list
                     if pid in parent_ids_pending:
-
-                        parent_ids_pending.remove(pid)
+                        try:
+                            parent_ids_pending.remove(pid)
+                        except KeyError:
+                            pass
 
     if len(parent_ids_pending) > 0:
         logger.warning("parent ids pending not empty")
