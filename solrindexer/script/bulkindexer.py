@@ -369,6 +369,7 @@ def main():
                     if pid in parent_ids_pending:
 
                         parent_ids_pending.remove(pid)
+    # LOOP END
     missing = list(set(parent_ids_found) - set(parent_ids_processed))
     if len(missing) > 0:
         logger.warning("Make sure to index the missing parents and then index the children")
@@ -378,6 +379,43 @@ def main():
     for pid in ppending_:
         if pid in parent_ids_processed:
             parent_ids_pending.remove(pid)
+        else:
+            myparent = None
+            myparent = get_dataset(pid)
+
+            if myparent['doc'] is not None:
+                logger.info(
+                    "parent found in index: %s, isParent: %s",
+                    myparent['doc']['id'], myparent['doc']['isParent'])
+                # Check if already flagged
+                if myparent['doc']['isParent'] is False:
+                    logger.info('Update on indexed parent %s, isParent: True' % pid)
+                    mydoc = IndexMMD._solr_update_parent_doc(myparent['doc'])
+                    doc_ = mydoc
+                    try:
+                        solr_add([doc_])
+                    except Exception as e:
+                        logger.errors("Could not update parent on index. reason %s", e)
+
+                    # Update lists
+                    parent_ids_processed.add(pid)
+
+                    # Remove from pending list
+                    if pid in parent_ids_pending:
+                        parent_ids_pending.remove(pid)
+                else:
+                    logger.info("Parent %s present and marked as parent", pid)
+                    # Update lists
+                    parent_ids_processed.add(pid)
+
+                    # Remove from pending list
+                    if pid in parent_ids_pending:
+
+                        parent_ids_pending.remove(pid)
+
+    if len(parent_ids_pending) > 0:
+        logger.warning("parent ids pending not empty")
+        logger.debug(parent_ids_pending)
 
     logger.info("====== INDEX END ===== %s files processed with %s workers and batch size %s ==",
                 len(myfiles), workers, chunksize)
