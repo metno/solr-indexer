@@ -1,0 +1,28 @@
+# Configuration template file
+# Øystein Godøy, METNO/FOU, 2019-10-23
+
+logfile: logs/senda-local.log
+#solrserver: http://metsis-solr:8983/solr/
+solrserver: http://localhost:8983/solr/
+#olrserver: https://solr.s-enda-dev.k8s.met.no/solr/
+solrcore: senda
+# Valid map projections include Mercator, PlateCarree, PolarStereographic
+wms-thumbnail-projection: Mercator
+wms-timeout: 480
+#auth-basic-username: admin
+#auth-basic-password: admin-test
+#auth-basic-password: vWxqm%NPsMV76LeU
+#Index in batches
+batch-size: 2000
+#Worker processes
+workers: 4
+threads: 8
+
+#Commit to solr at end of execution True/False
+end-solr-commit: True
+
+#Skip netCDF fe ature_type extraction if not set this is considered False
+#skip-feature-type: True
+#Override feature type (This will also skip the feature type)
+#Can be used if we know the feature_type of all datasets indexed in this execution (list,dir)
+#override-feature-type: profile

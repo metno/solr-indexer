@@ -48,7 +48,7 @@ def _init_logging(log_obj):
         msg_format = "[{asctime:}] [{thread:d}] [{threadName:s}]"
         msg_format += " {name:>28}:{lineno:<4d} {levelname:8s} {message:}"
     else:
-        msg_format = "{levelname:8s} {message:}"
+        msg_format = "[{processName:s}] [{threadName:s}] {levelname:8s} {message:}"
 
     log_format = logging.Formatter(fmt=msg_format, style="{")
     log_obj.setLevel(log_level)

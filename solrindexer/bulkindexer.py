@@ -193,8 +193,9 @@ class BulkIndexer(object):
         it = 1
         doc_ids_processed = set()
         # print("######### BATCH START ###########################")
+        batch_run = 1
         for i in range(0, len(filelist), chunksize):
-            logger.info("---- Batch run %d ----", i+1)
+            logger.info("---- Batch run %d ----", batch_run)
             # select a chunk
             files = filelist[i:(i + chunksize)]
             docs = list()
@@ -417,6 +418,7 @@ class BulkIndexer(object):
             # Keep track of docs indexed and batch iteration
             docs_indexed += len(docs)
             it += 1
+            batch_run += 1
 
             # Send processed documents to solr  for indexing as a new thread.
             # max threads is set in config

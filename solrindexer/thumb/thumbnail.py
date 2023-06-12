@@ -154,6 +154,9 @@ class WMSThumbNail(object):
                 wms_style = [available_styles[0]]
         else:
             wms_style = None
+
+        if wms_style is not None and isinstance(wms_style, str):
+            wms_style = [wms_style]
         logger.debug("Selected style: %s", wms_style)
 
         if not thumbnail_extent:

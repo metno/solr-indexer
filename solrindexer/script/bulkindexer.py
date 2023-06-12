@@ -263,14 +263,16 @@ def main():
 
     # Start the indexing
     logger.info("Got %d input files.", len(myfiles))
-    logger.info(
-        "Indexing with batch size %d and %d worker processes with %d",
-        chunksize, workers, threads)
 
     # We run only one worker if input files are less than 1000
     if len(myfiles) <= 1000:
         workers = 1
         chunksize = len(myfiles)/2
+
+    logger.info(
+        "Indexing with batch size %d and %d worker processes with %d threads",
+        chunksize, workers, threads)
+
     # We only do multiprocessing if workers is 2 or more
     if workers > 1:
         workerlistsize = round(len(myfiles)/workers)
@@ -370,6 +372,12 @@ def main():
     missing = list(set(parent_ids_found) - set(parent_ids_processed))
     if len(missing) > 0:
         logger.warning("Make sure to index the missing parents and then index the children")
+
+    # Update parent_ids_pending
+    ppending_ = parent_ids_pending_.copy()
+    for pid in ppending_:
+        if pid in parent_ids_processed:
+            parent_ids_pending.remove(pid)
 
     logger.info("====== INDEX END ===== %s files processed with %s workers and batch size %s ==",
                 len(myfiles), workers, chunksize)
