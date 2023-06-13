@@ -257,8 +257,9 @@ def main():
         Datasets that are not children are all set to parents.
         Make some corrections based on experience for harvested records...
         """
-        logger.info('Parsing parent/child relations.')
         if 'related_dataset' in newdoc:
+            logger.info('Parsing parent/child relations.')
+            logger.info("Got child dataset id %s.", newdoc['id'])
             # Special fix for NPI
             newdoc['related_dataset'] = newdoc['related_dataset'].replace(
                 'https://data.npolar.no/dataset/', '')
@@ -274,9 +275,9 @@ def main():
             # Create solr id from identifier
             myparentid = newdoc['related_dataset']
             parentid_solr = to_solr_id(myparentid)
-            logger.info("Got parent dataset id %s", parentid_solr)
             # If related_dataset is present,
             # set this dataset as a child using isChild and dataset_type
+            logger.debug("Marking as child.")
             newdoc.update({"isChild": True})
             newdoc.update({"dataset_type": "Level-2"})
             parentids.add(parentid_solr)
@@ -289,7 +290,6 @@ def main():
     # Check if parents are in the existing list
     pending = parentids.copy()
     for id in parentids:
-        logger.debug(len(pending))
         if not any(d['id'] == id for d in files2ingest):
             # Check if already ingested and update if so
             logger.info("Checking index for parent %s", id)

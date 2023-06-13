@@ -202,9 +202,9 @@ class WMSThumbNail(object):
             plt.cla()
             raise Exception("Could not plot wms: ", e)
 
-        logger.debug(type(ax))
-        logger.debug(ax)
-        logger.debug(ax.get_extent())
+        # logger.debug(type(ax))
+        # logger.debug(ax)
+        # logger.debug(ax.get_extent())
         # land_mask = cartopy.feature.NaturalEarthFeature(category='physical',
         #                                                scale='50m',
         #                                                facecolor='#cccccc',
