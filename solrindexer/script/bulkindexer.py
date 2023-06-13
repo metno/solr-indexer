@@ -291,34 +291,38 @@ def main():
         logger.debug("Input list: %s" % len(flatten(workerFileLists)))
         futures_list = list()
         job = 1
-        executor = ProcessPoolExecutor(max_workers=workers)
-        for fileList in workerFileLists:
-            logger.info("Submitting worker job %d - with %d files", job, len(fileList))
-            bulkidx = BulkIndexer(fileList, mySolRc, threads=threads,
-                                  chunksize=chunksize, auth=authentication,
-                                  tflg=tflg, thumbClass=thumbClass)
-            future = executor.submit(bulkidx.bulkindex, fileList)
+        with ProcessPoolExecutor(max_workers=workers) as executor:
+            for fileList in workerFileLists:
+                logger.info("Submitting worker job %d - with %d files", job, len(fileList))
+                bulkidx = BulkIndexer(fileList, mySolRc, threads=threads,
+                                      chunksize=chunksize, auth=authentication,
+                                      tflg=tflg, thumbClass=thumbClass)
+                future = executor.submit(bulkidx.bulkindex, fileList)
 
-            futures_list.append(future)
-            job = job+1
+                futures_list.append(future)
+                job = job+1
 
-        for f in as_completed(futures_list):
-            (parent_ids_found_,
-                parent_ids_pending_,
-                parent_ids_processed_,
-                doc_ids_processed_,
-                docs_failed_,
-                docs_indexed_,
-                files_processed_) = f.result()
-            # logger.debug(f.result())
-            parent_ids_found.update(parent_ids_found_)
-            parent_ids_pending.update(parent_ids_pending_)
-            parent_ids_processed.update(parent_ids_processed_)
-            doc_ids_processed.update(doc_ids_processed_)
-            processed += files_processed_
-            docs_failed += docs_failed_
-            docs_indexed += docs_indexed_
-            logger.info("%s docs indexed so far." % docs_indexed)
+            for f in as_completed(futures_list):
+                try:
+                    (parent_ids_found_,
+                        parent_ids_pending_,
+                        parent_ids_processed_,
+                        doc_ids_processed_,
+                        docs_failed_,
+                        docs_indexed_,
+                        files_processed_) = f.result()
+                    # logger.debug(f.result())
+                    parent_ids_found.update(parent_ids_found_)
+                    parent_ids_pending.update(parent_ids_pending_)
+                    parent_ids_processed.update(parent_ids_processed_)
+                    doc_ids_processed.update(doc_ids_processed_)
+                    processed += files_processed_
+                    docs_failed += docs_failed_
+                    docs_indexed += docs_indexed_
+                except Exception as e:
+                    logger.error("Process failed with: %s", e)
+                else:
+                    logger.info("%s docs indexed so far." % docs_indexed)
 
     # Bulkindex using main process.
     else:

@@ -474,6 +474,7 @@ class BulkIndexer(object):
                         if pid in parent_ids_pending:
                             parent_ids_pending.remove(pid)
 
+        Futures.ALL_COMPLETED
         # Store the tracking information and return back to calling script
         parent_ids_found_ = parent_ids_found.copy()
         parent_ids_pending_ = parent_ids_pending.copy()
