@@ -345,7 +345,7 @@ def create_wms_thumbnail(doc):
     except Exception as e:
         logger.error("Thumbnail creation from OGC WMS failed: %s, id: %s", e, id)
         # raise Exception("Thumbnail creation from OGC WMS failed: %s, id: %s", e, id)
-        pass
+        # pass
     finally:
         return doc_
 
