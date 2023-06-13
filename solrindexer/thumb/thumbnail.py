@@ -48,6 +48,7 @@ from threading import Lock
 
 from owslib.wms import WebMapService
 
+import multiprocessing as mp
 logger = logging.getLogger(__name__)
 
 matplotlib.use('agg')
@@ -83,7 +84,7 @@ class WMSThumbNail(object):
         self.thumbnail_type = thumbnail_type
         self.thumbnail_extent = thumbnail_extent
 
-        # matplotlib.use('Agg')
+        matplotlib.use('Agg')
 
     def create_wms_thumbnail(self, url, id):
         """ Create a base64 encoded thumbnail by means of cartopy.
@@ -94,7 +95,7 @@ class WMSThumbNail(object):
             Returns:
                 thumbnail_b64: base64 string representation of image
         """
-
+        logger.debug("%s. Starting wms url %s", mp.current_process().name, url)
         wms_layer = self.wms_layer
         wms_style = self.wms_style
         wms_zoom_level = self.wms_zoom_level
@@ -122,7 +123,11 @@ class WMSThumbNail(object):
             map_projection = getattr(ccrs, map_projection)()
             logger.debug("map_projection:  %s", map_projection)
         logger.debug("Opening wms url %s with timeout %d", url, wms_timeout)
-        wms = WebMapService(url, timeout=wms_timeout)
+
+        try:
+            wms = WebMapService(url, timeout=wms_timeout)
+        except Exception as e:
+            raise Exception("Could not read wms capability: ", e)
 
         """Some debugging"""
         logger.debug("Title: %s", wms.identification.title)
@@ -190,8 +195,13 @@ class WMSThumbNail(object):
 
         # logger.debug("Aquire lock - creating subplot.")
         # lock.acquire()
+        try:
+            fig, ax = plt.subplots(subplot_kw=subplot_kw)
+        except Exception as e:
+            plt.close(fig)
+            plt.cla()
+            raise Exception("Could not plot wms: ", e)
 
-        fig, ax = plt.subplots(subplot_kw=subplot_kw)
         logger.debug(type(ax))
         logger.debug(ax)
         logger.debug(ax.get_extent())
@@ -232,6 +242,8 @@ class WMSThumbNail(object):
         # Save figure to IO Buffer
         buf = io.BytesIO()
         fig.savefig(buf, format='png', bbox_inches='tight')
+        plt.close(fig)
+        plt.cla()
         buf.seek(0)
         encode_string = base64.b64encode(buf.getbuffer())
         # logger.debug(encode_string)
@@ -244,7 +256,7 @@ class WMSThumbNail(object):
         thumbnail_b64 = (b'data:image/png;base64,' + encode_string).decode('utf-8')
         # logger.debug(thumbnail_b64)
         del encode_string
-
+        logger.debug("%s. Finished", mp.current_process().name)
         return thumbnail_b64
 
     def create_ts_thumbnail(self):

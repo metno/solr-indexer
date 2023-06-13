@@ -456,7 +456,7 @@ class BulkIndexer(object):
                 myparent = get_dataset(pid)
                 if myparent['doc'] is not None:
                     logger.debug("pending parent found in index: %s, isParent: %s",
-                                 (myparent['doc']['id'], myparent['doc']['isParent']))
+                                 myparent['doc']['id'], myparent['doc']['isParent'])
 
                     if myparent['doc']['isParent'] is False:
                         logger.debug('Update on indexed parent %s, isParent: True' % pid)

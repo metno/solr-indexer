@@ -303,7 +303,9 @@ def main():
                 job = job+1
 
             for f in as_completed(futures_list):
-                try:
+                if f.exception():
+                    logger.error("Process failed with: %s", f.exception())
+                elif f.done():
                     (parent_ids_found_,
                         parent_ids_pending_,
                         parent_ids_processed_,
@@ -319,11 +321,8 @@ def main():
                     processed += files_processed_
                     docs_failed += docs_failed_
                     docs_indexed += docs_indexed_
-                except Exception as e:
-                    logger.error("Process failed with: %s", e)
-                else:
                     logger.info("%s docs indexed so far." % docs_indexed)
-
+        Futures.ALL_COMPLETED
     # Bulkindex using main process.
     else:
         logger.debug("Using ONE process.")

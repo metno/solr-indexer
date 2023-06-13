@@ -239,7 +239,7 @@ def process_feature_type(tmpdoc):
             ds = netCDF4.Dataset(dapurl, 'r')
         except Exception as e:
             logger.error("Something failed reading netcdf %s. Reason: %s", dapurl, e)
-            # lock.release()
+            ds.close()
             return tmpdoc_
 
         # Try to get the global attribute featureType
@@ -345,7 +345,7 @@ def create_wms_thumbnail(doc):
     except Exception as e:
         logger.error("Thumbnail creation from OGC WMS failed: %s, id: %s", e, id)
         # raise Exception("Thumbnail creation from OGC WMS failed: %s, id: %s", e, id)
-        # pass
+        pass
     finally:
         return doc_
 
