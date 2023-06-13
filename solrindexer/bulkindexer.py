@@ -485,7 +485,7 @@ class BulkIndexer(object):
         files_processed_ = files_processed
 
         # Close the connection
-        # self.solrcon.session.close()
+        # session.close()
         # self.mysolr.solrc.session.close()
 
         return (parent_ids_found_,

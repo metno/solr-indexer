@@ -390,7 +390,7 @@ def main():
         logger.warning("Make sure to index the missing parents and then index the children")
 
     # Update parent_ids_pending
-    ppending_ = parent_ids_pending_.copy()
+    ppending_ = parent_ids_pending.copy()
     for pid in ppending_:
         if pid in parent_ids_processed:
             parent_ids_pending.remove(pid)
