@@ -235,11 +235,13 @@ def process_feature_type(tmpdoc):
     if dapurl is not None:
         logger.debug("Trying to open netCDF file: %s", dapurl)
         # lock.acquire()
+        ds = None
         try:
             ds = netCDF4.Dataset(dapurl, 'r')
         except Exception as e:
             logger.error("Something failed reading netcdf %s. Reason: %s", dapurl, e)
-            ds.close()
+            if ds is not None:
+                ds.close()
             return tmpdoc_
 
         # Try to get the global attribute featureType
@@ -288,7 +290,12 @@ def process_feature_type(tmpdoc):
 
         if polygon is not None:
             logger.debug("Reading geospatial_bounds")
-            polygon_ = shapely.wkt.loads(polygon)
+            try:
+                polygon_ = shapely.wkt.loads(polygon)
+            except Exception as e:
+                logger.error("Clould not read geospatial_bounds: %s, Reason: %s", polygon, e)
+                ds.close()
+                return tmpdoc_
             logger.debug("Got geospatial bounds: %s", polygon)
             type = polygon_.geom_type
             if type == 'Point':
