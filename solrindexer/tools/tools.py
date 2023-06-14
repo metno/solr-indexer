@@ -28,6 +28,7 @@ import validators
 import netCDF4
 import dateutil.parser
 
+from shapely import wkt
 from shapely.ops import transform
 
 from threading import Lock
@@ -242,6 +243,10 @@ def process_feature_type(tmpdoc):
             logger.error("Something failed reading netcdf %s. Reason: %s", dapurl, e)
             if ds is not None:
                 ds.close()
+            # Set to inactive if file not found.
+            if '[Errno -90] NetCDF: file not found:':
+                logger.info("Setting dataset %s to Inactive", tmpdoc_['metadata_identifier'])
+                tmpdoc_.update({"metadata_status": "Inactive"})
             return tmpdoc_
 
         # Try to get the global attribute featureType
@@ -291,24 +296,43 @@ def process_feature_type(tmpdoc):
         if polygon is not None:
             logger.debug("Reading geospatial_bounds")
             try:
-                polygon_ = shapely.wkt.loads(polygon)
+                polygon_ = wkt.loads(polygon)
             except Exception as e:
-                logger.error("Clould not read geospatial_bounds: %s, Reason: %s", polygon, e)
+                logger.warning("Could not parse geospatial_bounds: %s, Reason: %s", polygon, e)
                 ds.close()
                 return tmpdoc_
-            logger.debug("Got geospatial bounds: %s", polygon)
-            type = polygon_.geom_type
-            if type == 'Point':
+            geom_type = polygon_.geom_type
+            logger.debug("Got geospatial type %s with bounds: %s", geom_type, polygon)
+            if geom_type == 'Point':
+                point_ = polygon_
                 point = polygon_.wkt
-                if shapely.has_z(polygon_):
-                    point_ = shapely.force_2d(polygon_)
+                if shapely.has_z(point_):
+                    point_ = shapely.force_2d(point_)
                     point = point_.wkt
+                if 'polygon_rpt' in tmpdoc_:
+                    parsed_point = wkt.loads(tmpdoc_['polygon_rpt'])
+                    if not parsed_point.equals(point_):
+                        point = transform(flip, point_).wkt
                 tmpdoc_.update({'geospatial_bounds': point})
-            else:
-                polygon = transform(flip, polygon_)
 
-                tmpdoc_.update({'geospatial_bounds': polygon.wkt})
-                tmpdoc_.update({'polygon_rpt': polygon.wkt})
+            elif geom_type == 'MultiPoint':
+                mpoint_ = polygon_
+                mpoint = polygon_.wkt
+                if shapely.has_z(polygon_):
+                    mpoint_ = shapely.force_2d(polygon_)
+                    mpoint = mpoint_.wkt
+                mpoint = transform(flip, mpoint_).wkt
+                tmpdoc_.update({'geospatial_bounds': mpoint})
+
+            else:
+                try:
+                    polygon = transform(flip, polygon_)
+                except Exception:
+                    logger.warning("Could not transform incoming geospatial bounds: %s", polygon_)
+                    pass
+                else:
+                    tmpdoc_.update({'geospatial_bounds': polygon.wkt})
+                    tmpdoc_.update({'polygon_rpt': polygon.wkt})
 
         bounds_crs = None
         try:

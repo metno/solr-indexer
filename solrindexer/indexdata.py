@@ -42,20 +42,15 @@ import netCDF4
 import logging
 import xmltodict
 import requests
-import validators
-import os.path
 import dateutil.parser
 import lxml.etree as ET
 
-import shapely.wkt
 import shapely.geometry as shpgeo
 
 from metvocab.mmdgroup import MMDGroup
 from shapely.geometry import box, mapping
-from shapely.ops import transform
 
-
-from solrindexer.tools import flip, rewrap
+from solrindexer.tools import rewrap, process_feature_type
 from solrindexer.tools import to_solr_id, parse_date
 
 logger = logging.getLogger(__name__)
@@ -171,6 +166,7 @@ class MMD4SolR:
         Need to check contents more specifically...
         """
         gcmd = False
+        logger.debug("Checking for gmcd keywords")
         if isinstance(mmd['mmd:keywords'], list):
             for elem in mmd['mmd:keywords']:
                 if str(elem['@vocabulary']).upper() == 'GCMDSK':
@@ -188,6 +184,7 @@ class MMD4SolR:
         extracted as SolR is not adapted.
         FIXME and check
         """
+        logger.debug("Checking last_metadata_update")
         if 'mmd:last_metadata_update' in mmd:
             if isinstance(mmd['mmd:last_metadata_update'],
                           dict):
@@ -218,7 +215,9 @@ class MMD4SolR:
                 else:
                     myvalue = mmd['mmd:last_metadata_update']+'Z'
             mydate = dateutil.parser.parse(myvalue)
+        logger.debug("Checking temporal extent.")
         if 'mmd:temporal_extent' in mmd:
+            # logger.debug(mmd['mmd:temporal_extent'])
             if isinstance(mmd['mmd:temporal_extent'], list):
                 for item in mmd['mmd:temporal_extent']:
                     for mykey in item:
@@ -230,7 +229,11 @@ class MMD4SolR:
                             item[mykey] = mydate.strftime('%Y-%m-%dT%H:%M:%SZ')
 
             else:
+                # logger.debug(mmd['mmd:temporal_extent'].items())
                 for mykey, myitem in mmd['mmd:temporal_extent'].items():
+                    if mykey == 'mmd:start_date' and myitem is None:
+                        raise ValueError(
+                            "Missing mmd:temporal_extent start_date. File will be skipped.")
                     if mykey == '@xmlns:gml':
                         continue
                     if (myitem is None) or (myitem == '--'):
@@ -410,6 +413,8 @@ class MMD4SolR:
         logger.debug("Geographical extent")
         # Assumes longitudes positive eastwards and in the are -180:180
         mmd_geographic_extent = mmd.get('mmd:geographic_extent', None)
+        # logger.debug(type(mmd_geographic_extent))
+        # logger.debug(mmd_geographic_extent)
         if mmd_geographic_extent is not None:
             if isinstance(mmd_geographic_extent, list):
                 logger.warning('This is a challenge as multiple bounding boxes are not '
@@ -471,6 +476,8 @@ class MMD4SolR:
                     mydict['geographic_extent_rectangle_west'] = -180.
                     mydict['geographic_extent_rectangle_east'] = 180.
             else:
+                # logger.debug(type(mmd_geographic_extent['mmd:rectangle']))
+                # logger.debug(mmd_geographic_extent['mmd:rectangle'])
                 for item in mmd_geographic_extent['mmd:rectangle']:
                     if item is None:
                         logger.warning(
@@ -1124,7 +1131,7 @@ class IndexMMD:
                 # Thumbnail of timeseries to be added
                 # Or better do this as part of get_feature_type?
                 logger.info("Processing feature type")
-                input_record = self.process_feature_type(input_record)
+                input_record = process_feature_type(input_record)
 
             logger.info("Adding records to list...")
             mmd_records.append(input_record)
@@ -1196,82 +1203,6 @@ class IndexMMD:
         except Exception as e:
             logger.error("Thumbnail creation from OGC WMS failed: %s", e)
             return doc
-
-    @staticmethod
-    def process_feature_type(tmpdoc):
-        """
-        Look for feature type and update document
-        """
-        dapurl = None
-        tmpdoc_ = tmpdoc
-        if 'data_access_url_opendap' in tmpdoc:
-            dapurl = str(tmpdoc['data_access_url_opendap']).strip()
-            valid = validators.url(dapurl)
-            # Special fix for nersc.
-            if dapurl.startswith("http://thredds.nersc"):
-                dapurl.replace("http:", "https:")
-
-            if not valid:
-                logger.warn("Opendap url not valid: %s", dapurl)
-                return tmpdoc_
-
-        if 'storage_information_file_location' in tmpdoc:
-            fileloc = str(tmpdoc['storage_information_file_location']).strip()
-            if os.path.isfile(fileloc):
-                dapurl = fileloc
-        if dapurl is not None:
-            try:
-                with netCDF4.Dataset(dapurl, 'r') as f:
-                    # if attribs is not None:
-                    for att in f.ncattrs():
-                        if att == 'featureType':
-                            featureType = getattr(f, att)
-                            if featureType not in ['point', 'timeSeries',
-                                                   'trajectory', 'profile',
-                                                   'timeSeriesProfile',
-                                                   'trajectoryProfile']:
-                                if featureType == "TimeSeries":
-                                    featureType = 'timeSeries'
-                                elif featureType == "timeseries":
-                                    featureType = 'timeSeries'
-                                elif featureType == "timseries":
-                                    featureType = 'timeSeries'
-                                else:
-                                    featureType = None
-                            if featureType:
-                                logger.info('feature_type found: %s', featureType)
-                                tmpdoc_.update({'feature_type': featureType})
-                            else:
-                                logger.info('Neither gridded nor discrete sampling \
-                                             geometry found in this record...')
-
-                        # Check if we have plogon.
-                        if att == 'geospatial_bounds':
-                            polygon = getattr(f, att)
-                            polygon_ = shapely.wkt.loads(polygon)
-                            logger.debug("Got geospatial bounds: %s", polygon)
-                            type = polygon_.geom_type
-                            if type == 'Point':
-                                point = polygon_.wkt
-                                if shapely.has_z(polygon_):
-                                    point_ = shapely.force_2d(polygon_)
-                                    point = point_.wkt
-                                tmpdoc.update({'geospatial_bounds': point})
-                            else:
-                                polygon = transform(flip, polygon_)
-
-                                tmpdoc.update({'geospatial_bounds': polygon.wkt})
-                                tmpdoc.update({'polygon_rpt': polygon.wkt})
-                                # Check if we have plogon.
-                        if att == 'geospatial_bounds_crs':
-                            crs = getattr(f, att)
-                            tmpdoc_.update({'geographic_extent_polygon_srsName': crs})
-
-                    return tmpdoc_
-            except Exception as e:
-                logger.error("Something failed reading netcdf %s. Readon %s", dapurl, e)
-
-        return tmpdoc_
 
     def delete_level1(self, datasetid):
         """ Require ID as input """

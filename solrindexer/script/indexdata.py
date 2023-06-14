@@ -248,8 +248,8 @@ def main():
         try:
             newdoc = mydoc.tosolr()
         except Exception as e:
-            logger.warning(
-                'Could not process the file: %s. Error: %s', myfile, e)
+            logger.error(
+                'Could not convert file %s to solr document.  Reason: %s', myfile, e)
             continue
 
         """
@@ -337,7 +337,7 @@ def main():
         try:
             mysolr.index_record(mylist, addThumbnail=tflg, thumbClass=thumbClass)
         except Exception as e:
-            logger.warning('Something failed during indexing %s', e)
+            logger.warning('Something failed during indexing:s %s', e)
         logger.info('%d records out of %d have been ingested...',
                     myrecs, len(files2ingest))
         del mylist
@@ -346,6 +346,9 @@ def main():
         logger.warning('Inconsistent number of records processed.')
     # Report status
     logger.info("Number of files processed were: %d", len(myfiles))
+
+    if len(myfiles) - len(files2ingest) > 0:
+        logger.warning("One or more files could not be processed. Check the logs.")
 
     # Check for missing parents in batch or index
     if len(pending) > 0:
