@@ -1038,6 +1038,32 @@ class IndexMMD:
     def commit(self):
         self.solrc.commit()
 
+    def get_status(self):
+        """Get SolR core status information"""
+        tmp = self.solr_url.split('/')
+        core = tmp[-1]
+        base_url = '/'.join(tmp[0:-1])
+        logger.debug("Getting status with url %s and core %s", base_url, core)
+        res = None
+        try:
+            res = requests.get(base_url + '/admin/cores?action=STATUS&core=' + core,
+                               auth=self.authentication)
+            res.raise_for_status()
+        except requests.exceptions.HTTPError as errh:
+            logger.error("Http Error: %s", errh)
+        except requests.exceptions.ConnectionError as errc:
+            logger.error("Error Connecting: %s", errc)
+        except requests.exceptions.Timeout as errt:
+            logger.error("Timeout Error: %s", errt)
+        except requests.exceptions.RequestException as err:
+            logger.error("OOps: Something Else went wrong: %s", err)
+
+        if res is None:
+            return None
+        else:
+            status = res.json()
+            return status['status'][core]['index']
+
     def add_thumbnail(self, url, thumbnail_type='wms'):
         """ Add thumbnail to SolR
             Args:
