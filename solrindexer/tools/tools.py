@@ -244,9 +244,9 @@ def process_feature_type(tmpdoc):
             if ds is not None:
                 ds.close()
             # Set to inactive if file not found.
-            if str(e).ststartswith('[Errno -90] NetCDF: file not found:'):
-                logger.info("Setting dataset %s to Inactive", tmpdoc_['metadata_identifier'])
-                tmpdoc_.update({"metadata_status": "Inactive"})
+            # if str(e).ststartswith('[Errno -90] NetCDF: file not found:'):
+            #     logger.info("Setting dataset %s to Inactive", tmpdoc_['metadata_identifier'])
+            #     tmpdoc_.update({"metadata_status": "Inactive"})
             return tmpdoc_
 
         # Try to get the global attribute featureType
