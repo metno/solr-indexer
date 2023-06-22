@@ -1,33 +1,32 @@
 #!/usr/bin/env python3
 
 import pysolr
-from solrindexer.multithread.threads import concurrently
-from concurrent import futures as Futures
 
 
 def handleResults(doc):
-
+    newdoc = doc
     # print(doc['id'])
-    if 'full_text' in doc:
-        doc.pop('full_text')
-    if 'bbox__maxX' in doc:
-        doc.pop('bbox__maxX')
-    if 'bbox__maxY' in doc:
-        doc.pop('bbox__maxY')
-    if 'bbox__minX' in doc:
-        doc.pop('bbox__minX')
-    if 'bbox__minY' in doc:
-        doc.pop('bbox__minY')
-    if 'bbox_rpt' in doc:
-        doc.pop('bbox_rpt')
-    if 'ss_access' in doc:
-        doc.pop('ss_access')
-    if '_version_' in doc:
-        doc.pop('_version_')
+    if 'full_text' in newdoc:
+        newdoc.pop('full_text')
+    if 'bbox__maxX' in newdoc:
+        newdoc.pop('bbox__maxX')
+    if 'bbox__maxY' in newdoc:
+        newdoc.pop('bbox__maxY')
+    if 'bbox__minX' in newdoc:
+        newdoc.pop('bbox__minX')
+    if 'bbox__minY' in newdoc:
+        newdoc.pop('bbox__minY')
+    if 'bbox_rpt' in newdoc:
+        newdoc.pop('bbox_rpt')
+    if 'ss_access' in newdoc:
+        newdoc.pop('ss_access')
+    if '_version_' in newdoc:
+        newdoc.pop('_version_')
 
-    doc['isParent'] = False
-    doc['isChild'] = False
-    return doc
+    newdoc.update({'isChild': False})
+    newdoc.update({'isChild': False})
+
+    return newdoc
 
 
 def main():
@@ -35,7 +34,7 @@ def main():
     search_rows = 1000
     search_start = 0
 
-    solrcon = pysolr.Solr('http://metsis-solr.met.no:8983/solr/adc-d8-dev',
+    solrcon = pysolr.Solr('http://157.249.74.44:8983/solr/adc',
                           always_commit=False, timeout=1020,
                           auth=None)
 
@@ -50,11 +49,13 @@ def main():
 
         docs = list(results)
         newdocs = list()
-        for (doc, newdoc) in concurrently(fn=handleResults, inputs=docs,
-                                          max_concurrency=8):
+        # for (doc, newdoc) in concurrently(fn=handleResults, inputs=docs,
+        #                                  max_concurrency=8):
+        for doc in docs:
+            newdoc = handleResults(doc)
             newdocs.append(newdoc)
 
-        Futures.ALL_COMPLETED
+        # Futures.ALL_COMPLETED
         # print(len(newdocs))
         try:
             solrcon.add(newdocs)
