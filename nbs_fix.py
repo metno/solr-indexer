@@ -24,7 +24,7 @@ def handleResults(doc):
         newdoc.pop('_version_')
 
     newdoc.update({'isChild': False})
-    newdoc.update({'isChild': False})
+    newdoc.update({'isParent': False})
 
     return newdoc
 
@@ -64,6 +64,7 @@ def main():
 
         del docs
         del newdocs
+        del results
         search_start += search_rows
 
 
