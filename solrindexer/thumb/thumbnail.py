@@ -136,6 +136,8 @@ class WMSThumbNail(object):
         logger.debug("GetMap options: %s", wms.getOperationByName("GetMap").formatOptions)
         available_layers = list(wms.contents.keys())
         logger.debug("Available layers :%s", available_layers)
+        if len(available_layers) == 0:
+            raise Exception("No layers found. Cannot create thumbnail.")
 
         for layer in blackListLayers:
             try:
