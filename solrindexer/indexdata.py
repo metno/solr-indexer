@@ -220,6 +220,8 @@ class MMD4SolR:
             except ParserError:
                 mydate = dateutil.parser.parse(myvalue[-1])
                 pass
+            except Exception as e:
+                logger.error('Date format could not be parsed: %s', e)
 
         logger.debug("Checking temporal extent.")
         if 'mmd:temporal_extent' in mmd:
