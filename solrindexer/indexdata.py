@@ -43,6 +43,7 @@ import logging
 import xmltodict
 import requests
 import dateutil.parser
+from dateutil.parser import ParserError
 import lxml.etree as ET
 
 import shapely.geometry as shpgeo
@@ -214,7 +215,12 @@ class MMD4SolR:
                     myvalue = mmd['mmd:last_metadata_update']
                 else:
                     myvalue = mmd['mmd:last_metadata_update']+'Z'
-            mydate = dateutil.parser.parse(myvalue)
+            try:
+                mydate = dateutil.parser.parse(myvalue)
+            except ParserError:
+                mydate = dateutil.parser.parse(myvalue[-1])
+                pass
+
         logger.debug("Checking temporal extent.")
         if 'mmd:temporal_extent' in mmd:
             # logger.debug(mmd['mmd:temporal_extent'])
@@ -225,9 +231,12 @@ class MMD4SolR:
                             mydate = ''
                             item[mykey] = mydate
                         else:
-                            mydate = dateutil.parser.parse(str(item[mykey]))
-                            item[mykey] = mydate.strftime('%Y-%m-%dT%H:%M:%SZ')
-
+                            try:
+                                mydate = dateutil.parser.parse(str(item[mykey]))
+                                item[mykey] = mydate.strftime('%Y-%m-%dT%H:%M:%SZ')
+                            except Exception as e:
+                                logger.error(
+                                    'Date format could not be parsed: %s', e)
             else:
                 # logger.debug(mmd['mmd:temporal_extent'].items())
                 for mykey, myitem in mmd['mmd:temporal_extent'].items():
@@ -1360,7 +1369,7 @@ class IndexMMD:
             return False, "No parent found in index."
         else:
             if myparent['doc'] is None:
-                if fail_on_missing:
+                if fail_on_missing is True:
                     return False, "Parent %s is not in the index. Index parent first." % parentid
                 else:
                     logger.warn("Parent %s is not in the index. Make sure to index parent first.",
