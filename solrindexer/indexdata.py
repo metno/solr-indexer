@@ -1362,9 +1362,17 @@ class IndexMMD:
         parent['isParent'] = True
         return parent
 
-    def update_parent(self, parentid, fail_on_missing=False, handle_missing_status=False):
-        """Search index for parent and update parent flag."""
+    def update_parent(self, parentid, fail_on_missing=False, handle_missing_status=True):
+        """Search index for parent and update parent flag.
 
+            Parameters:
+                parentid - (str) the parent id to find and update
+                fail_on_missing - (bool) - Return False on missing parents if set to True
+                handle_missing_status - (bool) If fail_on_missing is false,
+                                        this parameter is used to return false or true
+                                        back to the calling code. Logs a warning about
+                                        missing parent.
+        """
         myparent = self.get_dataset(parentid)
 
         if myparent is None:
