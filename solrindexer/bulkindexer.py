@@ -62,7 +62,7 @@ class BulkIndexer(object):
         self.total_in = len(inputList)
 
         # self.solrcon = pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=auth)
-        # self.mysolr = IndexMMD(solr_url, False, authentication=auth)
+        # self.  = IndexMMD(solr_url, False, authentication=auth)
 
         """Initialize thumbnail generator"""
         self.tflg = tflg

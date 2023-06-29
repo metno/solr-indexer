@@ -146,8 +146,12 @@ def parse_date(_date):
         logger.debug("date already solr compatible.")
         return date
     elif not test:
-        parsed_date = dateutil.parser.parse(_date)
-        date = parsed_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+        try:
+            parsed_date = dateutil.parser.parse(date)
+            date = parsed_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+        except Exception as e:
+            logger.error("Could not parse date: %s, reason: %s", date, e)
+            return None
 
         logger.debug(date)
         test = checkDateFormat(date)
@@ -158,9 +162,14 @@ def parse_date(_date):
             logger.debug("dateformat not solr compatible. fixing...")
             if re.search(r'\+\d\d:\d\dZ$', date) is not None:
                 date = re.sub(r'\+\d\d:\d\d', '', date)
-                newdate = dateutil.parser.parse(date)
-                date = newdate.strftime('%Y-%m-%dT%H:%M:%SZ')
-                logger.debug("parsed solr date: %s", date)
+                try:
+                    newdate = dateutil.parser.parse(date)
+                    date = newdate.strftime('%Y-%m-%dT%H:%M:%SZ')
+                    logger.debug("parsed solr date: %s", date)
+                except Exception as e:
+                    logger.error("Could not parse date: %s, reason: %s", date, e)
+                    return None
+
                 return date
     else:
         return None

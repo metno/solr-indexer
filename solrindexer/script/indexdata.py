@@ -293,7 +293,8 @@ def main():
         if not any(d['id'] == id for d in files2ingest):
             # Check if already ingested and update if so
             logger.info("Checking index for parent %s", id)
-            status, msg = mysolr.update_parent(id)
+            status, msg = mysolr.update_parent(id, fail_on_missing=False,
+                                               handle_missing_status=False)
 
             if status is True:
                 logger.info(msg)
