@@ -43,6 +43,7 @@ import logging
 import xmltodict
 import requests
 import dateutil.parser
+from dateutil.parser import ParserError
 import lxml.etree as ET
 
 import shapely.geometry as shpgeo
@@ -214,7 +215,14 @@ class MMD4SolR:
                     myvalue = mmd['mmd:last_metadata_update']
                 else:
                     myvalue = mmd['mmd:last_metadata_update']+'Z'
-            mydate = dateutil.parser.parse(myvalue)
+            try:
+                mydate = dateutil.parser.parse(myvalue)
+            except ParserError:
+                mydate = dateutil.parser.parse(myvalue[-1])
+                pass
+            except Exception as e:
+                logger.error('Date format could not be parsed: %s', e)
+
         logger.debug("Checking temporal extent.")
         if 'mmd:temporal_extent' in mmd:
             # logger.debug(mmd['mmd:temporal_extent'])
@@ -225,9 +233,12 @@ class MMD4SolR:
                             mydate = ''
                             item[mykey] = mydate
                         else:
-                            mydate = dateutil.parser.parse(str(item[mykey]))
-                            item[mykey] = mydate.strftime('%Y-%m-%dT%H:%M:%SZ')
-
+                            try:
+                                mydate = dateutil.parser.parse(str(item[mykey]))
+                                item[mykey] = mydate.strftime('%Y-%m-%dT%H:%M:%SZ')
+                            except Exception as e:
+                                logger.error(
+                                    'Date format could not be parsed: %s', e)
             else:
                 # logger.debug(mmd['mmd:temporal_extent'].items())
                 for mykey, myitem in mmd['mmd:temporal_extent'].items():
@@ -1351,16 +1362,24 @@ class IndexMMD:
         parent['isParent'] = True
         return parent
 
-    def update_parent(self, parentid, fail_on_missing=False, handle_missing_status=False):
-        """Search index for parent and update parent flag."""
+    def update_parent(self, parentid, fail_on_missing=False, handle_missing_status=True):
+        """Search index for parent and update parent flag.
 
+            Parameters:
+                parentid - (str) the parent id to find and update
+                fail_on_missing - (bool) - Return False on missing parents if set to True
+                handle_missing_status - (bool) If fail_on_missing is false,
+                                        this parameter is used to return false or true
+                                        back to the calling code. Logs a warning about
+                                        missing parent.
+        """
         myparent = self.get_dataset(parentid)
 
         if myparent is None:
             return False, "No parent found in index."
         else:
             if myparent['doc'] is None:
-                if fail_on_missing:
+                if fail_on_missing is True:
                     return False, "Parent %s is not in the index. Index parent first." % parentid
                 else:
                     logger.warn("Parent %s is not in the index. Make sure to index parent first.",
