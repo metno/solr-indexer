@@ -93,7 +93,7 @@ class WMSThumbNail(object):
                 url: wms GetCapabilities document
 
             Returns:
-                thumbnail_b64: base64 string representation of image
+                thumbnail_b64: base64 string representation of imag
         """
         logger.debug("%s. Starting wms url %s", mp.current_process().name, url)
         wms_layer = self.wms_layer
