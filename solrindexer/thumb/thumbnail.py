@@ -197,10 +197,12 @@ class WMSThumbNail(object):
 
         # logger.debug("Aquire lock - creating subplot.")
         # lock.acquire()
+        fig = None
         try:
             fig, ax = plt.subplots(subplot_kw=subplot_kw)
         except Exception as e:
-            plt.close(fig)
+            if fig is not None:
+                plt.close(fig)
             plt.cla()
             raise Exception("Could not plot wms: ", e)
 
