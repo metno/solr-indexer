@@ -43,7 +43,7 @@ import logging
 import xmltodict
 import requests
 import dateutil.parser
-from dateutil.parser import ParserError
+# from dateutil.parser import ParserError
 import lxml.etree as ET
 
 import shapely.geometry as shpgeo
@@ -196,32 +196,28 @@ class MMD4SolR:
                                 mydateels = myupdate
                                 # The comparison below is a hack, need to
                                 # revisit later, but works for now.
-                                myvalue = '0000-00-00:T00:00:00Z'
+                                # myvalue = '0000-00-00:T00:00:00Z'
                                 if isinstance(mydateels, list):
                                     for mydaterec in mydateels:
-                                        if mydaterec['mmd:datetime'] > myvalue:
-                                            myvalue = mydaterec['mmd:datetime']
+                                        # if mydaterec['mmd:datetime'] > myvalue:
+                                        myvalue = parse_date(mydaterec['mmd:datetime'])
+                                        if myvalue is None:
+                                            raise ValueError("Date could not be parsed: %s",
+                                                             mydaterec['mmd:datetime'])
                                 else:
-                                    if mydateels['mmd:datetime'].endswith('Z'):
-                                        myvalue = mydateels['mmd:datetime']
-                                    else:
-                                        myvalue = mydateels['mmd:datetime']+'Z'
+                                    myvalue = parse_date(mydateels['mmd:datetime'])
+                                    if myvalue is None:
+                                        raise ValueError("Date could not be parsed: %s",
+                                                         mydateels['mmd:datetime'])
 
             else:
                 # To be removed when all records are transformed into the
                 # new format
                 logger.warning('Removed D7 format in last_metadata_update')
-                if mmd['mmd:last_metadata_update'].endswith('Z'):
-                    myvalue = mmd['mmd:last_metadata_update']
-                else:
-                    myvalue = mmd['mmd:last_metadata_update']+'Z'
-            try:
-                mydate = dateutil.parser.parse(myvalue)
-            except ParserError:
-                mydate = dateutil.parser.parse(myvalue[-1])
-                pass
-            except Exception as e:
-                logger.error('Date format could not be parsed: %s', e)
+                myvalue = parse_date(mmd['mmd:last_metadata_update'])
+                if myvalue is None:
+                    raise ValueError("Date could not be parsed: %s",
+                                     mmd['mmd:last_metadata_update'])
 
         logger.debug("Checking temporal extent.")
         if 'mmd:temporal_extent' in mmd:
