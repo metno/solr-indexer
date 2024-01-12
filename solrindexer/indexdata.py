@@ -420,11 +420,15 @@ class MMD4SolR:
 
             if "temporal_extent_end_date" in mydict:
                 logger.debug('Creating daterange with end date')
-                mydict['temporal_extent_period_dr'] = '[' + str(mydict["temporal_extent_start_date"]) + ' TO ' + str(mydict["temporal_extent_end_date"]) + ']'
+                st = str(mydict["temporal_extent_start_date"])
+                end = str(mydict["temporal_extent_end_date"])
+                mydict['temporal_extent_period_dr'] = '[' + st + ' TO ' + end + ']'
             else:
                 logger.debug('Creating daterange with open end date')
-                mydict['temporal_extent_period_dr'] = '[' + str(mydict["temporal_extent_start_date"]) + ' TO *]'
-            logger.debug("Temporal extent date range: %s", str(mydict['temporal_extent_period_dr']))
+                st = str(mydict["temporal_extent_start_date"])
+                end = str(mydict["temporal_extent_end_date"])
+                mydict['temporal_extent_period_dr'] = '[' + st + ' TO *]'
+            logger.debug("Temporal extent date range: %s", mydict['temporal_extent_period_dr'])
         logger.debug("Geographical extent")
         # Assumes longitudes positive eastwards and in the are -180:180
         mmd_geographic_extent = mmd.get('mmd:geographic_extent', None)
