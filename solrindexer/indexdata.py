@@ -418,6 +418,17 @@ class MMD4SolR:
                         mydict["temporal_extent_end_date"] = str(
                             mmd['mmd:temporal_extent']['mmd:end_date'])
 
+            if "temporal_extent_end_date" in mydict:
+                logger.debug('Creating daterange with end date')
+                st = str(mydict["temporal_extent_start_date"])
+                end = str(mydict["temporal_extent_end_date"])
+                mydict['temporal_extent_period_dr'] = '[' + st + ' TO ' + end + ']'
+            else:
+                logger.debug('Creating daterange with open end date')
+                st = str(mydict["temporal_extent_start_date"])
+                end = str(mydict["temporal_extent_end_date"])
+                mydict['temporal_extent_period_dr'] = '[' + st + ' TO *]'
+            logger.debug("Temporal extent date range: %s", mydict['temporal_extent_period_dr'])
         logger.debug("Geographical extent")
         # Assumes longitudes positive eastwards and in the are -180:180
         mmd_geographic_extent = mmd.get('mmd:geographic_extent', None)
@@ -737,10 +748,11 @@ class MMD4SolR:
                 if 'mmd:wms_layers' in data_access and data_access_type == 'ogc_wms':
                     data_access_wms_layers_string = 'data_access_wms_layers'
                     # Map directly to list
-                    data_access_wms_layers = list(
-                        data_access['mmd:wms_layers'])
+                    data_access_wms_layers = list(set(
+                        data_access['mmd:wms_layers']['mmd:wms_layer']))
                     # old version was [i for i in data_access_wms_layers.values()][0]
-                    mydict[data_access_wms_layers_string] = data_access_wms_layers[0]
+                    mydict[data_access_wms_layers_string] = data_access_wms_layers
+                    logger.debug(data_access_wms_layers)
 
         logger.debug("Related dataset")
         # TODO

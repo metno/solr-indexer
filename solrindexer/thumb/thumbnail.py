@@ -93,7 +93,7 @@ class WMSThumbNail(object):
                 url: wms GetCapabilities document
 
             Returns:
-                thumbnail_b64: base64 string representation of imag
+                thumbnail_b64: base64 string representation of images
         """
         logger.debug("%s. Starting wms url %s", mp.current_process().name, url)
         wms_layer = self.wms_layer
@@ -111,6 +111,10 @@ class WMSThumbNail(object):
         logger.debug("add_coastlines: %s", add_coastlines)
         logger.debug("map_projection:  %s", map_projection)
         logger.debug("thumbnail_extent: %s", thumbnail_extent)
+
+        # Check if url is list or string, and process therafter
+        if (isinstance(url, list)):
+            url = url[0]  # Extract first url
 
         # Make sure url does not provide request attributes
         url = url.split('?')[0]
@@ -195,7 +199,7 @@ class WMSThumbNail(object):
         subplot_kw = dict(projection=map_projection)
         logger.debug(subplot_kw)
 
-        # logger.debug("Aquire lock - creating subplot.")
+        logger.debug("creating subplot.")
         # lock.acquire()
         fig = None
         try:

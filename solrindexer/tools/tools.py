@@ -227,7 +227,10 @@ def process_feature_type(tmpdoc):
     dapurl = None
     tmpdoc_ = tmpdoc
     if 'data_access_url_opendap' in tmpdoc:
-        dapurl = str(tmpdoc['data_access_url_opendap']).strip()
+        dapurl = tmpdoc['data_access_url_opendap']
+        if (isinstance(dapurl, list)):
+            dapurl = dapurl[0]
+        dapurl = str(dapurl).strip()
         valid = validators.url(dapurl)
         # Special fix for nersc.
         if dapurl.startswith("http://thredds.nersc"):
