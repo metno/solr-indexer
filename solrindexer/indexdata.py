@@ -426,7 +426,6 @@ class MMD4SolR:
             else:
                 logger.debug('Creating daterange with open end date')
                 st = str(mydict["temporal_extent_start_date"])
-                end = str(mydict["temporal_extent_end_date"])
                 mydict['temporal_extent_period_dr'] = '[' + st + ' TO *]'
             logger.debug("Temporal extent date range: %s", mydict['temporal_extent_period_dr'])
         logger.debug("Geographical extent")
