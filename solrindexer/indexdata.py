@@ -747,11 +747,16 @@ class MMD4SolR:
                 if 'mmd:wms_layers' in data_access and data_access_type == 'ogc_wms':
                     data_access_wms_layers_string = 'data_access_wms_layers'
                     # Map directly to list
-                    data_access_wms_layers = list(set(
-                        data_access['mmd:wms_layers']['mmd:wms_layer']))
+                    data_access_wms_layers = None
+                    da_wms = data_access['mmd:wms_layers']['mmd:wms_layer']
+                    if isinstance(da_wms, str):
+                        data_access_wms_layers = [da_wms]
+                    if isinstance(da_wms, list):
+                        data_access_wms_layers = list(set(da_wms))
                     # old version was [i for i in data_access_wms_layers.values()][0]
-                    mydict[data_access_wms_layers_string] = data_access_wms_layers
-                    logger.debug(data_access_wms_layers)
+                    if data_access_wms_layers is not None:
+                        mydict[data_access_wms_layers_string] = data_access_wms_layers
+                        logger.debug("WMS layers: %s", data_access_wms_layers)
 
         logger.debug("Related dataset")
         # TODO
