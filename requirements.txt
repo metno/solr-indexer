@@ -1,4 +1,5 @@
 lxml
+h5py
 netCDF4
 pysolr
 python-dateutil
