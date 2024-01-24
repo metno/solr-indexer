@@ -20,6 +20,6 @@ permissions and limitations under the License.
 from .thumbnail import WMSThumbNail
 
 __package__ = "wmsthumbnail"
-__version__ = "2.0.0"
-__date__ = "2023-12-13"
+__version__ = "2.0.2"
+__date__ = "2024-01-23"
 __all__ = ["WMSThumbNail"]

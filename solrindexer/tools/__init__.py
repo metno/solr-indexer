@@ -33,8 +33,8 @@ from .tools import get_dataset, solr_add, solr_commit
 
 
 __package__ = "tools"
-__version__ = "2.0.0"
-__date__ = "2023-12-13"
+__version__ = "2.0.2"
+__date__ = "2024-01-23"
 __all__ = ["flip", "rewrap", "to_solr_id",
            "parse_date", "getZones", "checkDateFormat",
            "getListOfFiles", "flatten", "process_feature_type",

@@ -1070,7 +1070,7 @@ class IndexMMD:
         logger.debug("Getting status with url %s and core %s", base_url, core)
         res = None
         try:
-            res = requests.get(base_url + '/admin/cores?action=STATUS&core=' + core,
+            res = requests.get(base_url + '/admin/cores?wt=json&action=STATUS&core=' + core,
                                auth=self.authentication)
             res.raise_for_status()
         except requests.exceptions.HTTPError as errh:
@@ -1330,7 +1330,7 @@ class IndexMMD:
         """
         res = None
         try:
-            res = requests.get(self.solr_url + '/get?id=' + id,
+            res = requests.get(self.solr_url + '/get?wt=json&id=' + id,
                                auth=self.authentication)
             res.raise_for_status()
         except requests.exceptions.HTTPError as errh:

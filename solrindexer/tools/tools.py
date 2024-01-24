@@ -84,7 +84,7 @@ def get_dataset(id):
     """
     res = None
     try:
-        res = requests.get(solr_endpoint + '/get?id=' + id,
+        res = requests.get(solr_endpoint + '/get?wt=json&id=' + id,
                            auth=authClass)
         res.raise_for_status()
     except requests.exceptions.HTTPError as errh:

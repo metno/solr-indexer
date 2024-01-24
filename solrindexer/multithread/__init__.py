@@ -24,7 +24,7 @@ from .threads import multiprocess
 
 
 __package__ = "multithread"
-__version__ = "2.0.0"
-__date__ = "2023-12-13"
+__version__ = "2.0.2"
+__date__ = "2024-01-23"
 __all__ = ["load_file", "load_files",
            "concurrently", "multiprocess"]
