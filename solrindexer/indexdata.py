@@ -830,7 +830,6 @@ class MMD4SolR:
 
             for related_information in related_information_elements:
                 value = related_information['mmd:type']
-                logger.info("rel inf value %s", value)
                 if value in related_information_LUT.keys():
                     # if list does not exist, create it
                     if 'related_url_{}'.format(
