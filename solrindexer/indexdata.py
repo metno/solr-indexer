@@ -830,18 +830,26 @@ class MMD4SolR:
 
             for related_information in related_information_elements:
                 value = related_information['mmd:type']
+                logger.info("rel inf value %s", value)
                 if value in related_information_LUT.keys():
-                    #if list does not exist, create it
-                    if 'related_url_{}'.format(related_information_LUT[value]) not in mydict.keys():
+                    # if list does not exist, create it
+                    if 'related_url_{}'.format(
+                            related_information_LUT[value]) not in mydict.keys():
                         mydict['related_url_{}'.format(related_information_LUT[value])] = []
                         mydict['related_url_{}_desc'.format(related_information_LUT[value])] = []
 
-                    #append elements to lists
-                    mydict['related_url_{}'.format(related_information_LUT[value])].append(related_information['mmd:resource'])
-                    if 'mmd:description' in related_information and related_information['mmd:description'] is not None:
-                        mydict['related_url_{}_desc'.format(related_information_LUT[value])].append(related_information['mmd:description'])
+                    # append elements to lists
+                    mydict['related_url_{}'.format(
+                        related_information_LUT[value])].append(
+                            related_information['mmd:resource'])
+                    ts = 'mmd:description'
+                    if ts in related_information and related_information[ts] is not None:
+                        mydict['related_url_{}_desc'.format(
+                            related_information_LUT[value])].append(
+                                related_information[ts])
                     else:
-                        mydict['related_url_{}_desc'.format(related_information_LUT[value])].append('Not Available')
+                        mydict['related_url_{}_desc'.format(
+                            related_information_LUT[value])].append('Not Available')
         logger.debug("ISO TopicCategory")
 
         if 'mmd:iso_topic_category' in mmd:
