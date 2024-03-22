@@ -22,29 +22,33 @@ def handleResults(doc):
         newdoc.pop('ss_access')
     if '_version_' in newdoc:
         newdoc.pop('_version_')
-
-    newdoc.update({'isChild': False})
-    newdoc.update({'isParent': False})
+    if 'isParent' in newdoc and newdoc['isParent'] is True:
+        print("Found parent")
+        newdoc.update({'isChild': True})
+        newdoc.update({'isParent': False})
+    else:
+        newdoc.update({'isChild': False})
+        newdoc.update({'isParent': False})
 
     return newdoc
 
 
 def main():
 
-    search_rows = 1000
+    search_rows = 100
     search_start = 0
 
-    solrcon = pysolr.Solr('http://157.249.74.44:8983/solr/adc',
+    solrcon = pysolr.Solr('http://157.249.74.44:8983/solr/testcore',
                           always_commit=False, timeout=1020,
                           auth=None)
 
-    results = solrcon.search('*:*', fq='collection:(NBS)', rows=0, start=0)
+    results = solrcon.search('*:*', fq='-isChild:[* TO *]', rows=0, start=0)
     print(results.hits)
     hits = results.hits
 
     while (search_start + search_rows) <= hits:
         print(search_start + search_rows)
-        results = solrcon.search('*:*', fq='collection:(NBS)',
+        results = solrcon.search('*:*', fq='-isChild:[* TO *]',
                                  rows=search_rows, start=search_start)
 
         docs = list(results)
