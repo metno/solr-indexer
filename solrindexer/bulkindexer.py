@@ -178,8 +178,8 @@ class BulkIndexer(object):
     def bulkindex(self, filelist):
         """Main bulkindexer function"""
         chunksize = self.chunksize
-        logger.debug("Got %d input files", len(filelist))
-        logger.debug("Processing with batchsize %d", chunksize)
+
+        logger.debug("-- Got %d input files", len(filelist))
         # Define some lists to keep track of the processing
         parent_ids_pending = set()  # Keep track of pending parent ids
         parent_ids_processed = set()  # Keep track parent ids already processed
@@ -195,7 +195,8 @@ class BulkIndexer(object):
         # print("######### BATCH START ###########################")
         batch_run = 1
         for i in range(0, len(filelist), chunksize):
-            logger.info("---- Batch run %d ----", batch_run)
+            logger.info("---- Batch run %d of %d ----",
+                        batch_run,  chunksize, len(filelist) / chunksize)
             # select a chunk
             files = filelist[i:(i + chunksize)]
             docs = list()
@@ -262,7 +263,7 @@ class BulkIndexer(object):
             # Load each file using multiple threads, and process documents as files are loaded
             ###################################################################"""
             logger.info("---- Process featureType concurrently ----")
-            for (doc, newdoc) in concurrently(fn=process_feature_type,
+            for (doc, newdoc) in multiprocess(fn=process_feature_type,
                                               inputs=dap_docs,
                                               max_concurrency=self.threads):
                 docs.remove(doc)
@@ -424,9 +425,9 @@ class BulkIndexer(object):
             # max threads is set in config
             indexthread = threading.Thread(target=self.add2solr, name="Index thread %s" % (
                 len(indexthreads)+1), args=(docs, self.msg_callback))
-            indexthreads.append(indexthread)
+            indexthreads.append(indexthread.start())
             logger.debug("Starting thread: %s", indexthread.getName())
-            indexthread.start()
+            # indexthread.start()
 
             # If we have reached maximum threads, we wait until finished
             # if len(indexthreads) >= self.threads:
@@ -440,10 +441,7 @@ class BulkIndexer(object):
         #   print("Added %s documents to solr. Total: %s" % (len(docs),docs_indexed))
         #   print("===================================")
 
-        """############### BATCH LOOP END  ############################
-        # wait for any threads still running to complete"""
-        for thr in indexthreads:
-            thr.join()
+        """############### BATCH LOOP END  ############################"""
 
         # Last we assume all pending parents are in the index
         ppending = set(parent_ids_pending)
@@ -473,6 +471,9 @@ class BulkIndexer(object):
                         # Remove from pending list
                         if pid in parent_ids_pending:
                             parent_ids_pending.remove(pid)
+        # wait for any threads still running to complete"""
+        for thr in indexthreads:
+            thr.join()
 
         Futures.ALL_COMPLETED
         # Store the tracking information and return back to calling script

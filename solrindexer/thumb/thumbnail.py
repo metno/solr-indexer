@@ -55,7 +55,7 @@ matplotlib.use('agg')
 
 lock = Lock()
 
-blackListLayers = ('latitude', 'longitude', 'lat', 'lon')
+blackListLayers = ('latitude', 'longitude', 'lat', 'lon', 'MS')
 
 
 class WMSThumbNail(object):
@@ -73,7 +73,7 @@ class WMSThumbNail(object):
     """
 
     def __init__(self, wms_layer=None, wms_style=None, wms_zoom_level=0,
-                 wms_timeout=None, add_coastlines=None, projection=None,
+                 wms_timeout=120, add_coastlines=None, projection=None,
                  thumbnail_type=None, thumbnail_extent=None):
         self.wms_layer = wms_layer
         self.wms_style = wms_style
@@ -86,7 +86,7 @@ class WMSThumbNail(object):
 
         matplotlib.use('Agg')
 
-    def create_wms_thumbnail(self, url, id):
+    def create_wms_thumbnail(self, url, id, wms_layers_mmd):
         """ Create a base64 encoded thumbnail by means of cartopy.
 
             Args:
@@ -104,8 +104,12 @@ class WMSThumbNail(object):
         map_projection = self.projection
         thumbnail_extent = self.thumbnail_extent
 
+        # Pick the first layer from the mmd layers list
+        wms_layer_mmd = wms_layers_mmd[0]
+
         """Some debugging"""
         logger.debug("wms_layer: %s", wms_layer)
+        logger.debug("wms_layer from MMD: %s", wms_layer_mmd)
         logger.debug("wms_style: %s", wms_style)
         logger.debug("wmz_zoom_level: %d", wms_zoom_level)
         logger.debug("add_coastlines: %s", add_coastlines)
@@ -122,15 +126,19 @@ class WMSThumbNail(object):
         if url.startswith("http://thredds.nersc"):
             url.replace("http:", "https:")
 
+        if url.startswith("http://nbswms.met.no"):
+            url.replace("http:", "https:")
+
         # map projection string to ccrs projection
         if isinstance(map_projection, str):
             map_projection = getattr(ccrs, map_projection)()
             logger.debug("map_projection:  %s", map_projection)
         logger.debug("Opening wms url %s with timeout %d", url, wms_timeout)
-
+        wms = None
         try:
             wms = WebMapService(url, timeout=wms_timeout)
         except Exception as e:
+            wms = None
             raise Exception("Could not read wms capability: ", e)
 
         """Some debugging"""
@@ -138,19 +146,39 @@ class WMSThumbNail(object):
         logger.debug("Type: %s", wms.identification.type)
         logger.debug("Operations: %s", [op.name for op in wms.operations])
         logger.debug("GetMap options: %s", wms.getOperationByName("GetMap").formatOptions)
+
+        """Get avilable layers and tiles"""
         available_layers = list(wms.contents.keys())
         logger.debug("Available layers :%s", available_layers)
+
+        available_layers_titles = []
+        for layer in available_layers:
+            available_layers_titles.append(wms.contents[layer].title)
+        logger.debug("Available layers titles :%s", available_layers_titles)
+
         if len(available_layers) == 0:
             raise Exception("No layers found. Cannot create thumbnail.")
 
-        for layer in blackListLayers:
-            try:
-                available_layers.remove(layer)
-            except ValueError:
-                pass
-
+        # Handle layer selection
         if wms_layer not in available_layers:
-            wms_layer = available_layers[0]
+            # Layer from commandline/config not in available layers. Check MMD
+            if wms_layer_mmd in available_layers:
+                wms_layer = wms_layer_mmd
+                logger.debug("Got layer from MMD: %s", wms_layer)
+            # Check if MMD layers was given with title instead of name as for NBS
+            elif wms_layer_mmd in available_layers_titles:
+                idx = available_layers_titles.index(wms_layer_mmd)
+                wms_layer = available_layers[idx]
+                logger.debug("Matched MMD wms layer title %s, found layer name: %s",
+                             wms_layer_mmd, wms_layer)
+            # Fallback. Choose the first from capabilities after removing blacklisted layers
+            else:
+                for layer in blackListLayers:
+                    try:
+                        available_layers.remove(layer)
+                    except ValueError:
+                        pass
+                        wms_layer = available_layers[0]
             logger.debug(
                 'Creating WMS thumbnail for layer: {}'.format(wms_layer))
         logger.debug("layer: %s", wms_layer)
@@ -208,6 +236,10 @@ class WMSThumbNail(object):
             if fig is not None:
                 plt.close(fig)
             plt.cla()
+            fig = None
+            ax = None
+            wms = None
+            plt.close('all')
             raise Exception("Could not plot wms: ", e)
 
         # logger.debug(type(ax))
@@ -250,8 +282,9 @@ class WMSThumbNail(object):
         # Save figure to IO Buffer
         buf = io.BytesIO()
         fig.savefig(buf, format='png', bbox_inches='tight')
-        plt.close(fig)
         plt.cla()
+        plt.close(fig)
+
         buf.seek(0)
         encode_string = base64.b64encode(buf.getbuffer())
         # logger.debug(encode_string)
@@ -264,6 +297,10 @@ class WMSThumbNail(object):
         thumbnail_b64 = (b'data:image/png;base64,' + encode_string).decode('utf-8')
         # logger.debug(thumbnail_b64)
         del encode_string
+        del fig
+        del ax
+        del wms
+        del buf
         logger.debug("%s. Finished", mp.current_process().name)
         return thumbnail_b64
 

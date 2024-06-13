@@ -752,7 +752,7 @@ class MMD4SolR:
                     if isinstance(da_wms, str):
                         data_access_wms_layers = [da_wms]
                     if isinstance(da_wms, list):
-                        data_access_wms_layers = list(set(da_wms))
+                        data_access_wms_layers = list(da_wms)
                     # old version was [i for i in data_access_wms_layers.values()][0]
                     if data_access_wms_layers is not None:
                         mydict[data_access_wms_layers_string] = data_access_wms_layers
@@ -1098,7 +1098,7 @@ class IndexMMD:
             status = res.json()
             return status['status'][core]['index']
 
-    def add_thumbnail(self, url, thumbnail_type='wms'):
+    def add_thumbnail(self, url, wms_layers_mmd, thumbnail_type='wms'):
         """ Add thumbnail to SolR
             Args:
                 type: Thumbnail type. (wms, ts)
@@ -1108,7 +1108,7 @@ class IndexMMD:
         logger.info("adding thumbnail for: %s" % url)
         if thumbnail_type == 'wms':
             try:
-                thumbnail = self.thumbClass.create_wms_thumbnail(url, self.id)
+                thumbnail = self.thumbClass.create_wms_thumbnail(url, self.id, wms_layers_mmd)
                 return thumbnail
             except Exception as e:
                 logger.error("Thumbnail creation from OGC WMS failed: %s", e)
@@ -1174,9 +1174,12 @@ class IndexMMD:
             if 'data_access_url_ogc_wms' in input_record and addThumbnail:
                 logger.info("Checking thumbnails...")
                 getCapUrl = input_record['data_access_url_ogc_wms']
+                mmd_layers = None
+                if 'data_access_wms_layers' in input_record:
+                    mmd_layers = input_record['data_access_wms_layers']
                 if not myfeature:
                     self.thumbnail_type = 'wms'
-                thumbnail_data = self.add_thumbnail(url=getCapUrl)
+                thumbnail_data = self.add_thumbnail(getCapUrl, mmd_layers)
 
                 if thumbnail_data is None:
                     logger.warning(

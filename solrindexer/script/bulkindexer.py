@@ -301,6 +301,7 @@ def main():
 
                 futures_list.append(future)
                 job = job+1
+                time.sleep(2)
 
             for f in as_completed(futures_list):
                 if f.exception():

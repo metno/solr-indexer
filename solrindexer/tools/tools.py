@@ -382,8 +382,11 @@ def create_wms_thumbnail(doc):
     url = str(doc['data_access_url_ogc_wms']).strip()
     logger.debug("adding thumbnail for: %s", url)
     id = str(doc['id']).strip()
+    wms_layers_mmd = None
+    if 'data_access_wms_layers' in doc:
+        wms_layers_mmd = doc['data_access_wms_layers']
     try:
-        thumbnail_data = thumbClass.create_wms_thumbnail(url, id)
+        thumbnail_data = thumbClass.create_wms_thumbnail(url, id, wms_layers_mmd)
         doc_.update({'thumbnail_data': thumbnail_data})
     except Exception as e:
         logger.error("Thumbnail creation from OGC WMS failed: %s, id: %s", e, id)

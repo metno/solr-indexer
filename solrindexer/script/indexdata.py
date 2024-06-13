@@ -162,7 +162,9 @@ def main():
         f2.close()
     elif args.directory:
         try:
-            myfiles = os.listdir(args.directory)
+            myfiles_ = os.listdir(args.directory)
+            myfiles = [file for file in myfiles_ if os.path.splitext(file)[1] == '.xml']
+
         except Exception as e:
             logger.error(
                 "Something went wrong in decoding cmd arguments: %s", e)
@@ -213,6 +215,7 @@ def main():
     files2ingest = []
     parentids = set()
     logger.info("Got %d input files.", len(myfiles))
+    # logger.debug(myfiles)
     for myfile in myfiles:
         myfile = myfile.strip()
         # Decide files to operate on
