@@ -196,7 +196,7 @@ class BulkIndexer(object):
         batch_run = 1
         for i in range(0, len(filelist), chunksize):
             logger.info("---- Batch run %d of %d ----",
-                        batch_run,  chunksize, len(filelist) / chunksize)
+                        batch_run, len(filelist) / chunksize)
             # select a chunk
             files = filelist[i:(i + chunksize)]
             docs = list()
