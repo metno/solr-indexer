@@ -27,6 +27,7 @@ import logging
 import argparse
 import cartopy.crs as ccrs
 
+from datetime import datetime
 from requests.auth import HTTPBasicAuth
 from solrindexer.tools import getListOfFiles, flatten, initThumb, initSolr
 from solrindexer.tools import solr_commit, solr_add, get_dataset
@@ -249,6 +250,10 @@ def main():
     """ Start timer"""
     st = time.perf_counter()
     pst = time.process_time()
+
+    """Log when we start the processing"""
+    now = datetime.now()
+    logger.info("Starting processing at: %s", now.strftime("%Y-%m-%d %H:%M:%S"))
 
     """ Create an instance of the BulkIndexer"""
     logger.debug("Creating bulkindexer.")

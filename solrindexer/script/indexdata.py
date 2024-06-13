@@ -24,6 +24,7 @@ import sys
 import logging
 import argparse
 import cartopy.crs as ccrs
+from datetime import datetime
 
 from requests.auth import HTTPBasicAuth
 from solrindexer.indexdata import MMD4SolR, IndexMMD
@@ -210,6 +211,10 @@ def main():
     else:
         thumbClass = None
     # EndCreatingThumbnail
+
+    """Log when we start the processing"""
+    now = datetime.now()
+    logger.info("Starting processing at: %s", now.strftime("%Y-%m-%d %H:%M:%S"))
 
     fileno = 1
     files2ingest = []
