@@ -108,7 +108,7 @@ class WMSThumbNail(object):
         if len(wms_layers_mmd) > 0:
             wms_layer_mmd = wms_layers_mmd[0]
         else:
-            wms_layer_mmd = ''
+            wms_layer_mmd = None
 
         """Some debugging"""
         logger.debug("wms_layer: %s", wms_layer)
