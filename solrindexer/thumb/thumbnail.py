@@ -181,7 +181,7 @@ class WMSThumbNail(object):
                         available_layers.remove(layer)
                     except ValueError:
                         pass
-                        wms_layer = available_layers[0]
+                wms_layer = available_layers[0]
             logger.debug(
                 'Creating WMS thumbnail for layer: {}'.format(wms_layer))
         logger.debug("layer: %s", wms_layer)
