@@ -1,0 +1,70 @@
+asttokens @ file:///opt/conda/conda-bld/asttokens_1646925590279/work
+blinker==1.6.2
+Brotli @ file:///croot/brotli-split_1714483155106/work
+Cartopy @ file:///croot/cartopy_1706196109024/work
+certifi @ file:///croot/certifi_1717618050233/work/certifi
+cftime @ file:///croot/cftime_1678830372931/work
+charset-normalizer @ file:///tmp/build/80754af9/charset-normalizer_1630003229654/work
+click==8.1.3
+contourpy @ file:///croot/contourpy_1700583582875/work
+cycler @ file:///tmp/build/80754af9/cycler_1637851556182/work
+decorator @ file:///opt/conda/conda-bld/decorator_1643638310831/work
+exceptiongroup @ file:///croot/exceptiongroup_1706031385326/work
+executing @ file:///opt/conda/conda-bld/executing_1646925071911/work
+Flask==2.3.2
+fonttools @ file:///croot/fonttools_1713551344105/work
+geojson @ file:///home/conda/feedstock_root/build_artifacts/geojson_1676562884917/work
+geos==0.2.3
+h5py==3.11.0
+idna @ file:///croot/idna_1714398848350/work
+ipython @ file:///croot/ipython_1704833016303/work
+itsdangerous==2.1.2
+jedi @ file:///tmp/build/80754af9/jedi_1644315229345/work
+Jinja2==3.1.2
+kiwisolver @ file:///croot/kiwisolver_1672387140495/work
+lxml @ file:///croot/lxml_1715289006750/work
+MarkupSafe==2.1.2
+matplotlib @ file:///croot/matplotlib-suite_1713336378214/work
+matplotlib-inline @ file:///opt/conda/conda-bld/matplotlib-inline_1662014470464/work
+metvocab @ git+https://github.com/metno/met-vocab-tools@84a62dda4b81feace340aaa5b2ebee4c86c4f823
+mkl-fft @ file:///croot/mkl_fft_1695058164594/work
+mkl-random @ file:///croot/mkl_random_1695059800811/work
+mkl-service==2.4.0
+netCDF4==1.6.5
+numpy @ file:///croot/numpy_and_numpy_base_1708638617955/work/dist/numpy-1.26.4-cp310-cp310-linux_x86_64.whl#sha256=d8cd837ed43e87f77e6efaa08e8de927ca030a1c9c5d04624432d6fb9a74a5ee
+OWSLib @ file:///tmp/build/80754af9/owslib_1620711747705/work
+packaging @ file:///croot/packaging_1710807400464/work
+parso @ file:///opt/conda/conda-bld/parso_1641458642106/work
+pexpect @ file:///tmp/build/80754af9/pexpect_1605563209008/work
+pillow @ file:///croot/pillow_1714398848491/work
+ply==3.11
+prompt-toolkit @ file:///croot/prompt-toolkit_1704404351921/work
+ptyprocess @ file:///tmp/build/80754af9/ptyprocess_1609355006118/work/dist/ptyprocess-0.7.0-py2.py3-none-any.whl
+pure-eval @ file:///opt/conda/conda-bld/pure_eval_1646925070566/work
+Pygments @ file:///croot/pygments_1684279966437/work
+pyparsing @ file:///opt/conda/conda-bld/pyparsing_1661452539315/work
+pyproj @ file:///croot/pyproj_1704901265679/work
+PyQt5==5.15.10
+PyQt5-sip @ file:///croot/pyqt-split_1698769088074/work/pyqt_sip
+pyshp @ file:///croot/pyshp_1706100959184/work
+PySocks @ file:///home/builder/ci_310/pysocks_1640793678128/work
+pysolr==3.9.0
+python-dateutil @ file:///croot/python-dateutil_1716495738603/work
+pytz @ file:///croot/pytz_1713974312559/work
+PyYAML @ file:///croot/pyyaml_1698096049011/work
+requests @ file:///croot/requests_1716902831423/work
+scipy @ file:///croot/scipy_1701295040508/work/dist/scipy-1.11.4-cp310-cp310-linux_x86_64.whl#sha256=a5e5a33a143f627fd4bde622162664c9ea97ff3af56f51c0f4c76ec9d1a340a3
+shapely @ file:///croot/shapely_1680636282912/work
+sip @ file:///croot/sip_1698675935381/work
+six @ file:///tmp/build/80754af9/six_1644875935023/work
+solrindexer @ file:///home/magnarem/solr-indexer
+stack-data @ file:///opt/conda/conda-bld/stack_data_1646927590127/work
+tomli @ file:///opt/conda/conda-bld/tomli_1657175507142/work
+tornado @ file:///croot/tornado_1696936946304/work
+traitlets @ file:///croot/traitlets_1671143879854/work
+unicodedata2 @ file:///croot/unicodedata2_1713212950228/work
+urllib3 @ file:///croot/urllib3_1715635851070/work
+validators @ file:///tmp/build/80754af9/validators_1612286467315/work
+wcwidth @ file:///Users/ktietz/demo/mc3/conda-bld/wcwidth_1629357192024/work
+Werkzeug==2.3.4
+xmltodict @ file:///croot/xmltodict_1697086210950/work
