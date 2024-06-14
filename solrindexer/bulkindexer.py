@@ -19,6 +19,7 @@ permissions and limitations under the License.
 
 import logging
 import threading
+import queue
 
 from solrindexer.indexdata import MMD4SolR
 from solrindexer.indexdata import IndexMMD
@@ -60,6 +61,7 @@ class BulkIndexer(object):
         self.threads = threads
         self.chunksize = chunksize
         self.total_in = len(inputList)
+        self.indexthreads = list()
 
         # self.solrcon = pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=auth)
         # self.  = IndexMMD(solr_url, False, authentication=auth)
@@ -162,14 +164,15 @@ class BulkIndexer(object):
             solr_docs, status = zip(*result)
             return solr_docs, status
 
-    def add2solr(self, docs, msg_callback):
+    def add2solr(self, docs, error_queue):
         """ Add documents to SolR"""
         try:
             solr_add(docs)
         except Exception as e:
             logger.error("Some documents failed to be added to solr. reason: %s" % e)
-        msg_callback("%s, PID: %s completed indexing %s documents!" % (
-            threading.current_thread().name, threading.get_native_id(), len(docs)))
+            error_msg = ("%s, PID: %s completed indexing %s documents!" % (
+                threading.current_thread().name, threading.get_native_id(), len(docs)))
+            error_queue.put(error_msg)
 
     def msg_callback(self, msg):
         """Message logging callback function"""
@@ -185,8 +188,10 @@ class BulkIndexer(object):
         parent_ids_processed = set()  # Keep track parent ids already processed
         parent_ids_found = set()    # Keep track of parent ids found
 
+        # Create a queue for solr indexing errors
+        index_error_queue = queue.Queue()
+
         # keep track of batch process
-        indexthreads = list()
         files_processed = 0
         docs_indexed = 0
         docs_skipped = 0
@@ -424,8 +429,9 @@ class BulkIndexer(object):
             # Send processed documents to solr  for indexing as a new thread.
             # max threads is set in config
             indexthread = threading.Thread(target=self.add2solr, name="Index thread %s" % (
-                len(indexthreads)+1), args=(docs, self.msg_callback))
-            indexthreads.append(indexthread.start())
+                len(self.indexthreads)+1), args=(docs, index_error_queue))
+            indexthread.start()
+            self.indexthreads.append(indexthread)
             logger.debug("Starting thread: %s", indexthread.getName())
             # indexthread.start()
 
@@ -472,7 +478,7 @@ class BulkIndexer(object):
                         if pid in parent_ids_pending:
                             parent_ids_pending.remove(pid)
         # wait for any threads still running to complete"""
-        for thr in indexthreads:
+        for thr in self.indexthreads:
             thr.join()
 
         Futures.ALL_COMPLETED
