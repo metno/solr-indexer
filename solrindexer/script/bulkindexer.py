@@ -245,6 +245,7 @@ def main():
 
     logger.debug("Create Thumbnails?  %s", tflg)
     logger.debug("Thumb class is %s", thumbClass)
+    logger.debug("Thumbnail projection %s", mapprojection)
     # EndCreatingThumbnail
 
     """ Start timer"""
@@ -353,18 +354,18 @@ def main():
     # summary of possible missing parents
     missing = list(set(parent_ids_found) - set(parent_ids_processed))
     if len(missing) > 0:
-        logger.info("The last parents should be in index")
+        logger.info("The last parents should be in index. Checking...")
         for pid in missing:
             myparent = None
             myparent = get_dataset(pid)
 
             if myparent['doc'] is not None:
-                logger.info(
+                logger.debug(
                     "parent found in index: %s, isParent: %s",
                     myparent['doc']['id'], myparent['doc']['isParent'])
                 # Check if already flagged
                 if myparent['doc']['isParent'] is False:
-                    logger.info('Update on indexed parent %s, isParent: True' % pid)
+                    logger.debug('Update on indexed parent %s, isParent: True' % pid)
                     mydoc = IndexMMD._solr_update_parent_doc(myparent['doc'])
                     doc_ = mydoc
                     try:
@@ -379,7 +380,7 @@ def main():
                     if pid in parent_ids_pending:
                         parent_ids_pending.remove(pid)
                 else:
-                    logger.info("Parent %s present and marked as parent", pid)
+                    logger.debug("Parent %s present and marked as parent", pid)
                     # Update lists
                     parent_ids_processed.add(pid)
 
@@ -404,12 +405,12 @@ def main():
             myparent = get_dataset(pid)
 
             if myparent['doc'] is not None:
-                logger.info(
+                logger.debug(
                     "parent found in index: %s, isParent: %s",
                     myparent['doc']['id'], myparent['doc']['isParent'])
                 # Check if already flagged
                 if myparent['doc']['isParent'] is False:
-                    logger.info('Update on indexed parent %s, isParent: True' % pid)
+                    logger.debug('Update on indexed parent %s, isParent: True' % pid)
                     mydoc = IndexMMD._solr_update_parent_doc(myparent['doc'])
                     doc_ = mydoc
                     try:
@@ -427,7 +428,7 @@ def main():
                         except KeyError:
                             pass
                 else:
-                    logger.info("Parent %s present and marked as parent", pid)
+                    logger.debug("Parent %s present and marked as parent", pid)
                     # Update lists
                     parent_ids_processed.add(pid)
 
@@ -454,6 +455,7 @@ def main():
     missing = list(set(parent_ids_found) - set(parent_ids_processed))
     if len(missing) != 0:
         logger.warning('Missing parents in input. %s' % missing)
+        logger.info('Could not find the following parents: %s' % missing)
     docs_failed = len(myfiles) - docs_indexed
     if docs_failed != 0:
         logger.warning('%d documents could not be indexed. check output and logfile.', docs_failed)

@@ -20,6 +20,8 @@ permissions and limitations under the License.
 import logging
 import threading
 import queue
+import time
+import math
 
 from solrindexer.indexdata import MMD4SolR
 from solrindexer.indexdata import IndexMMD
@@ -82,7 +84,9 @@ class BulkIndexer(object):
         if mmd is None:
             logger.warning("File %s was not parsed" % file)
             return (None, status)
-        mydoc = MMD4SolR(filename=file, mydoc=mmd, bulkFile=file)
+        if file is not None and file.endswith('\n'):
+            file = file[:-1]
+        mydoc = MMD4SolR(filename=None, mydoc=mmd, bulkFile=file)
         try:
             mydoc.check_mmd()
         except Exception as e:
@@ -166,13 +170,31 @@ class BulkIndexer(object):
 
     def add2solr(self, docs, error_queue):
         """ Add documents to SolR"""
+
+        """ Start timer"""
+        st = time.perf_counter()
+        pst = time.process_time()
+
         try:
             solr_add(docs)
+        # Handle failing indexing
         except Exception as e:
-            logger.error("Some documents failed to be added to solr. reason: %s" % e)
-            error_msg = ("%s, PID: %s completed indexing %s documents!" % (
-                threading.current_thread().name, threading.get_native_id(), len(docs)))
-            error_queue.put(error_msg)
+            tname = threading.current_thread().name
+            tid = threading.get_native_id()
+            error_msg = "%s, PID: %s Some documents failed to be added to solr. \
+                reason: %s"%(tname, tid, e)
+            logger.error(error_msg)
+            error_queue.put(str(error_msg))
+
+        # If success
+        et = time.perf_counter()
+        pet = time.process_time()
+        elapsed_time = et - st
+        pelt = pet - pst
+        etime = time.strftime("%H:%M:%S", time.gmtime(elapsed_time))
+        ctime = time.strftime("%H:%M:%S", time.gmtime(pelt))
+        logger.info("-- Indexed %d documents to SolR. Elapsed time: %s, CPU time: %s",
+                    len(docs), etime, ctime)
 
     def msg_callback(self, msg):
         """Message logging callback function"""
@@ -201,7 +223,7 @@ class BulkIndexer(object):
         batch_run = 1
         for i in range(0, len(filelist), chunksize):
             logger.info("---- Batch run %d of %d ----",
-                        batch_run, len(filelist) / chunksize)
+                        batch_run, math.ceil(len(filelist) / chunksize))
             # select a chunk
             files = filelist[i:(i + chunksize)]
             docs = list()
@@ -282,7 +304,7 @@ class BulkIndexer(object):
                 """######################## STARTING THREADS ########################
                 # Load each file using multiple threads, and process documents as files are loaded
                 ###################################################################"""
-                logger.debug("---- Creating thumbnails concurrently ----")
+                logger.info("---- Creating thumbnails concurrently ----")
                 for (doc, newdoc) in multiprocess(fn=create_wms_thumbnail,
                                                   inputs=thumb_docs,
                                                   max_concurrency=self.threads):
@@ -362,7 +384,7 @@ class BulkIndexer(object):
             # Last we check if parents pending previous chunks is in this chunk
             ppending = set(parent_ids_pending)
             if len(ppending) > 0:
-                logger.debug(" == Checking Pending == ")
+                logger.info(" --- Checking parent/child integrity --- ")
                 for pid in ppending:
                     # Firs we check if the parent dataset are in our jobs
                     myparent = None
@@ -428,6 +450,7 @@ class BulkIndexer(object):
 
             # Send processed documents to solr  for indexing as a new thread.
             # max threads is set in config
+            logger.info("---- Indexing documents ----")
             indexthread = threading.Thread(target=self.add2solr, name="Index thread %s" % (
                 len(self.indexthreads)+1), args=(docs, index_error_queue))
             indexthread.start()
@@ -452,6 +475,7 @@ class BulkIndexer(object):
         # Last we assume all pending parents are in the index
         ppending = set(parent_ids_pending)
         if len(ppending) > 0:
+            logger.info(" --- Checking parent/child integrity --- ")
             logger.debug(
                 "The last parents should be in index, or was processed by another worker.")
             for pid in ppending:
@@ -480,6 +504,9 @@ class BulkIndexer(object):
         # wait for any threads still running to complete"""
         for thr in self.indexthreads:
             thr.join()
+
+        while not index_error_queue.empty():
+            logger.error(index_error_queue.get())
 
         Futures.ALL_COMPLETED
         # Store the tracking information and return back to calling script

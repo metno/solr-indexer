@@ -287,10 +287,10 @@ def process_feature_type(tmpdoc):
                 featureType = 'timeSeries'
 
             if featureType is not None:
-                logger.info('feature_type found: %s', featureType)
+                logger.debug('feature_type found: %s', featureType)
                 tmpdoc_.update({'feature_type': featureType})
             else:
-                logger.info('Neither gridded nor discrete sampling \
+                logger.debug('Neither gridded nor discrete sampling \
                             geometry found in this record...')
 
         polygon = None
@@ -378,13 +378,14 @@ def create_wms_thumbnail(doc):
             solr document with thumbnail
     """
     global thumbClass
-    doc_ = doc
+    doc_ = doc.copy()
     url = str(doc['data_access_url_ogc_wms']).strip()
-    logger.debug("adding thumbnail for: %s", url)
     id = str(doc['id']).strip()
-    wms_layers_mmd = None
+    logger.debug("adding thumbnail for %s with url: %s", id, url)
+    wms_layers_mmd = []
     if 'data_access_wms_layers' in doc:
         wms_layers_mmd = doc['data_access_wms_layers']
+    logger.debug("wms_layers_mmd is: %s", wms_layers_mmd)
     try:
         thumbnail_data = thumbClass.create_wms_thumbnail(url, id, wms_layers_mmd)
         doc_.update({'thumbnail_data': thumbnail_data})

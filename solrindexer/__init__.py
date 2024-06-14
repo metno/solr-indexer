@@ -19,6 +19,7 @@ permissions and limitations under the License.
 
 import os
 import logging
+import sys
 
 from .indexdata import IndexMMD
 from .indexdata import MMD4SolR
@@ -28,6 +29,11 @@ __package__ = "solrindexer"
 __version__ = "2.0.2"
 __date__ = "2024-01-23"
 __all__ = ["IndexMMD", "MMD4SolR", "BulkIndexer"]
+
+
+class InfoFilter(logging.Filter):
+    def filter(self, rec):
+        return rec.levelno == logging.INFO
 
 
 def _init_logging(log_obj):
@@ -54,16 +60,41 @@ def _init_logging(log_obj):
     log_obj.setLevel(log_level)
 
     # Create stream handlers
-    h_stdout = logging.StreamHandler()
-    h_stdout.setLevel(log_level)
-    h_stdout.setFormatter(log_format)
-    log_obj.addHandler(h_stdout)
+    # h_stdout = logging.StreamHandler()
+    # h_stdout.setLevel(log_level)
+    # h_stdout.setFormatter(log_format)
+    # log_obj.addHandler(h_stdout)
 
     if log_file is not None:
         h_file = logging.FileHandler(log_file, encoding="utf-8")
         h_file.setLevel(log_level)
         h_file.setFormatter(log_format)
         log_obj.addHandler(h_file)
+
+    # Create a handler for stdout, set its level to INFO.
+    stdout_format = "[{asctime:}] [{processName:s}] [{threadName:s}] {message:}"
+    stdout_log_format = logging.Formatter(fmt=stdout_format, style="{")
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setLevel(logging.INFO)
+    stdout_handler.addFilter(InfoFilter())
+    stdout_handler.setFormatter(stdout_log_format)
+
+    # Create a handler for stderr, set its level to WARNING.
+    stderr_format = "[{asctime:}] [{thread:d}] [{threadName:s}]"
+    stderr_format += " {name:>28}:{lineno:<4d} {levelname:8s} {message:}"
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_log_format = logging.Formatter(fmt=stderr_format, style="{")
+    stderr_handler.setLevel(logging.WARNING)
+    stderr_handler.setFormatter(stderr_log_format)
+
+    # Add the handlers to the logger.
+    log_obj.addHandler(stdout_handler)
+    log_obj.addHandler(stderr_handler)
+
+    # Set logger level to the lowest level, this level is used to determine
+    # whether a incoming message should be processed.
+    # logger.setLevel(logging.INFO)
+
     return
 
 

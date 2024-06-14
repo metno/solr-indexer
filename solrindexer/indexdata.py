@@ -62,8 +62,8 @@ class MMD4SolR:
 
     def __init__(self, filename=None, mydoc=None, bulkFile=None):
         logger.debug('Creating an instance of MMD4SolR')
-        logger.debug("filename is %s. mydoc is %s", filename, type(mydoc))
         self.filename = filename
+        logger.debug("filename is %s. mydoc is %s", filename, type(mydoc))
         if filename is not None:
             try:
                 with open(self.filename, encoding='utf-8') as fd:

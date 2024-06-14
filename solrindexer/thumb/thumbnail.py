@@ -105,7 +105,10 @@ class WMSThumbNail(object):
         thumbnail_extent = self.thumbnail_extent
 
         # Pick the first layer from the mmd layers list
-        wms_layer_mmd = wms_layers_mmd[0]
+        if len(wms_layers_mmd) > 0:
+            wms_layer_mmd = wms_layers_mmd[0]
+        else:
+            wms_layer_mmd = ''
 
         """Some debugging"""
         logger.debug("wms_layer: %s", wms_layer)
