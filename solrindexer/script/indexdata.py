@@ -34,6 +34,9 @@ from solrindexer.searchindex import parse_cfg
 from solrindexer.thumb.thumbnail import WMSThumbNail
 
 logger = logging.getLogger(__name__)
+if os.getenv("SOLRINDEXER_LOGLEVEL", "INFO") == "DEBUG":
+    logger.setLevel(logging.DEBUG)
+    logger.debug("Loglevel was set to DEBUG")
 
 
 def parse_arguments():

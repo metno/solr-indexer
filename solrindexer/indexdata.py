@@ -769,14 +769,23 @@ class MMD4SolR:
             if isinstance(mmd['mmd:related_dataset'], list):
                 logger.warning('Too many fields in related_dataset...')
                 for e in mmd['mmd:related_dataset']:
-                    if '@mmd:relation_type' in e:
-                        if e['@mmd:relation_type'] == 'parent':
+                    logger.debug(e)
+                    if '@relation_type' in e:
+                        if e['@relation_type'] == 'parent':
+                            logger.debug("Found parent")
                             if '#text' in dict(e):
                                 mydict['related_dataset'] = e['#text']
                                 mydict['related_dataset_id'] = mydict['related_dataset']
                                 myid = to_solr_id(
                                     mydict['related_dataset_id'])
                                 mydict['related_dataset_id'] = myid
+                        if e['@relation_type'] == 'auxiliary':
+                            logger.debug("Found auxiliary")
+                            logger.debug(e)
+                            if '#text' in dict(e):
+                                mydict['related_dataset_auxiliary'] = e['#text']
+                                mydict['related_dataset_auxiliary_id'] = to_solr_id(
+                                    mydict['related_dataset_auxiliary'])
             else:
                 # Not sure if this is used??
                 if '#text' in dict(mmd['mmd:related_dataset']):
@@ -867,6 +876,13 @@ class MMD4SolR:
             mydict['keywords_keyword'] = []
             mydict['keywords_vocabulary'] = []
             mydict['keywords_gcmd'] = []
+            mydict['keywords_wigos'] = []
+            mydict['keywords_gcmdloc'] = []
+            mydict['keywords_gcmdprov'] = []
+            mydict['keywords_cfstdn'] = []
+            mydict['keywords_gemet'] = []
+            mydict['keywords_northemes'] = []
+
             # Not used yet
             mydict['keywords_wigos'] = []
             # If there is only one keyword list
@@ -884,6 +900,18 @@ class MMD4SolR:
                         if isinstance(elem, str):
                             if vocab == "GCMDSK":
                                 mydict['keywords_gcmd'].append(elem)
+                            if vocab == "WIGOS":
+                                mydict['keywords_wigos'].append(elem)
+                            if vocab == "GCMDLOC":
+                                mydict['keywords_gcmdloc'].append(elem)
+                            if vocab == "GCMDPROV":
+                                mydict['keywords_gcmdprov'].append(elem)
+                            if vocab == "CFSTDN":
+                                mydict['keywords_cfstdn'].append(elem)
+                            if vocab == "GEMET":
+                                mydict['keywords_gemet'].append(elem)
+                            if vocab == "NORTHEMES":
+                                mydict['keywords_northemes'].append(elem)
                             mydict['keywords_vocabulary'].append(vocab)
                             mydict['keywords_keyword'].append(elem)
             # If there are multiple keyword lists
@@ -897,6 +925,18 @@ class MMD4SolR:
                             for keyword in elem['mmd:keyword']:
                                 if elem['@vocabulary'] == "GCMDSK":
                                     mydict['keywords_gcmd'].append(keyword)
+                                if elem['@vocabulary'] == "WIGOS":
+                                    mydict['keywords_wigos'].append(keyword)
+                                if elem['@vocabulary'] == "GCMDLOC":
+                                    mydict['keywords_gcmdloc'].append(keyword)
+                                if elem['@vocabulary'] == "GCMDPROV":
+                                    mydict['keywords_gcmdprov'].append(keyword)
+                                if elem['@vocabulary'] == "CFSTDN":
+                                    mydict['keywords_cfstdn'].append(keyword)
+                                if elem['@vocabulary'] == "GEMET":
+                                    mydict['keywords_gemet'].append(keyword)
+                                if elem['@vocabulary'] == "NORTHEMES":
+                                    mydict['keywords_northemes'].append(keyword)
                                 mydict['keywords_vocabulary'].append(
                                     elem['@vocabulary'])
                                 mydict['keywords_keyword'].append(keyword)
