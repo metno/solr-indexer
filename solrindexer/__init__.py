@@ -75,8 +75,9 @@ def _init_logging(log_obj):
     stdout_format = "[{asctime:}] [{processName:s}] [{threadName:s}] {message:}"
     stdout_log_format = logging.Formatter(fmt=stdout_format, style="{")
     stdout_handler = logging.StreamHandler(sys.stdout)
-    stdout_handler.setLevel(logging.INFO)
-    stdout_handler.addFilter(InfoFilter())
+    if log_level == logging.INFO:
+        stdout_handler.setLevel(logging.INFO)
+        stdout_handler.addFilter(InfoFilter())
     stdout_handler.setFormatter(stdout_log_format)
 
     # Create a handler for stderr, set its level to WARNING.
