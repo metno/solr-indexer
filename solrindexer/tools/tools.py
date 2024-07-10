@@ -33,6 +33,8 @@ from shapely.ops import transform
 
 from threading import Lock
 
+from solrindexer.thumb.thumbnail_api import create_wms_thumbnail_api
+
 # Logging Setup
 logger = logging.getLogger(__name__)
 
@@ -385,7 +387,7 @@ def create_wms_thumbnail(doc):
     wms_layers_mmd = []
     if 'data_access_wms_layers' in doc:
         wms_layers_mmd = doc['data_access_wms_layers']
-    logger.debug("wms_layers_mmd is: %s", wms_layers_mmd)
+        logger.debug("wms_layers_mmd is: %s", wms_layers_mmd)
     try:
         thumbnail_data = thumbClass.create_wms_thumbnail(url, id, wms_layers_mmd)
         doc_.update({'thumbnail_data': thumbnail_data})
@@ -395,6 +397,48 @@ def create_wms_thumbnail(doc):
         pass
     finally:
         return doc_
+
+
+def create_wms_thumbnail_api_wrapper(doc):
+    """ Add thumbnail to SolR using API wms generator
+        Args:
+            type: solr document
+        Returns:
+            solr document with thumbnail
+    """
+    global thumbClass
+    wmsconfig = thumbClass.copy()
+    doc_ = doc.copy()
+    url = str(doc['data_access_url_ogc_wms']).strip()
+    id = str(doc['id']).strip()
+    logger.debug("adding thumbnail for %s with url: %s", id, url)
+    wms_layers_mmd = []
+    if 'data_access_wms_layers' in doc:
+        wms_layers_mmd = doc['data_access_wms_layers']
+        logger.debug("wms_layers_mmd is: %s", wms_layers_mmd)
+    wmsconfig.update({'wms_url': url})
+    wmsconfig.update({'wms_layers_mmd': wms_layers_mmd})
+    wmsconfig.update({"id": id})
+    logger.debug("Calling WMS ThumbnailAPI with settings: %s", wmsconfig)
+    response = create_wms_thumbnail_api(wmsconfig)
+    logger.debug("WMS api response: %s", response)
+    error = response.get('error')
+    status_code = response.get('status_code')
+    if error is None and status_code == 200:
+        thumbnail_url = response.get("data", None).get("thumbnail_url", None)
+        if thumbnail_url is not None:
+            logger.debug("Adding thumbnail_url field with value: %s",
+                         thumbnail_url)
+            doc_.update({'thumbnail_url': thumbnail_url})
+        else:
+            logger.warning("Could not properly generate thumbnail")
+        #     # If WMS is not available, remove this data_access element
+        #     # from the XML that is indexed
+        #     del input_record['data_access_url_ogc_wms']
+    else:
+        logger.error("Could not generate thumbnail, reason: %s, status_code %s",
+                     error, status_code)
+    return doc_
 
 
 def main():

@@ -28,6 +28,7 @@ from solrindexer.indexdata import IndexMMD
 
 from solrindexer.tools import to_solr_id, process_feature_type
 from solrindexer.tools import create_wms_thumbnail, get_dataset, solr_add
+from solrindexer.tools import create_wms_thumbnail_api_wrapper
 from solrindexer.multithread.io import load_file
 from solrindexer.multithread.threads import concurrently, multiprocess
 
@@ -64,6 +65,7 @@ class BulkIndexer(object):
         self.chunksize = chunksize
         self.total_in = len(inputList)
         self.indexthreads = list()
+        self.thumbClass = thumbClass
 
         # self.solrcon = pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=auth)
         # self.  = IndexMMD(solr_url, False, authentication=auth)
@@ -233,7 +235,7 @@ class BulkIndexer(object):
             # Load each file using multiple threads, and process documents as files are loaded
             ###################################################################
             """
-            logger.info("---- Reading files concurrently ----")
+            logger.info("---- Reading files concurrently %d ----", self.threads)
             for (file, mmd) in concurrently(fn=load_file, inputs=files,
                                             max_concurrency=self.threads):
 
@@ -289,7 +291,7 @@ class BulkIndexer(object):
             """######################## STARTING THREADS ########################
             # Load each file using multiple threads, and process documents as files are loaded
             ###################################################################"""
-            logger.info("---- Process featureType concurrently ----")
+            logger.info("---- Process featureType concurrently %d ----", self.threads)
             for (doc, newdoc) in multiprocess(fn=process_feature_type,
                                               inputs=dap_docs,
                                               max_concurrency=self.threads):
@@ -304,12 +306,19 @@ class BulkIndexer(object):
                 """######################## STARTING THREADS ########################
                 # Load each file using multiple threads, and process documents as files are loaded
                 ###################################################################"""
-                logger.info("---- Creating thumbnails concurrently ----")
-                for (doc, newdoc) in multiprocess(fn=create_wms_thumbnail,
-                                                  inputs=thumb_docs,
-                                                  max_concurrency=self.threads):
-                    docs.remove(doc)
-                    docs.append(newdoc)
+                logger.info("---- Creating thumbnails concurrently %d ----", self.threads)
+                if (isinstance(self.thumbClass, dict)):
+                    for (doc, newdoc) in multiprocess(fn=create_wms_thumbnail_api_wrapper,
+                                                      inputs=thumb_docs,
+                                                      max_concurrency=self.threads):
+                        docs.remove(doc)
+                        docs.append(newdoc)
+                else:
+                    for (doc, newdoc) in multiprocess(fn=create_wms_thumbnail,
+                                                      inputs=thumb_docs,
+                                                      max_concurrency=self.threads):
+                        docs.remove(doc)
+                        docs.append(newdoc)
                 """################################## THREADS FINISHED ##################"""
             Futures.ALL_COMPLETED
             # Run over the list of parentids found in this chunk, and look for the parent

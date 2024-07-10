@@ -20,13 +20,14 @@ permissions and limitations under the License.
 import os
 import logging
 import sys
+# import http
 
 from .indexdata import IndexMMD
 from .indexdata import MMD4SolR
 from .bulkindexer import BulkIndexer
 
 __package__ = "solrindexer"
-__version__ = "2.0.2"
+__version__ = "2.1.0"
 __date__ = "2024-01-23"
 __all__ = ["IndexMMD", "MMD4SolR", "BulkIndexer"]
 
@@ -78,7 +79,10 @@ def _init_logging(log_obj):
     if log_level == logging.INFO:
         stdout_handler.setLevel(logging.INFO)
         stdout_handler.addFilter(InfoFilter())
-    stdout_handler.setFormatter(stdout_log_format)
+        stdout_handler.setFormatter(stdout_log_format)
+    if log_level == logging.DEBUG:
+        stdout_handler.setLevel(logging.DEBUG)
+        stdout_handler.setFormatter(log_format)
 
     # Create a handler for stderr, set its level to WARNING.
     stderr_format = "[{asctime:}] [{thread:d}] [{threadName:s}]"
@@ -92,6 +96,9 @@ def _init_logging(log_obj):
     log_obj.addHandler(stdout_handler)
     log_obj.addHandler(stderr_handler)
 
+    # if log_level == logging.DEBUG:
+    # http.client.HTTPConnection.debuglevel = 1
+    # http.client.HTTPSConnection.debuglevel = 1
     # Set logger level to the lowest level, this level is used to determine
     # whether a incoming message should be processed.
     # logger.setLevel(logging.INFO)

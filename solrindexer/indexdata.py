@@ -53,6 +53,7 @@ from shapely.geometry import box, mapping
 
 from solrindexer.tools import rewrap, process_feature_type
 from solrindexer.tools import to_solr_id, parse_date
+from solrindexer.thumb.thumbnail_api import create_wms_thumbnail_api
 
 logger = logging.getLogger(__name__)
 
@@ -882,9 +883,7 @@ class MMD4SolR:
             mydict['keywords_cfstdn'] = []
             mydict['keywords_gemet'] = []
             mydict['keywords_northemes'] = []
-
-            # Not used yet
-            mydict['keywords_wigos'] = []
+            logger.debug(mmd['mmd:keywords'])
             # If there is only one keyword list
             if isinstance(mmd['mmd:keywords'], dict):
                 vocab = mmd['mmd:keywords']['@vocabulary']
@@ -942,8 +941,26 @@ class MMD4SolR:
                                 mydict['keywords_keyword'].append(keyword)
                         else:
                             # logger.debug(type(elem))
-                            if elem['@vocabulary'] == "None" or elem['@vocabulary'] == "GCMDSK":
+                            if elem['@vocabulary'] == "GCMDSK":
                                 mydict['keywords_gcmd'].append(
+                                    elem['mmd:keyword'])
+                            if elem['@vocabulary'] == "WIGOS":
+                                mydict['keywords_wigos'].append(
+                                    elem['mmd:keyword'])
+                            if elem['@vocabulary'] == "GCMDLOC":
+                                mydict['keywords_gcmdloc'].append(
+                                    elem['mmd:keyword'])
+                            if elem['@vocabulary'] == "GCMDPROV":
+                                mydict['keywords_gcmdprov'].append(
+                                    elem['mmd:keyword'])
+                            if elem['@vocabulary'] == "CFSTDN":
+                                mydict['keywords_cfstdn'].append(
+                                    elem['mmd:keyword'])
+                            if elem['@vocabulary'] == "GEMET":
+                                mydict['keywords_gemet'].append(
+                                    elem['mmd:keyword'])
+                            if elem['@vocabulary'] == "NORTHEMES":
+                                mydict['keywords_northemes'].append(
                                     elem['mmd:keyword'])
                             mydict['keywords_vocabulary'].append(
                                 elem['@vocabulary'])
@@ -953,6 +970,24 @@ class MMD4SolR:
             else:
                 if mmd['mmd:keywords']['@vocabulary'] == "GCMDSK":
                     mydict['keywords_gcmd'].append(
+                        mmd['mmd:keywords']['mmd:keyword'])
+                if mmd['mmd:keywords']['@vocabulary'] == "WIGOS":
+                    mydict['keywords_wigos'].append(
+                        mmd['mmd:keywords']['mmd:keyword'])
+                if mmd['mmd:keywords']['@vocabulary'] == "GCMDLOC":
+                    mydict['keywords_gcmdloc'].append(
+                        mmd['mmd:keywords']['mmd:keyword'])
+                if mmd['mmd:keywords']['@vocabulary'] == "GCMDPROV":
+                    mydict['keywords_gcmdprov'].append(
+                        mmd['mmd:keywords']['mmd:keyword'])
+                if mmd['mmd:keywords']['@vocabulary'] == "CFSTDN":
+                    mydict['keywords_cfstdn'].append(
+                        mmd['mmd:keywords']['mmd:keyword'])
+                if mmd['mmd:keywords']['@vocabulary'] == "GEMET":
+                    mydict['keywords_gemet'].append(
+                        mmd['mmd:keywords']['mmd:keyword'])
+                if mmd['mmd:keywords']['@vocabulary'] == "NORTHEMES":
+                    mydict['keywords_northemes'].append(
                         mmd['mmd:keywords']['mmd:keyword'])
                 mydict['keywords_vocabulary'].append(
                     mmd['mmd:keywords']['@vocabulary'])
@@ -1099,6 +1134,9 @@ class IndexMMD:
         # Keep track of solr endpoint
         self.solr_url = mysolrserver
 
+        # Keep track of wms url tasks for later results.
+        self.wms_task_list = []
+
         # Connecting to core
         try:
             self.solrc = pysolr.Solr(mysolrserver, always_commit=always_commit, timeout=1020,
@@ -1162,6 +1200,19 @@ class IndexMMD:
             logger.error('Invalid thumbnail type: {}'.format(thumbnail_type))
             return None
 
+    def add_thumbnail_api(self, wmsconfig):
+        """Create thumnails using the thumbnail-generator-api"""
+
+        getCapUrl = wmsconfig.get('wms_url')
+        if getCapUrl is not None:
+            logger.debug("Got WMS url: %s. Creating thumbnail using API", getCapUrl)
+            wmsconfig.update({"id": self.id})
+            response = create_wms_thumbnail_api(wmsconfig)
+            return response
+        else:
+            logger.debug("No wms url. Skipping thumbnail generation")
+            return None
+
     def index_record(self, records2ingest, addThumbnail, level=None, thumbClass=None):
         # FIXME, update the text below Øystein Godøy, METNO/FOU, 2023-03-19
         """ Add thumbnail to SolR
@@ -1214,21 +1265,58 @@ class IndexMMD:
             if 'data_access_url_ogc_wms' in input_record and addThumbnail:
                 logger.info("Checking thumbnails...")
                 getCapUrl = input_record['data_access_url_ogc_wms']
+                if isinstance(getCapUrl, list):
+                    getCapUrl = getCapUrl[0]
+
+                # logger.debug(type(getCapUrl))
+                # logger.debug(getCapUrl)
                 mmd_layers = None
+
                 if 'data_access_wms_layers' in input_record:
                     mmd_layers = input_record['data_access_wms_layers']
                 if not myfeature:
                     self.thumbnail_type = 'wms'
-                thumbnail_data = self.add_thumbnail(getCapUrl, mmd_layers)
+                if (isinstance(thumbClass, dict)):
+                    logger.debug("Creating WMS thumbnail using new API using url %s", getCapUrl)
+                    thumbClass.update({'wms_url': getCapUrl})
+                    thumbClass.update({'wms_layers_mmd': mmd_layers})
 
-                if thumbnail_data is None:
-                    logger.warning(
-                        'Could not properly parse WMS GetCapabilities document')
-                    # If WMS is not available, remove this data_access element
-                    # from the XML that is indexed
-                    del input_record['data_access_url_ogc_wms']
+                    response = self.add_thumbnail_api(thumbClass)
+                    logger.debug("WMS api response: %s", response)
+                    error = response.get('error')
+                    status_code = response.get('status_code')
+                    if error is None and status_code == 200:
+                        thumbnail_url = response.get("data", None).get("thumbnail_url", None)
+                        if thumbnail_url is not None:
+                            logger.debug("Adding thumbnail_url field with value: %s",
+                                         thumbnail_url)
+                            input_record.update({'thumbnail_url': thumbnail_url})
+                        # else:
+                        #     logger.warning("Could not properly generate thumbnail")
+                        #     # If WMS is not available, remove this data_access element
+                        #     # from the XML that is indexed
+                        #     del input_record['data_access_url_ogc_wms']
+                    else:
+                        logger.error("Could not generate thumbnail, reason: %s, status_code %s",
+                                     error, status_code)
+                    # Store task id for later processing
+                    task_id = response.get("data", None).get("task_id", None)
+                    if task_id is not None:
+                        logger.debug("Added task_id: %s to list.", task_id)
+                        self.wms_task_list.append(task_id)
                 else:
-                    input_record.update({'thumbnail_data': thumbnail_data})
+                    logger.debug("Creating WMS thumbnail using legacy method using url: %s",
+                                 getCapUrl)
+                    thumbnail_data = self.add_thumbnail(getCapUrl, mmd_layers)
+
+                    if thumbnail_data is None:
+                        logger.warning(
+                            'Could not properly parse WMS GetCapabilities document')
+                        # If WMS is not available, remove this data_access element
+                        # from the XML that is indexed
+                        del input_record['data_access_url_ogc_wms']
+                    else:
+                        input_record.update({'thumbnail_data': thumbnail_data})
 
             if 'data_access_url_opendap' in input_record:
                 # Thumbnail of timeseries to be added
@@ -1460,11 +1548,11 @@ class IndexMMD:
                 logger.info("Dataset already marked as parent.")
                 return True, "Already updated."
             else:
-                # doc = {'id': parentid, 'isParent': True} TODO: Fix schema so atomic updates works
-                doc = self._solr_update_parent_doc(myparent['doc'])
+                doc = {'id': parentid, 'isParent': True}
+                # doc = self._solr_update_parent_doc(myparent['doc'])
                 try:
-                    # self.solrc.add([doc],fieldUpdates={'isParent': 'set'})TODO:fix atomic updates
-                    self.solrc.add([doc])
+                    self.solrc.add([doc], fieldUpdates={'isParent': 'set'})
+                    # self.solrc.add([doc])
                 except Exception as e:
                     logger.error(
                         "Atomic update failed on parent %s. Error is: ", (parentid, e))

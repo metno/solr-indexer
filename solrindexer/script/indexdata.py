@@ -24,6 +24,8 @@ import sys
 import logging
 import argparse
 import cartopy.crs as ccrs
+import requests
+import time
 from datetime import datetime
 
 from requests.auth import HTTPBasicAuth
@@ -101,22 +103,30 @@ def main():
     # Read config file, can be done as a CONFIG class, such that argparser can overwrite duplicates
     # with open(args.cfgfile, 'r') as ymlfile:
     #   cfg = yaml.load(ymlfile, Loader=yaml.FullLoader)
-
-    # Specify map projection
-    mapprojection = ccrs.PlateCarree()  # Fallback
+    # Read map projection
     if args.map_projection:
         map_projection = args.map_projection
     else:
-        map_projection = cfg['wms-thumbnail-projection']
-    if map_projection == 'Mercator':
-        mapprojection = ccrs.Mercator()
-    elif map_projection == 'PlateCarree':
-        mapprojection = ccrs.PlateCarree()
-    elif map_projection == 'PolarStereographic':
-        mapprojection = ccrs.Stereographic(central_longitude=0.0, central_latitude=90.,
-                                           true_scale_latitude=60.)
-    else:
-        raise Exception('Map projection is not properly specified in config')
+        map_projection = cfg.get('wms-thumbnail-projection', None)
+    # Specify map projection
+    thumb_impl = cfg.get('thumbnail_impl', None)
+    if thumb_impl is None or thumb_impl == 'legacy':
+        mapprojection = ccrs.PlateCarree()  # Fallback
+        if map_projection == 'Mercator':
+            mapprojection = ccrs.Mercator()
+        elif map_projection == 'PlateCarree':
+            mapprojection = ccrs.PlateCarree()
+        elif map_projection == 'PolarStereographic':
+            mapprojection = ccrs.Stereographic(central_longitude=0.0, central_latitude=90.,
+                                               true_scale_latitude=60.)
+        else:
+            raise Exception('Map projection is not properly specified in config')
+        logger.debug("Using legacy thumbnail implementation")
+    if thumb_impl == 'fastapi':
+        mapprojection = 'PlateCarree'
+        if type(map_projection) is str:
+            mapprojection = map_projection
+        logger.debug("Using new thumbnail implementation with projection: %s", map_projection)
 
     # Enable basic authentication if configured.
     if 'auth-basic-username' in cfg and 'auth-basic-password' in cfg:
@@ -200,6 +210,10 @@ def main():
     else:
         thumbnail_extent = None
 
+    # Get new thumbnail config from etc config
+    thumbnail_api_host = cfg.get('thumbnail_api_host', None)
+    thumbnail_api_endpoint = cfg.get('thumbnail_api_endpoint', None)
+
     """Creating thumbnail generator class for use"""
     if not args.no_thumbnail:
         tflg = True
@@ -207,12 +221,34 @@ def main():
         tflg = False
     if tflg:
         thumbClass = WMSThumbNail(projection=mapprojection,
-                                  wms_layer=wms_layer, wms_style=wms_style,
-                                  wms_zoom_level=wms_zoom_level, add_coastlines=wms_coastlines,
-                                  wms_timeout=cfg['wms-timeout'], thumbnail_extent=thumbnail_extent
+                                  wms_layer=wms_layer,
+                                  wms_style=wms_style,
+                                  wms_zoom_level=wms_zoom_level,
+                                  add_coastlines=wms_coastlines,
+                                  wms_timeout=cfg.get('wms-timeout', 120),
+                                  thumbnail_extent=thumbnail_extent,
+                                  thumbnail_impl=thumb_impl,
+                                  thumbnail_api_host=thumbnail_api_host,
+                                  thumbnail_api_endpoint=thumbnail_api_endpoint
                                   )
     else:
         thumbClass = None
+
+    # Create a dict instead of object, if we use the new api, so the code does
+    # not need to import cartopy/matplotlib etc.
+    if thumb_impl == 'fastapi':
+        del thumbClass
+        thumbClass = {"host":  thumbnail_api_host,
+                      "endpoint": thumbnail_api_endpoint,
+                      "wms_layer": wms_layer,
+                      "wms_style": wms_style,
+                      "wms_zoom_level": wms_zoom_level,
+                      "wms_timeout": cfg.get('wms-timeout', 120),
+                      "add_coastlines": wms_coastlines,
+                      "projection": mapprojection,
+                      "thumbnail_extent": thumbnail_extent
+                      }
+
     # EndCreatingThumbnail
 
     """Log when we start the processing"""
@@ -366,6 +402,31 @@ def main():
     if len(pending) > 0:
         logger.warning("Missing parents in input and/or index")
         logger.info(pending)
+
+    # Check wms thumbnail generation tasks.
+    if len(mysolr.wms_task_list) > 0:
+        task_list = mysolr.wms_task_list.copy()
+        logger.info("Check thumbnail cration status(es)")
+        while task_list:
+            taskid = task_list.pop(0)
+            try:
+                response = requests.get(thumbnail_api_host+'/api/v1/tasks/'+taskid)
+                response.raise_for_status
+
+                resp = response.json()
+                if resp.get('status') == 'PENDING':
+                    task_list.append(taskid)
+                if resp.get('status') == 'FAILURE':
+                    logger.error(resp)
+                if resp.get('status') == 'SUCCESS':
+                    logger.info(response.json())
+
+            except requests.HTTPError as e:
+                logger.error("Somthing went wrong calling the API: %s", str(e))
+            except Exception as e:
+                logger.error("Somthing went wrong calling the API: %s", str(e))
+            finally:
+                time.sleep(2)
 
     if end_solr_commit is True:
         # Add a commit to solr at end of run

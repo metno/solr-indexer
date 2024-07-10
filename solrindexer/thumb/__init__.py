@@ -1,5 +1,5 @@
 """
-SOLR-indexer : Main Package Init
+SOLR-indexer : Thumb Package Init
 ================================
 
 Copyright MET Norway

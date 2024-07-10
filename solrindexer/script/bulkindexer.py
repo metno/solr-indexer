@@ -102,22 +102,34 @@ def main():
     # Read config file, can be done as a CONFIG class, such that argparser can overwrite duplicates
     # with open(args.cfgfile, 'r') as ymlfile:
     #   cfg = yaml.load(ymlfile, Loader=yaml.FullLoader)
-
-    # Specify map projection
-    mapprojection = ccrs.PlateCarree()  # Fallback
     if args.map_projection:
         map_projection = args.map_projection
     else:
-        map_projection = cfg['wms-thumbnail-projection']
-    if map_projection == 'Mercator':
-        mapprojection = ccrs.Mercator()
-    elif map_projection == 'PlateCarree':
-        mapprojection = ccrs.PlateCarree()
-    elif map_projection == 'PolarStereographic':
-        mapprojection = ccrs.Stereographic(central_longitude=0.0, central_latitude=90.,
-                                           true_scale_latitude=60.)
-    else:
-        raise Exception('Map projection is not properly specified in config')
+        map_projection = cfg.get('wms-thumbnail-projection', None)
+    # Specify map projection
+    thumb_impl = cfg.get('thumbnail_impl', None)
+    if thumb_impl is None or thumb_impl == 'legacy':
+        # Specify map projection
+        mapprojection = ccrs.PlateCarree()  # Fallback
+        if args.map_projection:
+            map_projection = args.map_projection
+        else:
+            map_projection = cfg['wms-thumbnail-projection']
+        if map_projection == 'Mercator':
+            mapprojection = ccrs.Mercator()
+        elif map_projection == 'PlateCarree':
+            mapprojection = ccrs.PlateCarree()
+        elif map_projection == 'PolarStereographic':
+            mapprojection = ccrs.Stereographic(central_longitude=0.0, central_latitude=90.,
+                                               true_scale_latitude=60.)
+        else:
+            raise Exception('Map projection is not properly specified in config')
+        logger.debug("Using legacy thumbnail implementation")
+    if thumb_impl == 'fastapi':
+        mapprojection = 'PlateCarree'
+        if type(map_projection) is str:
+            mapprojection = map_projection
+        logger.debug("Using new thumbnail implementation with projection: %s", map_projection)
 
     # Enable basic authentication if configured.
     if 'auth-basic-username' in cfg and 'auth-basic-password' in cfg:
@@ -228,6 +240,10 @@ def main():
     else:
         thumbnail_extent = None
 
+    # Get new thumbnail config from etc config
+    thumbnail_api_host = cfg.get('thumbnail_api_host', None)
+    thumbnail_api_endpoint = cfg.get('thumbnail_api_endpoint', None)
+
     """Creating thumbnail generator class for use"""
     if not args.no_thumbnail:
         tflg = True
@@ -243,6 +259,21 @@ def main():
     else:
         thumbClass = None
 
+    # Create a dict instead of object, if we use the new api, so the code does
+    # not need to import cartopy/matplotlib etc.
+    if thumb_impl == 'fastapi' and tflg:
+        del thumbClass
+        thumbClass = {"host":  thumbnail_api_host,
+                      "endpoint": thumbnail_api_endpoint,
+                      "wms_layer": wms_layer,
+                      "wms_style": wms_style,
+                      "wms_zoom_level": wms_zoom_level,
+                      "wms_timeout": cfg.get('wms-timeout', 120),
+                      "add_coastlines": wms_coastlines,
+                      "projection": mapprojection,
+                      "thumbnail_extent": thumbnail_extent}
+        initThumb(thumbClass)
+
     logger.debug("Create Thumbnails?  %s", tflg)
     logger.debug("Thumb class is %s", thumbClass)
     logger.debug("Thumbnail projection %s", mapprojection)
@@ -257,7 +288,8 @@ def main():
     logger.info("Starting processing at: %s", now.strftime("%Y-%m-%d %H:%M:%S"))
 
     """ Create an instance of the BulkIndexer"""
-    logger.debug("Creating bulkindexer.")
+    logger.info("Creating bulkindexer with chunks %d and threads/processes %d.",
+                chunksize, threads)
     bulkindexer = BulkIndexer(myfiles, mySolRc, threads=threads,
                               chunksize=chunksize, auth=authentication,
                               tflg=tflg, thumbClass=thumbClass)

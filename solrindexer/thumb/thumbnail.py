@@ -74,7 +74,9 @@ class WMSThumbNail(object):
 
     def __init__(self, wms_layer=None, wms_style=None, wms_zoom_level=0,
                  wms_timeout=120, add_coastlines=None, projection=None,
-                 thumbnail_type=None, thumbnail_extent=None):
+                 thumbnail_type=None, thumbnail_extent=None,
+                 thumbnail_api_host=None, thumbnail_api_endpoint=None,
+                 thumbnail_impl='legacy'):
         self.wms_layer = wms_layer
         self.wms_style = wms_style
         self.wms_zoom_level = wms_zoom_level
@@ -83,6 +85,9 @@ class WMSThumbNail(object):
         self.projection = projection
         self.thumbnail_type = thumbnail_type
         self.thumbnail_extent = thumbnail_extent
+        self.thumbnail_impl = thumbnail_impl
+        self.thumbnail_api_host = thumbnail_api_host
+        self.thumbnail_api_endpoint = thumbnail_api_endpoint
 
         matplotlib.use('Agg')
 
@@ -132,6 +137,9 @@ class WMSThumbNail(object):
         if url.startswith("http://nbswms.met.no"):
             url.replace("http:", "https:")
 
+        # Local test
+        # url = url.replace('https://fastapi.s-enda-dev.k8s.met.no/', 'http://localhost:8000/')
+
         # map projection string to ccrs projection
         if isinstance(map_projection, str):
             map_projection = getattr(ccrs, map_projection)()
@@ -139,7 +147,7 @@ class WMSThumbNail(object):
         logger.debug("Opening wms url %s with timeout %d", url, wms_timeout)
         wms = None
         try:
-            wms = WebMapService(url, timeout=wms_timeout)
+            wms = WebMapService(url, version="1.3.0", timeout=int(wms_timeout))
         except Exception as e:
             wms = None
             raise Exception("Could not read wms capability: ", e)
@@ -266,7 +274,7 @@ class WMSThumbNail(object):
         fig.set_dpi(100)
         # ax.background_patch.set_alpha(1)
         logger.debug("ax.add_wms(layer=%s, style=%s).", wms_layer, wms_style)
-        ax.add_wms(wms=url, layers=[wms_layer],
+        ax.add_wms(wms, layers=[wms_layer],
                    wms_kwargs={'transparent': False,
                                'styles': wms_style})
 

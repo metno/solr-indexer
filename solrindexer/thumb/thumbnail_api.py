@@ -29,10 +29,10 @@ def create_wms_thumbnail_api(data: dict) -> dict:
     host = data.get('host')
     endpoint = data.get('endpoint')
     url = host + endpoint
-    del data['host']
-    del data['endpoint']
+    del data['host']  # Remove field not part of request model.
+    del data['endpoint']  # Remove field not part of request model.
     logger.debug("Calling wms thumbnail-generator API at: %s", url)
-    result = {"data": {"url": None, "message": None},
+    result = {"data": {"url": None, "message": None, "task_id": None},
               "error": None,
               "status_code": None
               }
@@ -46,19 +46,26 @@ def create_wms_thumbnail_api(data: dict) -> dict:
         logger.debug(resp)
         result.update({'data': resp.get('data')})
         result.update({'status_code': response.status_code})
+        if response.status_code != 200:
+            result.update({'error': resp.get('error')})
+            logger.error("Could not create thumbnail task: %s", str(resp))
 
     except requests.HTTPError as e:
         # Log the error if an exception occurred
-        logger.error("Could not contact thumbnail genearator API: %s", str(e))
+        # logger.error("Could not contact thumbnail genearator API: %s", str(e))
         result.update({"error": str(e)})
         result.update({"status_code": response.status_code})
+        # raise e
 
     except Exception as e:
         # For any other exceptions
         # Log the error if an exception occurred
-        logger.error("Error generating thumbnail from API: %s", str(e))
+        # logger.error("Error generating thumbnail from API: %s", str(e))
         result.update({"error": str(e)})
         result.update({"status_code": response.status_code})
+        # raise e
 
     finally:
+        if result.get('error') is not None and result.get('task_id') is None:
+            logger.debug("Error calling thumbnail API: %s", str(result.get('error')))
         return result
