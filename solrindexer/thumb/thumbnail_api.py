@@ -38,6 +38,7 @@ def create_wms_thumbnail_api(data: dict) -> dict:
               }
 
     try:
+        logger.debug("calling API with json data: %s", data)
         response = requests.post(url, json=data, headers=headers)
         response.raise_for_status()  # Raises a HTTPError if the status is 4xx, 5xx
 

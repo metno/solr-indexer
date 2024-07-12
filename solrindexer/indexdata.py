@@ -1207,6 +1207,7 @@ class IndexMMD:
         if getCapUrl is not None:
             logger.debug("Got WMS url: %s. Creating thumbnail using API", getCapUrl)
             wmsconfig.update({"id": self.id})
+            logger.debug("Creating wms with config: %s", wmsconfig)
             response = create_wms_thumbnail_api(wmsconfig)
             return response
         else:
@@ -1274,6 +1275,8 @@ class IndexMMD:
 
                 if 'data_access_wms_layers' in input_record:
                     mmd_layers = input_record['data_access_wms_layers']
+                if mmd_layers is None:
+                    mmd_layers = []
                 if not myfeature:
                     self.thumbnail_type = 'wms'
                 if (isinstance(thumbClass, dict)):
