@@ -27,7 +27,7 @@ from .tools import checkDateFormat
 from .tools import getListOfFiles
 from .tools import process_feature_type
 from .tools import initThumb
-from .tools import initSolr
+from .tools import initSolr, find_xml_files
 from .tools import create_wms_thumbnail
 from .tools import create_wms_thumbnail_api_wrapper
 from .tools import get_dataset, solr_add, solr_commit
@@ -41,4 +41,4 @@ __all__ = ["flip", "rewrap", "to_solr_id",
            "getListOfFiles", "flatten", "process_feature_type",
            "initThumb", "create_wms_thumbnail", "initSolr",
            "get_dataset", "solr_add", "solr_commit",
-           "create_wms_thumbnail_api_wrapper"]
+           "create_wms_thumbnail_api_wrapper", "find_xml_files"]

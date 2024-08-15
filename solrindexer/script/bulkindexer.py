@@ -29,7 +29,7 @@ import cartopy.crs as ccrs
 
 from datetime import datetime
 from requests.auth import HTTPBasicAuth
-from solrindexer.tools import getListOfFiles, flatten, initThumb, initSolr
+from solrindexer.tools import find_xml_files, flatten, initThumb, initSolr
 from solrindexer.tools import solr_commit, solr_add, get_dataset
 from solrindexer.searchindex import parse_cfg
 from solrindexer.bulkindexer import BulkIndexer
@@ -193,7 +193,7 @@ def main():
             logger.error("Directory not found %s", args.directory)
             sys.exit(1)
         try:
-            myfiles = getListOfFiles(args.directory)
+            myfiles = find_xml_files(args.directory)
             if myfiles is not None:
                 logger.info("Processing directory: %s",
                             args.directory)

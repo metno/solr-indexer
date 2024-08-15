@@ -27,6 +27,7 @@ import requests
 import validators
 import netCDF4
 import dateutil.parser
+import subprocess
 
 from shapely import wkt
 from shapely.ops import transform
@@ -215,6 +216,19 @@ def getListOfFiles(dirName):
     if len(listOfFiles) == 0:
         return None
     return listOfFiles
+
+
+def find_xml_files(directory):
+    logger.debug("Creating list of files traversing %s", directory)
+    try:
+        output = subprocess.check_output(
+            ["find", directory, "-type", "f", "-name", "*.xml"],
+            universal_newlines=True
+        )
+        return output.split('\n')[:-1]  # Remove last item which is an empty string
+    except subprocess.CalledProcessError as e:
+        print(f"Error occurred while finding XML files: {str(e)}")
+        return []
 
 
 def flatten(mylist):
