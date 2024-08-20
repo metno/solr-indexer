@@ -242,6 +242,9 @@ def process_feature_type(tmpdoc):
     """
     dapurl = None
     tmpdoc_ = tmpdoc
+    metadata_status = tmpdoc.get('metadata_status', 'unknown')
+    if metadata_status == 'Inactive' or metadata_status == 'inactive':
+        return tmpdoc
     if 'data_access_url_opendap' in tmpdoc:
         dapurl = tmpdoc['data_access_url_opendap']
         if (isinstance(dapurl, list)):
