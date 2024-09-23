@@ -17,7 +17,7 @@ implied. See the License for the specific language governing
 permissions and limitations under the License.
 """
 
-from .thumbnail import WMSThumbNail
+# from .thumbnail import WMSThumbNail
 
 __package__ = "wmsthumbnail"
 __version__ = "2.0.2"
