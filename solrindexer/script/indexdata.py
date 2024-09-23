@@ -161,7 +161,10 @@ def main():
         meta_id = str(args.mark_parent).strip()
         logger.debug("Got mark parent argument with meta id: %s", meta_id)
         status, msg = mysolr.update_parent(to_solr_id(meta_id))
-        sys.exit()
+        logger.info("Parent updated with status %s and message: %s",
+                    status, msg)
+
+        sys.exit(int(status))
 
     # Find files to process
     if args.input_file:
