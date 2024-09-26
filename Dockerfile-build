@@ -23,9 +23,10 @@ COPY requirements.txt .
 
 # Install dependencies
 RUN /opt/venv/bin/pip install -r requirements.txt
+RUN pip install build
 
 # Copy the project code
 COPY . .
 
 # Set the command to run when the container starts
-CMD ["pip", "install", "solrindexer"]
+CMD ["python", "-m", "build"]

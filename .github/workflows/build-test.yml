@@ -10,14 +10,14 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v1
+      uses: docker/setup-buildx-action@v3
 
     - name: Build Docker image
       run: |
-        docker build -t solrindexer:latest .
+        docker build -f Dockerfile-build -t solrindexer:build .
     - name: Install solrindexer in docker image
       run: |
-        docker run --rm solrindexer:latest
+        docker run --rm solrindexer:build
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -28,7 +28,16 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install wheel
+        python --version
 
     - name: Install Python package
       run: |
         pip install . -r requirements.txt || exit 1
+
+    - name: Test executable script indexdata
+      run: |
+        indexdata -c etc/cfg-template.yml || exit 1
+
+    - name: Test executable script bulkindexer
+      run: |
+        bulkindexer -c etc/cfg-template.yml || exit 1
