@@ -17,12 +17,94 @@ jobs:
         docker build -f Dockerfile-build -t solrindexer:build .
     - name: Install solrindexer in docker image
       run: |
+        dcoker run --rm -it solrindexer:build bash -c "python --version"
         docker run --rm solrindexer:build
 
-    - name: Set up Python
+    - name: Set up Python 3.9
       uses: actions/setup-python@v5
       with:
         python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install wheel
+        python --version
+
+    - name: Install solrindexer with requirements
+      run: |
+        pip install . -r requirements.txt || exit 1
+
+    - name: Install thumbnail requirements
+      run: |
+        pip install -r requirements-thumb.txt || exit 1
+
+    - name: Test executable script indexdata
+      run: |
+        indexdata -c etc/cfg-template.yml || exit 1
+
+    - name: Test executable script bulkindexer
+      run: |
+        bulkindexer -c etc/cfg-template.yml || exit 1
+
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install wheel
+        python --version
+
+    - name: Install solrindexer with requirements
+      run: |
+        pip install . -r requirements.txt || exit 1
+
+    - name: Install thumbnail requirements
+      run: |
+        pip install -r requirements-thumb.txt || exit 1
+
+    - name: Test executable script indexdata
+      run: |
+        indexdata -c etc/cfg-template.yml || exit 1
+
+    - name: Test executable script bulkindexer
+      run: |
+        bulkindexer -c etc/cfg-template.yml || exit 1
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install wheel
+        python --version
+
+    - name: Install solrindexer with requirements
+      run: |
+        pip install . -r requirements.txt || exit 1
+
+    - name: Install thumbnail requirements
+      run: |
+        pip install -r requirements-thumb.txt || exit 1
+
+    - name: Test executable script indexdata
+      run: |
+        indexdata -c etc/cfg-template.yml || exit 1
+
+    - name: Test executable script bulkindexer
+      run: |
+        bulkindexer -c etc/cfg-template.yml || exit 1
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
 
     - name: Install dependencies
       run: |
