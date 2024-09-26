@@ -30,9 +30,13 @@ jobs:
         pip install wheel
         python --version
 
-    - name: Install Python package
+    - name: Install solrindexer with requirements
       run: |
         pip install . -r requirements.txt || exit 1
+
+    - name: Install thumbnail requirements
+      run: |
+        pip install -r requirements-thumb.txt || exit 1
 
     - name: Test executable script indexdata
       run: |
