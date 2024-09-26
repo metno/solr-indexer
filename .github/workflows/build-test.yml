@@ -4,7 +4,6 @@ on: [push, pull_request]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
@@ -16,7 +15,7 @@ jobs:
     - name: Build Docker image
       run: |
         docker build -t solrindexer:latest .
-     - name: Install solrindexer in docker image
+    - name: Install solrindexer in docker image
       run: |
         docker run --rm solrindexer:latest
 
