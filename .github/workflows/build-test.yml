@@ -1,4 +1,4 @@
-name: Docker build test python 3.9
+name: Docker build test python 3.9-3.12
 
 on: [push, pull_request]
 
