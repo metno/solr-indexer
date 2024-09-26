@@ -17,7 +17,6 @@ jobs:
         docker build -f Dockerfile-build -t solrindexer:build .
     - name: Install solrindexer in docker image
       run: |
-        docker run --rm -it solrindexer:build bash -c "python --version"
         docker run --rm solrindexer:build
 
     - name: Set up Python 3.9
