@@ -20,7 +20,7 @@ jobs:
         docker run --rm solrindexer:latest
 
     - name: Set up Python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v5
       with:
         python-version: '3.9'
 
@@ -31,4 +31,4 @@ jobs:
 
     - name: Install Python package
       run: |
-        pip install solrindexer -r requirements.txt || exit 1
+        pip install . -r requirements.txt || exit 1

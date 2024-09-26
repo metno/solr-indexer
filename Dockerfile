@@ -28,4 +28,4 @@ RUN /opt/venv/bin/pip install -r requirements.txt
 COPY . .
 
 # Set the command to run when the container starts
-CMD ["python", "setup.py", "install"]
+CMD ["pip", "install", "solrindexer"]
