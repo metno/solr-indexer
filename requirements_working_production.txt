@@ -26,7 +26,7 @@ lxml @ file:///croot/lxml_1715289006750/work
 MarkupSafe==2.1.2
 matplotlib @ file:///croot/matplotlib-suite_1713336378214/work
 matplotlib-inline @ file:///opt/conda/conda-bld/matplotlib-inline_1662014470464/work
-metvocab @ git+https://github.com/metno/met-vocab-tools@84a62dda4b81feace340aaa5b2ebee4c86c4f823
+metvocab @ git+https://github.com/metno/met-vocab-tools@v1.2.0
 mkl-fft @ file:///croot/mkl_fft_1695058164594/work
 mkl-random @ file:///croot/mkl_random_1695059800811/work
 mkl-service==2.4.0
