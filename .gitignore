@@ -1,5 +1,6 @@
 .coverage
 build/
 solrindexer.egg-info/
+idxenv
 *.log
 *__pycache__*

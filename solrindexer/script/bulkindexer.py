@@ -31,7 +31,7 @@ from datetime import datetime
 from requests.auth import HTTPBasicAuth
 from solrindexer.tools import find_xml_files, flatten, initThumb, initSolr
 from solrindexer.tools import solr_commit, solr_add, get_dataset
-from solrindexer.searchindex import parse_cfg
+from solrindexer.script.searchindex import parse_cfg
 from solrindexer.bulkindexer import BulkIndexer
 from solrindexer.indexdata import IndexMMD
 
@@ -311,9 +311,9 @@ def main():
     logger.info("Got %d input files.", len(myfiles))
 
     # We run only one worker if input files are less than 1000
-    if len(myfiles) <= 1000:
+    if len(myfiles) <= 500:
         workers = 1
-        chunksize = 1000
+        chunksize = 500
 
     logger.info(
         "Indexing with batch size %d and %d worker processes with %d threads",

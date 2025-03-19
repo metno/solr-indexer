@@ -1552,10 +1552,12 @@ class IndexMMD:
                 return True, "Already updated."
             else:
                 # doc = {'id': parentid, 'isParent': True}
-                doc = self._solr_update_parent_doc(myparent['doc'])
+                # doc = self._solr_update_parent_doc(myparent['doc'])
+                doc = myparent['doc']
+                doc['isParent'] = True
                 try:
-                    # self.solrc.add([doc], fieldUpdates={'isParent': 'set'})
-                    self.solrc.add([doc])
+                    self.solrc.add([doc], fieldUpdates={'isParent': 'set'})
+                    # self.solrc.add([doc])
                 except Exception as e:
                     logger.error(
                         "Atomic update failed on parent %s. Error is: ", (parentid, e))

@@ -31,7 +31,7 @@ from datetime import datetime
 from requests.auth import HTTPBasicAuth
 from solrindexer.indexdata import MMD4SolR, IndexMMD
 from solrindexer.tools import to_solr_id
-from solrindexer.searchindex import parse_cfg
+from solrindexer.script.searchindex import parse_cfg
 
 from solrindexer.thumb.thumbnail import WMSThumbNail
 
@@ -371,7 +371,7 @@ def main():
                 i += 1
 
     if len(files2ingest) == 0:
-        logger.warn('No files to ingest.')
+        logger.warning('No files to ingest.')
         return 1
 
     # Do the ingestion FIXME
