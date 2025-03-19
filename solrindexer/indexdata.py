@@ -278,6 +278,7 @@ class MMD4SolR:
                                    'Data management plan': 'data_management_plan',
                                    'Other documentation': 'other_documentation',
                                    'Software': 'software',
+                                   'Data server landing page': 'data_server_landing_page',
                                    }
 
         # As of python 3.6 Dictionaries are ordered by insertion (as OrderedDict)
