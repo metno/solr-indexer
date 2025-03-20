@@ -896,24 +896,25 @@ class MMD4SolR:
                         mmd['mmd:keywords']['mmd:keyword'])
                     mydict['keywords_vocabulary'].append(vocab)
                 else:
-                    for elem in mmd['mmd:keywords']['mmd:keyword']:
-                        if isinstance(elem, str):
-                            if vocab == "GCMDSK":
-                                mydict['keywords_gcmd'].append(elem)
-                            if vocab == "WIGOS":
-                                mydict['keywords_wigos'].append(elem)
-                            if vocab == "GCMDLOC":
-                                mydict['keywords_gcmdloc'].append(elem)
-                            if vocab == "GCMDPROV":
-                                mydict['keywords_gcmdprov'].append(elem)
-                            if vocab == "CFSTDN":
-                                mydict['keywords_cfstdn'].append(elem)
-                            if vocab == "GEMET":
-                                mydict['keywords_gemet'].append(elem)
-                            if vocab == "NORTHEMES":
-                                mydict['keywords_northemes'].append(elem)
-                            mydict['keywords_vocabulary'].append(vocab)
-                            mydict['keywords_keyword'].append(elem)
+                    if mmd['mmd:keywords']['mmd:keyword'] is not None:
+                        for elem in mmd['mmd:keywords']['mmd:keyword']:
+                            if isinstance(elem, str):
+                                if vocab == "GCMDSK":
+                                    mydict['keywords_gcmd'].append(elem)
+                                if vocab == "WIGOS":
+                                    mydict['keywords_wigos'].append(elem)
+                                if vocab == "GCMDLOC":
+                                    mydict['keywords_gcmdloc'].append(elem)
+                                if vocab == "GCMDPROV":
+                                    mydict['keywords_gcmdprov'].append(elem)
+                                if vocab == "CFSTDN":
+                                    mydict['keywords_cfstdn'].append(elem)
+                                if vocab == "GEMET":
+                                    mydict['keywords_gemet'].append(elem)
+                                if vocab == "NORTHEMES":
+                                    mydict['keywords_northemes'].append(elem)
+                                mydict['keywords_vocabulary'].append(vocab)
+                                mydict['keywords_keyword'].append(elem)
             # If there are multiple keyword lists
             elif isinstance(mmd['mmd:keywords'], list):
                 for elem in mmd['mmd:keywords']:
@@ -1075,16 +1076,18 @@ class MMD4SolR:
                 # make it an iterable list
                 dataset_citation_elements = [dataset_citation_elements]
 
-            for dataset_citation in dataset_citation_elements:
-                for k, v in dataset_citation.items():
-                    element_suffix = k.split(':')[-1]
-                    # Fix issue between MMD and SolR schema, SolR requires full datetime, MMD not.
-                    if element_suffix == 'publication_date':
-                        if v is not None:
-                            logger.debug("Got publication date %s", v)
-                            v = parse_date(v)
+            if dataset_citation_elements is not None:
+                for dataset_citation in dataset_citation_elements:
+                    for k, v in dataset_citation.items():
+                        element_suffix = k.split(':')[-1]
+                        # Fix issue between MMD and SolR schema, SolR requires full datetime,
+                        # MMD not.
+                        if element_suffix == 'publication_date':
+                            if v is not None:
+                                logger.debug("Got publication date %s", v)
+                                v = parse_date(v)
 
-                    mydict['dataset_citation_{}'.format(element_suffix)] = v
+                        mydict['dataset_citation_{}'.format(element_suffix)] = v
 
         """ Quality control """
         if 'mmd:quality_control' in mmd and mmd['mmd:quality_control'] is not None:
