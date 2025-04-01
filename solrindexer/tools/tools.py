@@ -415,7 +415,7 @@ def create_wms_thumbnail(doc):
         Returns:
             solr document with thumbnail
     """
-    global thumbClass
+    # global thumbClass
     doc_ = doc.copy()
     url = str(doc['data_access_url_ogc_wms']).strip()
     id = str(doc['id']).strip()
@@ -442,7 +442,7 @@ def create_wms_thumbnail_api_wrapper(doc):
         Returns:
             solr document with thumbnail
     """
-    global thumbClass
+    # global thumbClass
     wmsconfig = thumbClass.copy()
     doc_ = doc.copy()
     url = str(doc['data_access_url_ogc_wms']).strip()
