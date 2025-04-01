@@ -4,3 +4,5 @@ solrindexer.egg-info/
 idxenv
 *.log
 *__pycache__*
+.env
+.*
