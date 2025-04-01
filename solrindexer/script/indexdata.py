@@ -26,6 +26,7 @@ import argparse
 import cartopy.crs as ccrs
 import requests
 import time
+from dotenv import load_dotenv
 from datetime import datetime
 
 from requests.auth import HTTPBasicAuth
@@ -132,15 +133,45 @@ def main():
     if 'auth-basic-username' in cfg and 'auth-basic-password' in cfg:
         username = cfg['auth-basic-username']
         password = cfg['auth-basic-password']
-        logger.info("Setting up basic authentication")
+        logger.info("Setting up basic authentication from config")
         if username == '' or password == '':
             raise Exception('Authentication username and/or password are configured,'
                             'but have blank strings')
         else:
+            logger.info("Got username and password. Creating HTTPBasicAuth object")
+            authentication = HTTPBasicAuth(username, password)
+    elif 'dotenv_path' in cfg:
+        dotenv_path = cfg['dotenv_path']
+        if not os.path.exists(dotenv_path):
+            raise FileNotFoundError(f"The file {dotenv_path} does not exist.")
+        logger.info("Setting up basic authentication from dotenv_path")
+        try:
+            load_dotenv(dotenv_path)
+        except Exception as e:
+            raise Exception(f"Failed to load dotenv {dotenv_path}, Reason {e}")
+        username = os.getenv('SOLR_USERNAME', default='')
+        password = os.getenv('SOLR_PASSWORD', default='')
+        if username == '' or password == '':
+            raise Exception('Authentication username and/or password are configured,'
+                            'but have blank strings')
+        else:
+            logger.info("Got username and password. Creating HTTPBasicAuth object")
             authentication = HTTPBasicAuth(username, password)
     else:
-        authentication = None
-        logger.info("Authentication disabled")
+        logger.info("Setting up basic authentication from dotenv")
+        try:
+            load_dotenv()
+        except Exception as e:
+            raise Exception(f"Failed to load dotenv {dotenv_path}, Reason {e}")
+        username = os.getenv('SOLR_USERNAME', default='')
+        password = os.getenv('SOLR_PASSWORD', default='')
+        if username == '' and password == '':
+            authentication = None
+            logger.info("Authentication disabled")
+        else:
+            logger.info("Got username and password. Creating HTTPBasicAuth object")
+            authentication = HTTPBasicAuth(username, password)
+
     # Get solr server config
     SolrServer = cfg['solrserver']
     myCore = cfg['solrcore']

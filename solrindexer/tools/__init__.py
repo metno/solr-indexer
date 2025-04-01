@@ -22,6 +22,7 @@ from .tools import flatten
 from .tools import rewrap
 from .tools import to_solr_id
 from .tools import getZones
+from .tools import solr_ping
 from .tools import parse_date
 from .tools import checkDateFormat
 from .tools import getListOfFiles
@@ -41,4 +42,5 @@ __all__ = ["flip", "rewrap", "to_solr_id",
            "getListOfFiles", "flatten", "process_feature_type",
            "initThumb", "create_wms_thumbnail", "initSolr",
            "get_dataset", "solr_add", "solr_commit",
-           "create_wms_thumbnail_api_wrapper", "find_xml_files"]
+           "create_wms_thumbnail_api_wrapper", "find_xml_files",
+           "solr_ping"]

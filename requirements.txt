@@ -8,4 +8,5 @@ PyYAML
 requests
 xmltodict
 requests
+python-dotenv
 metvocab @ git+https://github.com/metno/met-vocab-tools@v1.2.0

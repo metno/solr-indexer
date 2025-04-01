@@ -25,3 +25,4 @@ dependencies:
   - certifi
   - urllib3
   - requests
+  - python-dotenv

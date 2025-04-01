@@ -27,7 +27,10 @@ import os
 import argparse
 import pysolr
 import yaml
+import sys
+import json
 import logging
+from dotenv import load_dotenv
 from requests.auth import HTTPBasicAuth
 
 logger = logging.getLogger(__name__)
@@ -78,6 +81,19 @@ class IndexMMD:
         except Exception as e:
             logger.info("Something failed in SolR init", str(e))
         logger.info("Connection established to: " + str(mysolrserver))
+
+        try:
+            pong = self.solrc.ping()
+            status = json.loads(pong)['status']
+            if status == 'OK':
+                logger.info('Solr ping with status %s', status)
+            else:
+                logger.error('Error! Solr ping with status %s', status)
+                sys.exit(1)
+
+        except pysolr.SolrError as e:
+            logger.error(f"Could not contact solr server: {e}")
+            sys.exit(1)
 
     def delete_item(self, datasetid, commit):
         """ Require ID as input """
@@ -133,15 +149,44 @@ def main():
     if 'auth-basic-username' in cfg and 'auth-basic-password' in cfg:
         username = cfg['auth-basic-username']
         password = cfg['auth-basic-password']
-        logger.info("Setting up basic authentication")
+        logger.info("Setting up basic authentication from config")
         if username == '' or password == '':
             raise Exception('Authentication username and/or password are configured,'
                             'but have blank strings')
         else:
+            logger.info("Got username and password. Creating HTTPBasicAuth object")
+            authentication = HTTPBasicAuth(username, password)
+    elif 'dotenv_path' in cfg:
+        dotenv_path = cfg['dotenv_path']
+        if not os.path.exists(dotenv_path):
+            raise FileNotFoundError(f"The file {dotenv_path} does not exist.")
+        logger.info("Setting up basic authentication from dotenv_path")
+        try:
+            load_dotenv(dotenv_path)
+        except Exception as e:
+            raise Exception(f"Failed to load dotenv {dotenv_path}, Reason {e}")
+        username = os.getenv('SOLR_USERNAME', default='')
+        password = os.getenv('SOLR_PASSWORD', default='')
+        if username == '' or password == '':
+            raise Exception('Authentication username and/or password are configured,'
+                            'but have blank strings')
+        else:
+            logger.info("Got username and password. Creating HTTPBasicAuth object")
             authentication = HTTPBasicAuth(username, password)
     else:
-        authentication = None
-        logger.info("Authentication disabled")
+        logger.info("Setting up basic authentication from dotenv")
+        try:
+            load_dotenv()
+        except Exception as e:
+            raise Exception(f"Failed to load dotenv {dotenv_path}, Reason {e}")
+        username = os.getenv('SOLR_USERNAME', default='')
+        password = os.getenv('SOLR_PASSWORD', default='')
+        if username == '' and password == '':
+            authentication = None
+            logger.info("Authentication disabled")
+        else:
+            logger.info("Got username and password. Creating HTTPBasicAuth object")
+            authentication = HTTPBasicAuth(username, password)
 
     # Search for records
     mysolr = IndexMMD(mySolRc, args.always_commit, authentication)

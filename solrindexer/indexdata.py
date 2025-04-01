@@ -35,7 +35,8 @@ UPDATES:
         Refactoring
 """
 
-
+import sys
+import json
 import base64
 import pysolr
 import netCDF4
@@ -1145,6 +1146,18 @@ class IndexMMD:
         except Exception as e:
             logger.error("Something failed in SolR init: %s", str(e))
             raise e
+        try:
+            pong = self.solrc.ping()
+            status = json.loads(pong)['status']
+            if status == 'OK':
+                logger.info('Solr ping with status %s', status)
+            else:
+                logger.error('Error! Solr ping with status %s', status)
+                sys.exit(1)
+
+        except pysolr.SolrError as e:
+            logger.error(f"Could not contact solr server: {e}")
+            sys.exit(1)
 
     # Function for sending explicit commit to solr
     def commit(self):

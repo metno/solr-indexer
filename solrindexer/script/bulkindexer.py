@@ -25,12 +25,13 @@ import time
 import pysolr
 import logging
 import argparse
+from dotenv import load_dotenv
 import cartopy.crs as ccrs
 
 from datetime import datetime
 from requests.auth import HTTPBasicAuth
 from solrindexer.tools import find_xml_files, flatten, initThumb, initSolr
-from solrindexer.tools import solr_commit, solr_add, get_dataset
+from solrindexer.tools import solr_commit, solr_add, get_dataset, solr_ping
 from solrindexer.script.searchindex import parse_cfg
 from solrindexer.bulkindexer import BulkIndexer
 from solrindexer.indexdata import IndexMMD
@@ -135,15 +136,45 @@ def main():
     if 'auth-basic-username' in cfg and 'auth-basic-password' in cfg:
         username = cfg['auth-basic-username']
         password = cfg['auth-basic-password']
-        logger.info("Setting up basic authentication")
+        logger.info("Setting up basic authentication from config")
         if username == '' or password == '':
             raise Exception('Authentication username and/or password are configured,'
                             'but have blank strings')
         else:
+            logger.info("Got username and password. Creating HTTPBasicAuth object")
+            authentication = HTTPBasicAuth(username, password)
+    elif 'dotenv_path' in cfg:
+        dotenv_path = cfg['dotenv_path']
+        if not os.path.exists(dotenv_path):
+            raise FileNotFoundError(f"The file {dotenv_path} does not exist.")
+        logger.info("Setting up basic authentication from dotenv_path")
+        try:
+            load_dotenv(dotenv_path)
+        except Exception as e:
+            raise Exception(f"Failed to load dotenv {dotenv_path}, Reason {e}")
+        username = os.getenv('SOLR_USERNAME', default='')
+        password = os.getenv('SOLR_PASSWORD', default='')
+        if username == '' or password == '':
+            raise Exception('Authentication username and/or password are configured,'
+                            'but have blank strings')
+        else:
+            logger.info("Got username and password. Creating HTTPBasicAuth object")
             authentication = HTTPBasicAuth(username, password)
     else:
-        authentication = None
-        logger.info("Authentication disabled")
+        logger.info("Setting up basic authentication from dotenv")
+        try:
+            load_dotenv()
+        except Exception as e:
+            raise Exception(f"Failed to load dotenv {dotenv_path}, Reason {e}")
+        username = os.getenv('SOLR_USERNAME', default='')
+        password = os.getenv('SOLR_PASSWORD', default='')
+        if username == '' and password == '':
+            authentication = None
+            logger.info("Authentication disabled")
+        else:
+            logger.info("Got username and password. Creating HTTPBasicAuth object")
+            authentication = HTTPBasicAuth(username, password)
+
     # Get solr server config
     SolrServer = cfg['solrserver']
     myCore = cfg['solrcore']
@@ -161,6 +192,8 @@ def main():
     initSolr(mySolRc,
              pysolr.Solr(mySolRc, always_commit=False, timeout=1020, auth=authentication),
              authentication)
+
+    solr_ping()
 
     # Bulkinder defaults override from config
     if 'batch-size' in cfg:
