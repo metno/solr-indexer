@@ -19,8 +19,11 @@ limitations under the License.
 
 import os
 import re
+import sys
 import math
+import json
 import fnmatch
+import pysolr
 import shapely
 import logging
 import requests
@@ -109,6 +112,22 @@ def get_dataset(id):
 def solr_add(docs):
     """Add documents to solr"""
     solr_pysolr.add(docs)
+
+
+def solr_ping():
+    """Ping Solr"""
+    try:
+        pong = solr_pysolr.ping()
+        status = json.loads(pong)['status']
+        if status == 'OK':
+            logger.info('Solr ping with status %s', status)
+        else:
+            logger.error('Error! Solr ping with status %s', status)
+            sys.exit(1)
+
+    except pysolr.SolrError as e:
+        logger.error(f"Could not contact solr server: {e}")
+        sys.exit(1)
 
 
 def solr_commit():
@@ -396,7 +415,7 @@ def create_wms_thumbnail(doc):
         Returns:
             solr document with thumbnail
     """
-    global thumbClass
+    # global thumbClass
     doc_ = doc.copy()
     url = str(doc['data_access_url_ogc_wms']).strip()
     id = str(doc['id']).strip()
@@ -423,7 +442,7 @@ def create_wms_thumbnail_api_wrapper(doc):
         Returns:
             solr document with thumbnail
     """
-    global thumbClass
+    # global thumbClass
     wmsconfig = thumbClass.copy()
     doc_ = doc.copy()
     url = str(doc['data_access_url_ogc_wms']).strip()
