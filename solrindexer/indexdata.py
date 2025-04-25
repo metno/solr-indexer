@@ -1117,6 +1117,7 @@ class IndexMMD:
     def __init__(self, mysolrserver, always_commit=False, authentication=None):
         # Set up logging
         logger.info('Creating an instance of IndexMMD')
+        logger.info(f"Always commit is: {always_commit}")
 
         # level variables
 
@@ -1231,7 +1232,7 @@ class IndexMMD:
             logger.debug("No wms url. Skipping thumbnail generation")
             return None
 
-    def index_record(self, records2ingest, addThumbnail, level=None, thumbClass=None):
+    def index_record(self, records2ingest, addThumbnail, level=None, thumbClass=None, scope=None):
         # FIXME, update the text below Øystein Godøy, METNO/FOU, 2023-03-19
         """ Add thumbnail to SolR
             Args:
@@ -1351,14 +1352,16 @@ class IndexMMD:
         Send information to SolR
         """
         logger.info("Adding records to SolR core.")
+        res = None
         try:
-            self.solrc.add(mmd_records)
+            res = self.solrc.add(mmd_records)
         except Exception as e:
-            msg = "Something failed in SolR adding document: %s" % str(e)
+            msg = "Solr index error: %s" % str(e)
             logger.critical(msg)
             return False, msg
         msg = "Record successfully added."
         logger.info("Record successfully added.")
+        logger.debug(res)
 
         del mmd_records
 

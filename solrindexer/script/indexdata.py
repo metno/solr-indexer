@@ -60,6 +60,8 @@ def parse_arguments():
                         help='Create and index thumbnail, do not update the main content.')
     parser.add_argument('-n', '--no_thumbnail', action='store_true',
                         help='Do not index thumbnails (done automatically if WMS available).')
+    parser.add_argument('-nbs', '--nbs', action='store_true',
+                        help="Flag to set NBS-scope. Will use pregenerated thumbnails.")
 
     # Thumbnail parameters
     parser.add_argument('-m', '--map_projection', required=False,
@@ -99,6 +101,11 @@ def main():
 
     # Parse configuration file
     cfg = parse_cfg(args.cfgfile)
+
+    scope = None
+    if args.nbs:
+        scope = "NBS"
+    logger.info(f"Got {scope} scope")
 
     # CONFIG START
     # Read config file, can be done as a CONFIG class, such that argparser can overwrite duplicates
@@ -280,9 +287,16 @@ def main():
                       "wms_timeout": cfg.get('wms-timeout', 120),
                       "add_coastlines": wms_coastlines,
                       "projection": mapprojection,
-                      "thumbnail_extent": thumbnail_extent
+                      "thumbnail_extent": thumbnail_extent,
+                      "thumbnail_server": 'https://adc-thumbnails.met.no/'
                       }
-
+    # Special thumbnail handeling for NBS scope
+    if scope is not None and scope == 'NBS':
+        del thumbClass
+        thumbClass = dict()
+        thumbClass['scope'] = scope
+        thumbClass["base_path"] = "Your custom string"
+        thumbClass["thumbnail_server"] = 'https://adc-thumbnails.met.no/'
     # EndCreatingThumbnail
 
     """Log when we start the processing"""
@@ -417,7 +431,7 @@ def main():
         mylist = files2ingest[i:i+mystep]
         myrecs += len(mylist)
         try:
-            mysolr.index_record(mylist, addThumbnail=tflg, thumbClass=thumbClass)
+            mysolr.index_record(mylist, addThumbnail=tflg, thumbClass=thumbClass, scope=scope)
         except Exception as e:
             logger.warning('Something failed during indexing:s %s', e)
         logger.info('%d records out of %d have been ingested...',
