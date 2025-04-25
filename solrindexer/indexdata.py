@@ -725,7 +725,7 @@ class MMD4SolR:
                                 mydict[element_name].append(val)
                     # sub element is not ordered dicts
                     else:
-                        element_name = f'data_center_{key.split(":")[-1]}'
+                        element_name = f'{key.split(":")[-1]}'
                         # create key in mydict. Repetition of above. Should be simplified.
                         if element_name not in mydict.keys():
                             mydict[element_name] = []
