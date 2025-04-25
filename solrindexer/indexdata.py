@@ -745,7 +745,10 @@ class MMD4SolR:
             for data_access in data_access_elements:
                 data_access_type = data_access['mmd:type'].replace(
                     " ", "_").lower()
-                mydict[f'data_access_url_{data_access_type}'] = data_access['mmd:resource']
+                if f'data_access_url_{data_access_type}' not in mydict.keys():
+                    mydict[f'data_access_url_{data_access_type}'] = []
+
+                mydict[f'data_access_url_{data_access_type}'].append(data_access['mmd:resource'])
 
                 if 'mmd:wms_layers' in data_access and data_access_type == 'ogc_wms':
                     data_access_wms_layers_string = 'data_access_wms_layers'
