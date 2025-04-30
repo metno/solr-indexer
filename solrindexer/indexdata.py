@@ -1117,7 +1117,8 @@ class IndexMMD:
     a list of dictionaries representing MMD as input.
     """
 
-    def __init__(self, mysolrserver, always_commit=False, authentication=None):
+    def __init__(self, mysolrserver, always_commit=False,
+                 authentication=None, config=None):
         # Set up logging
         logger.info('Creating an instance of IndexMMD')
         logger.info(f"Always commit is: {always_commit}")
@@ -1136,6 +1137,9 @@ class IndexMMD:
         self.thumbnail_type = None
         self.thumbnail_extent = None
         self.thumbClass = None
+
+        # The config object
+        self.config = config
 
         # Solr authentication
         self.authentication = authentication
@@ -1328,6 +1332,8 @@ class IndexMMD:
                     if task_id is not None:
                         logger.debug("Added task_id: %s to list.", task_id)
                         self.wms_task_list.append(task_id)
+                elif self.config.get('scope', '') == 'NBS':
+                    thumnail_url = add_nbs_thumbnail(input_record, self.config)
                 else:
                     logger.debug("Creating WMS thumbnail using legacy method using url: %s",
                                  getCapUrl)
@@ -1346,7 +1352,9 @@ class IndexMMD:
                 # Thumbnail of timeseries to be added
                 # Or better do this as part of get_feature_type?
                 logger.info("Processing feature type")
-                input_record = process_feature_type(input_record)
+                skip_feature_type = self.config.get('skip-feature-type', False)
+                if skip_feature_type is False:
+                    input_record = process_feature_type(input_record)
 
             logger.info("Adding records to list...")
             mmd_records.append(input_record)

@@ -61,7 +61,7 @@ def parse_arguments():
     parser.add_argument('-n', '--no_thumbnail', action='store_true',
                         help='Do not index thumbnails (done automatically if WMS available).')
     parser.add_argument('-nbs', '--nbs', action='store_true',
-                        help="Flag to set NBS-scope. Will use pregenerated thumbnails.")
+                        help="Special flag for NBS. Will use pregenerated thumbnails from lustre.")
 
     # Thumbnail parameters
     parser.add_argument('-m', '--map_projection', required=False,
@@ -105,7 +105,19 @@ def main():
     scope = None
     if args.nbs:
         scope = "NBS"
-    logger.info(f"Got {scope} scope")
+        cfg.set('scope', scope)
+        nbs_base_path = cfg.get('nbs-thumbnails-base-path', None)
+        nbs_base_url = cfg.get('nbs-thumbnails-base-url', None)
+        if not isinstance(nbs_base_path, str) or not isinstance(nbs_base_url, str):
+            if nbs_base_url is None:
+                logger.error("Missing config: nbs-thumbnails-base-url in cfg file")
+
+            if nbs_base_path is None:
+                logger.error("Missing config: nbs-thumbnails-base-path in cfg file")
+
+            sys.exit(1)
+
+    logger.debug(f"Got {scope} scope")
 
     # CONFIG START
     # Read config file, can be done as a CONFIG class, such that argparser can overwrite duplicates
@@ -186,7 +198,7 @@ def main():
     # Set up connection to SolR server
     mySolRc = SolrServer+myCore
     logger.info("Connecting to solr %s",  mySolRc)
-    mysolr = IndexMMD(mySolRc, args.always_commit, authentication)
+    mysolr = IndexMMD(mySolRc, args.always_commit, authentication, cfg)
 
     end_solr_commit = False
     if 'end-solr-commit' in cfg:

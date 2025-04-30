@@ -60,6 +60,9 @@ def parse_arguments():
     parser.add_argument('-n', '--no_thumbnail', action='store_true',
                         help='Do not index thumbnails (done automatically if WMS available).')
 
+    parser.add_argument('-nbs', '--nbs', action='store_true',
+                        help="Special flag for NBS. Will use pregenerated thumbnails from lustre.")
+
     # Thumbnail parameters
     parser.add_argument('-m', '--map_projection', required=False,
                         help='Specify map projection for thumbnail '
@@ -98,6 +101,23 @@ def main():
 
     # Parse configuration file
     cfg = parse_cfg(args.cfgfile)
+
+    scope = None
+    if args.nbs:
+        scope = "NBS"
+        cfg.set('scope', scope)
+        nbs_base_path = cfg.get('nbs-thumbnails-base-path', None)
+        nbs_base_url = cfg.get('nbs-thumbnails-base-url', None)
+        if not isinstance(nbs_base_path, str) or not isinstance(nbs_base_url, str):
+            if nbs_base_url is None:
+                logger.error("Missing config: nbs-thumbnails-base-url in cfg file")
+
+            if nbs_base_path is None:
+                logger.error("Missing config: nbs-thumbnails-base-path in cfg file")
+
+            sys.exit(1)
+
+    logger.debug(f"Got {scope} scope")
 
     # CONFIG START
     # Read config file, can be done as a CONFIG class, such that argparser can overwrite duplicates
@@ -325,7 +345,7 @@ def main():
                 chunksize, threads)
     bulkindexer = BulkIndexer(myfiles, mySolRc, threads=threads,
                               chunksize=chunksize, auth=authentication,
-                              tflg=tflg, thumbClass=thumbClass)
+                              tflg=tflg, thumbClass=thumbClass, config=cfg)
     """
     Indexing start. The inputlist is split into as many lists as input workers.
     Each worker will process the lists and return back the information needed to track the

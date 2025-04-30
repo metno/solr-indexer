@@ -434,6 +434,13 @@ def create_wms_thumbnail(doc):
     finally:
         return doc_
 
+def add_nbs_thumbnail(doc, config):
+    NBS_PROD_RE = "NBS/(\w\d\w)/(\d{4})/(\d{2})/(\d{2})/(.+).nc"
+
+    # Get the configuration
+    nbs_base_path = config.get('nbs-thumbnails-base-path', None)
+    nbs_base_url = config.get('nbs-thumbnails-base-url', None)
+
 
 def create_wms_thumbnail_api_wrapper(doc):
     """ Add thumbnail to SolR using API wms generator

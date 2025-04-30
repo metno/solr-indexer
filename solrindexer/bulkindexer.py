@@ -57,7 +57,7 @@ class BulkIndexer(object):
     """
 
     def __init__(self, inputList, solr_url, threads=20, chunksize=2500, auth=None,
-                 tflg=False, thumbClass=None):
+                 tflg=False, thumbClass=None, config=None):
         """ Initialize BulkIndexer"""
         logger.debug("Initializing BulkIndexer.")
         self.inputList = inputList
@@ -66,6 +66,7 @@ class BulkIndexer(object):
         self.total_in = len(inputList)
         self.indexthreads = list()
         self.thumbClass = thumbClass
+        self.config = config
 
         # self.solrcon = pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=auth)
         # self.  = IndexMMD(solr_url, False, authentication=auth)
