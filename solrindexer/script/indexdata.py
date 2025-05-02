@@ -85,7 +85,7 @@ def parse_arguments():
         parser.exit()
     if not args.input_file and not args.directory and not args.list_file and not args.mark_parent:
         parser.print_help()
-        parser.exit()
+        parser.exit(2)
 
     return args
 
@@ -97,15 +97,13 @@ def main():
         args = parse_arguments()
     except Exception as e:
         logger.error("Something failed in parsing arguments: %s", str(e))
-        return 1
+        sys.exit(1)
 
     # Parse configuration file
     cfg = parse_cfg(args.cfgfile)
-
     scope = None
     if args.nbs:
         scope = "NBS"
-        cfg.set('scope', scope)
         nbs_base_path = cfg.get('nbs-thumbnails-base-path', None)
         nbs_base_url = cfg.get('nbs-thumbnails-base-url', None)
         if not isinstance(nbs_base_path, str) or not isinstance(nbs_base_url, str):
@@ -116,37 +114,45 @@ def main():
                 logger.error("Missing config: nbs-thumbnails-base-path in cfg file")
 
             sys.exit(1)
-
+    # Set default value
+    cfg['scope'] = scope
     logger.debug(f"Got {scope} scope")
 
     # CONFIG START
-    # Read config file, can be done as a CONFIG class, such that argparser can overwrite duplicates
-    # with open(args.cfgfile, 'r') as ymlfile:
-    #   cfg = yaml.load(ymlfile, Loader=yaml.FullLoader)
-    # Read map projection
-    if args.map_projection:
+    # Check thumbnail flags
+    if not args.no_thumbnail:
+        tflg = True
+    else:
+        tflg = False
+
+    logger.info(f"Thumbnail flag is: {tflg}")
+    cfg['tflg'] = tflg
+    if args.map_projection and tflg:
         map_projection = args.map_projection
     else:
         map_projection = cfg.get('wms-thumbnail-projection', None)
     # Specify map projection
-    thumb_impl = cfg.get('thumbnail_impl', None)
-    if thumb_impl is None or thumb_impl == 'legacy':
-        mapprojection = ccrs.PlateCarree()  # Fallback
-        if map_projection == 'Mercator':
-            mapprojection = ccrs.Mercator()
-        elif map_projection == 'PlateCarree':
-            mapprojection = ccrs.PlateCarree()
-        elif map_projection == 'PolarStereographic':
-            mapprojection = ccrs.Stereographic(central_longitude=0.0, central_latitude=90.,
-                                               true_scale_latitude=60.)
-        else:
-            raise Exception('Map projection is not properly specified in config')
-        logger.debug("Using legacy thumbnail implementation")
-    if thumb_impl == 'fastapi':
-        mapprojection = 'PlateCarree'
-        if type(map_projection) is str:
-            mapprojection = map_projection
-        logger.debug("Using new thumbnail implementation with projection: %s", map_projection)
+    thumb_impl = cfg.get('thumbnail_impl', 'legacy')
+    if cfg['scope'] == 'NBS' and tflg:
+        logger.info("Using NBS specific thumbnail_url creating from file on lustre")
+    else:
+        if thumb_impl == 'legacy' and tflg:
+            mapprojection = ccrs.PlateCarree()  # Fallback
+            if map_projection == 'Mercator':
+                mapprojection = ccrs.Mercator()
+            elif map_projection == 'PlateCarree':
+                mapprojection = ccrs.PlateCarree()
+            elif map_projection == 'PolarStereographic':
+                mapprojection = ccrs.Stereographic(central_longitude=0.0, central_latitude=90.,
+                                                   true_scale_latitude=60.)
+            else:
+                raise Exception('Map projection is not properly specified in config')
+            logger.info(f"Using legacy thumbnail implementation with projection {map_projection}")
+        if thumb_impl == 'fastapi' and tflg:
+            mapprojection = 'PlateCarree'
+            if type(map_projection) is str:
+                mapprojection = map_projection
+            logger.info("Using new thumbnail implementation with projection: %s", map_projection)
 
     # Enable basic authentication if configured.
     if 'auth-basic-username' in cfg and 'auth-basic-password' in cfg:
@@ -235,7 +241,7 @@ def main():
         except Exception as e:
             logger.error(
                 "Something went wrong in decoding cmd arguments: %s", e)
-            return 1
+            sys.exit(1)
 
     """Handeling thumbnail command line arguments"""
     # FIXME, need a better way of handling this, WMS layers should be interpreted
@@ -268,11 +274,8 @@ def main():
     thumbnail_api_endpoint = cfg.get('thumbnail_api_endpoint', None)
 
     """Creating thumbnail generator class for use"""
-    if not args.no_thumbnail:
-        tflg = True
-    else:
-        tflg = False
-    if tflg:
+    if tflg and cfg['scope'] is None and thumb_impl != 'fastapi':
+        logger.debug("Creating legacy thumbnail genarator class.")
         thumbClass = WMSThumbNail(projection=mapprojection,
                                   wms_layer=wms_layer,
                                   wms_style=wms_style,
@@ -289,7 +292,7 @@ def main():
 
     # Create a dict instead of object, if we use the new api, so the code does
     # not need to import cartopy/matplotlib etc.
-    if thumb_impl == 'fastapi':
+    if tflg and thumb_impl == 'fastapi':
         del thumbClass
         thumbClass = {"host":  thumbnail_api_host,
                       "endpoint": thumbnail_api_endpoint,
@@ -303,12 +306,9 @@ def main():
                       "thumbnail_server": 'https://adc-thumbnails.met.no/'
                       }
     # Special thumbnail handeling for NBS scope
-    if scope is not None and scope == 'NBS':
+    if tflg and cfg['scope'] is not None and cfg['scope'] == 'NBS':
         del thumbClass
         thumbClass = dict()
-        thumbClass['scope'] = scope
-        thumbClass["base_path"] = "Your custom string"
-        thumbClass["thumbnail_server"] = 'https://adc-thumbnails.met.no/'
     # EndCreatingThumbnail
 
     """Log when we start the processing"""
@@ -443,7 +443,7 @@ def main():
         mylist = files2ingest[i:i+mystep]
         myrecs += len(mylist)
         try:
-            mysolr.index_record(mylist, addThumbnail=tflg, thumbClass=thumbClass, scope=scope)
+            mysolr.index_record(mylist, addThumbnail=tflg, thumbClass=thumbClass)
         except Exception as e:
             logger.warning('Something failed during indexing:s %s', e)
         logger.info('%d records out of %d have been ingested...',

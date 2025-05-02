@@ -53,7 +53,7 @@ from metvocab.mmdgroup import MMDGroup
 from shapely.geometry import box, mapping
 
 from solrindexer.tools import rewrap, process_feature_type
-from solrindexer.tools import to_solr_id, parse_date
+from solrindexer.tools import to_solr_id, parse_date, add_nbs_thumbnail
 from solrindexer.thumb.thumbnail_api import create_wms_thumbnail_api
 
 logger = logging.getLogger(__name__)
@@ -1239,7 +1239,7 @@ class IndexMMD:
             logger.debug("No wms url. Skipping thumbnail generation")
             return None
 
-    def index_record(self, records2ingest, addThumbnail, level=None, thumbClass=None, scope=None):
+    def index_record(self, records2ingest, addThumbnail, level=None, thumbClass=None):
         # FIXME, update the text below Øystein Godøy, METNO/FOU, 2023-03-19
         """ Add thumbnail to SolR
             Args:
@@ -1266,8 +1266,10 @@ class IndexMMD:
         mmd_records = list()
         norec = len(records2ingest)
         i = 1
+        progress_string = "=>"
         for input_record in records2ingest:
-            logger.info("====>")
+            progress_string = "=" + progress_string
+            logger.info(progress_string)
             logger.info("Processing record %d of %d", i, norec)
             i += 1
             # Do some checking of content
@@ -1296,6 +1298,7 @@ class IndexMMD:
 
                 # logger.debug(type(getCapUrl))
                 # logger.debug(getCapUrl)
+                thumb_impl = self.config.get('thumbnail_impl', 'legacy')
                 mmd_layers = None
 
                 if 'data_access_wms_layers' in input_record:
@@ -1304,7 +1307,7 @@ class IndexMMD:
                     mmd_layers = []
                 if not myfeature:
                     self.thumbnail_type = 'wms'
-                if (isinstance(thumbClass, dict)):
+                if (isinstance(thumbClass, dict) and thumb_impl == 'fastapi'):
                     logger.debug("Creating WMS thumbnail using new API using url %s", getCapUrl)
                     thumbClass.update({'wms_url': getCapUrl})
                     thumbClass.update({'wms_layers_mmd': mmd_layers})
@@ -1333,7 +1336,8 @@ class IndexMMD:
                         logger.debug("Added task_id: %s to list.", task_id)
                         self.wms_task_list.append(task_id)
                 elif self.config.get('scope', '') == 'NBS':
-                    thumnail_url = add_nbs_thumbnail(input_record, self.config)
+                    logger.debug("Calling add_nbs_thumbnail()-function")
+                    input_record = add_nbs_thumbnail(input_record, self.config)
                 else:
                     logger.debug("Creating WMS thumbnail using legacy method using url: %s",
                                  getCapUrl)
@@ -1351,9 +1355,12 @@ class IndexMMD:
             if 'data_access_url_opendap' in input_record:
                 # Thumbnail of timeseries to be added
                 # Or better do this as part of get_feature_type?
-                logger.info("Processing feature type")
+
                 skip_feature_type = self.config.get('skip-feature-type', False)
-                if skip_feature_type is False:
+                if skip_feature_type is True:
+                    logger.info("skip-feature-type is True in config. Skipping feature type..")
+                else:
+                    logger.info("Processing feature type")
                     input_record = process_feature_type(input_record)
 
             logger.info("Adding records to list...")

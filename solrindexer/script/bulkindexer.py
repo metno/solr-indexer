@@ -105,7 +105,6 @@ def main():
     scope = None
     if args.nbs:
         scope = "NBS"
-        cfg.set('scope', scope)
         nbs_base_path = cfg.get('nbs-thumbnails-base-path', None)
         nbs_base_url = cfg.get('nbs-thumbnails-base-url', None)
         if not isinstance(nbs_base_path, str) or not isinstance(nbs_base_url, str):
@@ -116,42 +115,48 @@ def main():
                 logger.error("Missing config: nbs-thumbnails-base-path in cfg file")
 
             sys.exit(1)
-
+    # Set default value
+    cfg['scope'] = scope
     logger.debug(f"Got {scope} scope")
 
     # CONFIG START
-    # Read config file, can be done as a CONFIG class, such that argparser can overwrite duplicates
-    # with open(args.cfgfile, 'r') as ymlfile:
-    #   cfg = yaml.load(ymlfile, Loader=yaml.FullLoader)
-    if args.map_projection:
+    # Check thumbnail flags
+    if not args.no_thumbnail:
+        tflg = True
+    else:
+        tflg = False
+
+    logger.info(f"Thumbnail flag is: {tflg}")
+    cfg['tflg'] = tflg
+    if args.map_projection and tflg:
         map_projection = args.map_projection
     else:
         map_projection = cfg.get('wms-thumbnail-projection', None)
     # Specify map projection
-    thumb_impl = cfg.get('thumbnail_impl', None)
-    if thumb_impl is None or thumb_impl == 'legacy':
-        # Specify map projection
-        mapprojection = ccrs.PlateCarree()  # Fallback
-        if args.map_projection:
-            map_projection = args.map_projection
+    thumb_impl = cfg.get('thumbnail_impl', 'legacy')
+    if cfg['scope'] == 'NBS' and tflg:
+        logger.info("Using NBS specific thumbnail_url creating from file on lustre")
+        mapprojection = map_projection
+    else:
+        if thumb_impl == 'legacy' and tflg:
+            mapprojection = ccrs.PlateCarree()  # Fallback
+            if map_projection == 'Mercator':
+                mapprojection = ccrs.Mercator()
+            elif map_projection == 'PlateCarree':
+                mapprojection = ccrs.PlateCarree()
+            elif map_projection == 'PolarStereographic':
+                mapprojection = ccrs.Stereographic(central_longitude=0.0, central_latitude=90.,
+                                                   true_scale_latitude=60.)
+            else:
+                raise Exception('Map projection is not properly specified in config')
+            logger.info("Using legacy thumbnail implementation")
+        elif thumb_impl == 'fastapi' and tflg:
+            mapprojection = 'PlateCarree'
+            if type(map_projection) is str:
+                mapprojection = map_projection
+            logger.info("Using new thumbnail implementation with projection: %s", map_projection)
         else:
-            map_projection = cfg['wms-thumbnail-projection']
-        if map_projection == 'Mercator':
-            mapprojection = ccrs.Mercator()
-        elif map_projection == 'PlateCarree':
-            mapprojection = ccrs.PlateCarree()
-        elif map_projection == 'PolarStereographic':
-            mapprojection = ccrs.Stereographic(central_longitude=0.0, central_latitude=90.,
-                                               true_scale_latitude=60.)
-        else:
-            raise Exception('Map projection is not properly specified in config')
-        logger.debug("Using legacy thumbnail implementation")
-    if thumb_impl == 'fastapi':
-        mapprojection = 'PlateCarree'
-        if type(map_projection) is str:
-            mapprojection = map_projection
-        logger.debug("Using new thumbnail implementation with projection: %s", map_projection)
-
+            mapprojection = None
     # Enable basic authentication if configured.
     if 'auth-basic-username' in cfg and 'auth-basic-password' in cfg:
         username = cfg['auth-basic-username']
@@ -302,11 +307,18 @@ def main():
         tflg = True
     else:
         tflg = False
-    if tflg:
+    if tflg and cfg['scope'] is None and thumb_impl != 'fastapi':
+        logger.debug("Creating legacy thumbnail genarator class.")
         thumbClass = WMSThumbNail(projection=mapprojection,
-                                  wms_layer=wms_layer, wms_style=wms_style,
-                                  wms_zoom_level=wms_zoom_level, add_coastlines=wms_coastlines,
-                                  wms_timeout=cfg['wms-timeout'], thumbnail_extent=thumbnail_extent
+                                  wms_layer=wms_layer,
+                                  wms_style=wms_style,
+                                  wms_zoom_level=wms_zoom_level,
+                                  add_coastlines=wms_coastlines,
+                                  wms_timeout=cfg.get('wms-timeout', 120),
+                                  thumbnail_extent=thumbnail_extent,
+                                  thumbnail_impl=thumb_impl,
+                                  thumbnail_api_host=thumbnail_api_host,
+                                  thumbnail_api_endpoint=thumbnail_api_endpoint
                                   )
         initThumb(thumbClass)
     else:
@@ -324,7 +336,19 @@ def main():
                       "wms_timeout": cfg.get('wms-timeout', 120),
                       "add_coastlines": wms_coastlines,
                       "projection": mapprojection,
-                      "thumbnail_extent": thumbnail_extent}
+                      "thumbnail_extent": thumbnail_extent,
+                      "thumbnail_server": 'https://adc-thumbnails.met.no/'
+                      }
+        initThumb(thumbClass)
+
+    # Special thumbnail handeling for NBS scope
+    if tflg and cfg['scope'] is not None and cfg['scope'] == 'NBS':
+        del thumbClass
+        thumbClass = dict()
+        nbs_base_path = cfg.get('nbs-thumbnails-base-path', None)
+        nbs_base_url = cfg.get('nbs-thumbnails-base-url', None)
+        thumbClass['nbs_base_url'] = nbs_base_url
+        thumbClass['nbs_base_path'] = nbs_base_path
         initThumb(thumbClass)
 
     logger.debug("Create Thumbnails?  %s", tflg)

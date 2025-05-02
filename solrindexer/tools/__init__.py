@@ -27,9 +27,9 @@ from .tools import parse_date
 from .tools import checkDateFormat
 from .tools import getListOfFiles
 from .tools import process_feature_type
-from .tools import initThumb
+from .tools import initThumb, add_nbs_thumbnail
 from .tools import initSolr, find_xml_files
-from .tools import create_wms_thumbnail
+from .tools import create_wms_thumbnail, add_nbs_thumbnail_bulk
 from .tools import create_wms_thumbnail_api_wrapper
 from .tools import get_dataset, solr_add, solr_commit
 
@@ -43,4 +43,4 @@ __all__ = ["flip", "rewrap", "to_solr_id",
            "initThumb", "create_wms_thumbnail", "initSolr",
            "get_dataset", "solr_add", "solr_commit",
            "create_wms_thumbnail_api_wrapper", "find_xml_files",
-           "solr_ping"]
+           "solr_ping", "add_nbs_thumbnail", "add_nbs_thumbnail_bulk"]
