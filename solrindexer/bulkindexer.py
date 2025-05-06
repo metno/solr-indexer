@@ -28,7 +28,7 @@ from solrindexer.indexdata import IndexMMD
 
 from solrindexer.tools import to_solr_id, process_feature_type
 from solrindexer.tools import create_wms_thumbnail, get_dataset, solr_add
-from solrindexer.tools import create_wms_thumbnail_api_wrapper
+from solrindexer.tools import create_wms_thumbnail_api_wrapper, add_nbs_thumbnail_bulk
 from solrindexer.multithread.io import load_file
 from solrindexer.multithread.threads import concurrently, multiprocess
 
@@ -57,7 +57,7 @@ class BulkIndexer(object):
     """
 
     def __init__(self, inputList, solr_url, threads=20, chunksize=2500, auth=None,
-                 tflg=False, thumbClass=None):
+                 tflg=False, thumbClass=None, config=None):
         """ Initialize BulkIndexer"""
         logger.debug("Initializing BulkIndexer.")
         self.inputList = inputList
@@ -66,6 +66,7 @@ class BulkIndexer(object):
         self.total_in = len(inputList)
         self.indexthreads = list()
         self.thumbClass = thumbClass
+        self.config = config
 
         # self.solrcon = pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=auth)
         # self.  = IndexMMD(solr_url, False, authentication=auth)
@@ -291,14 +292,18 @@ class BulkIndexer(object):
             """######################## STARTING THREADS ########################
             # Load each file using multiple threads, and process documents as files are loaded
             ###################################################################"""
-            logger.info("---- Process featureType concurrently %d ----", self.threads)
-            for (doc, newdoc) in multiprocess(fn=process_feature_type,
-                                              inputs=dap_docs,
-                                              max_concurrency=self.threads):
-                docs.remove(doc)
-                docs.append(newdoc)
-            """################################## THREADS FINISHED ##################"""
-            Futures.ALL_COMPLETED
+            skip_feature_type = self.config.get('skip-feature-type', False)
+            if skip_feature_type is True:
+                logger.info("skip-feature-type is True in config. Skipping feature type..")
+            else:
+                logger.info("---- Process featureType concurrently %d ----", self.threads)
+                for (doc, newdoc) in multiprocess(fn=process_feature_type,
+                                                  inputs=dap_docs,
+                                                  max_concurrency=self.threads):
+                    docs.remove(doc)
+                    docs.append(newdoc)
+                """################################## THREADS FINISHED ##################"""
+                Futures.ALL_COMPLETED
             """TODO: Add wms thumbnail batch creation here."""
             if self.tflg is True:
                 thumb_docs = [
@@ -306,8 +311,17 @@ class BulkIndexer(object):
                 """######################## STARTING THREADS ########################
                 # Load each file using multiple threads, and process documents as files are loaded
                 ###################################################################"""
+                thumb_impl = self.config.get('thumbnail_impl', 'legacy')
                 logger.info("---- Creating thumbnails concurrently %d ----", self.threads)
-                if (isinstance(self.thumbClass, dict)):
+                if self.config.get('scope', '') == 'NBS':
+                    logger.debug("Calling add_nbs_thumbnail()-function")
+                    for (doc, newdoc) in multiprocess(fn=add_nbs_thumbnail_bulk,
+                                                      inputs=thumb_docs,
+                                                      max_concurrency=self.threads):
+                        docs.remove(doc)
+                        docs.append(newdoc)
+
+                elif (isinstance(self.thumbClass, dict) and thumb_impl == 'fastapi'):
                     for (doc, newdoc) in multiprocess(fn=create_wms_thumbnail_api_wrapper,
                                                       inputs=thumb_docs,
                                                       max_concurrency=self.threads):

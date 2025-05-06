@@ -1,14 +1,42 @@
 # Configuration template file
-# Øystein Godøy, METNO/FOU, 2019-10-23
+# Created by: Øystein Godøy, METNO/FOU, 2019-10-23
+# Updated by: Magnar Martinsen, METNO/FOU, 2025-05-02
 
+#Logging (optional)
 logfile: <YOUR LOGFILE>
+
+# Solr connection information (Required)  
 solrserver: <YOUR SolR Server>
 solrcore: <YOUR SolR Core>
-# Valid map projections include Mercator, PlateCarree, PolarStereographic
-wms-thumbnail-projection: Mercator
-wms-timeout: 480
 
-# Add support for solr basic authentication
+# Add support for solr basic authentication (Optional)
 # uncomment and set <USERNAME> & <PASSWORD> to enable Authentication
 #auth-basic-username: <USERNAME>
 #auth-basic-password: <PASSWORD>
+
+
+# Valid map projections include Mercator, PlateCarree, PolarStereographic
+# (Optional) 
+wms-thumbnail-projection: Mercator
+wms-timeout: 480
+
+# Bulkindexer settings (optional)
+batch-size: 250
+#Worker processes
+workers: 3
+threads: 4
+
+#Thumbnail implementation. [legacy, fastapi] (optional, legacy will be default if not specified)
+# legacy: stores the generated thumbnail in the solr document 
+#         in the binary field thumbnail as base64 encoded string
+# fastapi: calls thumbnail-generator api, and get an url for the thumbnail, stored in thumbnail_url field in solr.
+#          the thumbnail is then served by nginx from that url.
+#thumbnail_impl: fastapi
+#thumbnail_api_host: http://localhost:8000
+#thumbnail_api_endpoint: /api/v1/thumbnail/wms/generate_thumbnail
+
+
+# NBS specific thumnail configuration (optional)
+#nbs-thumbnails-base-path: <Base file path where to find NBS products and thumbnail.png>
+#nbs-thumbnails-base-url: <Base url from where the thumbnails will be served> 
+
