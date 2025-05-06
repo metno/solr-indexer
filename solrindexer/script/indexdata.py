@@ -85,7 +85,7 @@ def parse_arguments():
         parser.exit()
     if not args.input_file and not args.directory and not args.list_file and not args.mark_parent:
         parser.print_help()
-        parser.exit(2)
+        parser.exit()
 
     return args
 
