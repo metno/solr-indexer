@@ -439,16 +439,14 @@ def create_wms_thumbnail(doc):
 
 
 def add_nbs_thumbnail(doc, config):
-    NBS_PROD_RE = r"NBS/(\w\d\w)/(\d{4})/(\d{2})/(\d{2})/(.+).nc"
+    NBS_PROD_RE = r"NBS/(\w\d\w)/(\d{4})/(\d{2})/(\d{2})(?:/(IW|EW))?/(.+).nc"
 
     # Get the configuration
     nbs_base_path = config.get('nbs-thumbnails-base-path', None)
     nbs_base_url = config.get('nbs-thumbnails-base-url', None)
     # Extract filename and path from data_access_url_opendap
     data_access_url_opendap = doc.get('data_access_url_opendap', '')[0]
-    # title = doc.get('title', [])[0]
-    # print(title)
-    # print(data_access_url_opendap)
+    logger.debug(data_access_url_opendap)
 
     match = re.search(NBS_PROD_RE, data_access_url_opendap)
     if match:
@@ -456,30 +454,47 @@ def add_nbs_thumbnail(doc, config):
         year = match.group(2)
         month = match.group(3)
         day = match.group(4)
-        fname = match.group(5)
+        mode = match.group(5)
+        fname = match.group(6)
+        logger.debug(mode)
+        if product.startswith("S1"):
+            thumb_path = f"{nbs_base_path}/{product}/{year}"
+            thumb_path += f"/{month}/{day}/{mode}/ql/{fname}/thumbnail.png"
+            thumbFound = os.path.isfile(thumb_path)
+            if thumbFound:
+                thumbnail_url = f"{nbs_base_url}/{product}/{year}/"
+                thumbnail_url += f"{month}/{day}/{mode}/ql/{fname}/thumbnail.png"
+                logger.info("NBS thumbnail_url set to: %s", thumbnail_url)
+                doc['thumbnail_url'] = thumbnail_url
+            else:
+                logger.error("NBS thumbnail not found: %s", thumb_path)
 
-        thumb_path = f"{nbs_base_path}/{product}/{year}/{month}/{day}/ql/{fname}/thumbnail.png"
+        else:
+            thumb_path = f"{nbs_base_path}/{product}/{year}"
+            thumb_path += f"/{month}/{day}/ql/{fname}/thumbnail.png"
 
-        thumbFound = os.path.isfile(thumb_path)
-        if thumbFound:
-            thumbnail_url = f"{nbs_base_url}/{product}/{year}/"
-            thumbnail_url += f"{month}/{day}/ql/{fname}/thumbnail.png"
-            logger.info("NBS thumbnail_url set to: %s", thumbnail_url)
-            doc['thumbnail_url'] = thumbnail_url
+            thumbFound = os.path.isfile(thumb_path)
+            if thumbFound:
+                thumbnail_url = f"{nbs_base_url}/{product}/{year}/"
+                thumbnail_url += f"{month}/{day}/ql/{fname}/thumbnail.png"
+                logger.info("NBS thumbnail_url set to: %s", thumbnail_url)
+                doc['thumbnail_url'] = thumbnail_url
+            else:
+                logger.error("NBS thumbnail not found: %s", thumb_path)
     return doc
 
 
 def add_nbs_thumbnail_bulk(doc):
-    NBS_PROD_RE = r"NBS/(\w\d\w)/(\d{4})/(\d{2})/(\d{2})/(.+).nc"
+    NBS_PROD_RE = r"NBS/(\w\d\w)/(\d{4})/(\d{2})/(\d{2})(?:/(IW|EW))?/(.+).nc"
 
     # Get the configuration
     nbs_base_path = thumbClass.get('nbs_base_path', None)
     nbs_base_url = thumbClass.get('nbs_base_url', None)
     # Extract filename and path from data_access_url_opendap
     data_access_url_opendap = doc.get('data_access_url_opendap', '')[0]
-    # title = doc.get('title', [])[0]
-    # print(title)
-    # print(data_access_url_opendap)
+    title = doc.get('title', [])[0]
+    logger.debug(title)
+    logger.debug(data_access_url_opendap)
 
     match = re.search(NBS_PROD_RE, data_access_url_opendap)
     if match:
@@ -487,18 +502,33 @@ def add_nbs_thumbnail_bulk(doc):
         year = match.group(2)
         month = match.group(3)
         day = match.group(4)
-        fname = match.group(5)
+        mode = match.group(5)
+        fname = match.group(6)
+        logger.debug(mode)
+        if product.startswith("S1"):
+            thumb_path = f"{nbs_base_path}/{product}/{year}"
+            thumb_path += f"/{month}/{day}/{mode}/ql/{fname}/thumbnail.png"
+            thumbFound = os.path.isfile(thumb_path)
+            if thumbFound:
+                thumbnail_url = f"{nbs_base_url}/{product}/{year}/"
+                thumbnail_url += f"{month}/{day}/{mode}/ql/{fname}/thumbnail.png"
+                logger.debug("NBS thumbnail_url set to: %s", thumbnail_url)
+                doc['thumbnail_url'] = thumbnail_url
+            else:
+                logger.error("NBS thumbnail not found: %s", thumb_path)
 
-        thumb_path = f"{nbs_base_path}/{product}/{year}/{month}/{day}/ql/{fname}/thumbnail.png"
-
-        thumbFound = os.path.isfile(thumb_path)
-        if thumbFound:
-            thumbnail_url = f"{nbs_base_url}/{product}/{year}/"
-            thumbnail_url += f"{month}/{day}/ql/{fname}/thumbnail.png"
-            logger.debug("NBS thumbnail_url set to: %s", thumbnail_url)
-            doc['thumbnail_url'] = thumbnail_url
         else:
-            logger.error("NBS thumbnail not found: %s", thumb_path)
+            thumb_path = f"{nbs_base_path}/{product}/{year}"
+            thumb_path += f"/{month}/{day}/ql/{fname}/thumbnail.png"
+
+            thumbFound = os.path.isfile(thumb_path)
+            if thumbFound:
+                thumbnail_url = f"{nbs_base_url}/{product}/{year}/"
+                thumbnail_url += f"{month}/{day}/ql/{fname}/thumbnail.png"
+                logger.debug("NBS thumbnail_url set to: %s", thumbnail_url)
+                doc['thumbnail_url'] = thumbnail_url
+            else:
+                logger.error("NBS thumbnail not found: %s", thumb_path)
     return doc
 
 

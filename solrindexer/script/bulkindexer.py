@@ -411,7 +411,7 @@ def main():
                 logger.info("Submitting worker job %d - with %d files", job, len(fileList))
                 bulkidx = BulkIndexer(fileList, mySolRc, threads=threads,
                                       chunksize=chunksize, auth=authentication,
-                                      tflg=tflg, thumbClass=thumbClass)
+                                      tflg=tflg, thumbClass=thumbClass, config=cfg)
                 future = executor.submit(bulkidx.bulkindex, fileList)
 
                 futures_list.append(future)

@@ -314,7 +314,7 @@ class BulkIndexer(object):
                 thumb_impl = self.config.get('thumbnail_impl', 'legacy')
                 logger.info("---- Creating thumbnails concurrently %d ----", self.threads)
                 if self.config.get('scope', '') == 'NBS':
-                    logger.debug("Calling add_nbs_thumbnail()-function")
+                    logger.info("Using NBS-specific thumbnail-logic")
                     for (doc, newdoc) in multiprocess(fn=add_nbs_thumbnail_bulk,
                                                       inputs=thumb_docs,
                                                       max_concurrency=self.threads):
