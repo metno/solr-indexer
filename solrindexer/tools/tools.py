@@ -315,7 +315,8 @@ def process_feature_type(tmpdoc):
             logger.debug("Got featuretype: %s", featureType)
             validfeaturetypes = {'point' : 'point', 'timeseries' : 'timeSeries',
                              'trajectory' : 'trajectory', 'profile' : 'profile',
-                             'timeseriesprofile' : 'timeSeriesProfile', 'trajectoryprofile' : 'trajectoryProfile'}
+                             'timeseriesprofile' : 'timeSeriesProfile',
+                             'trajectoryprofile' : 'trajectoryProfile'}
 
             if featureType not in validfeaturetypes.values():
                 logger.warning(
