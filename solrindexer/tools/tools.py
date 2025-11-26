@@ -17,25 +17,24 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import fnmatch
+import json
+import logging
+import math
 import os
 import re
-import sys
-import math
-import json
-import fnmatch
-import pysolr
-import shapely
-import logging
-import requests
-import validators
-import netCDF4
-import dateutil.parser
 import subprocess
+import sys
+from threading import Lock
 
+import dateutil.parser
+import netCDF4
+import pysolr
+import requests
+import shapely
+import validators
 from shapely import wkt
 from shapely.ops import transform
-
-from threading import Lock
 
 from solrindexer.thumb.thumbnail_api import create_wms_thumbnail_api
 
@@ -142,8 +141,11 @@ def flip(x, y):
 
 def rewrap(x):
     """Rewrap coordinates from 0-360 to -180-180"""
-    return (x + 180) % 360 - 180
+    return (x + 180.) % 360. - 180.
 
+def rewrap_to_360(x):
+    """Rewrap coordinates from -180-180 to 0-360"""
+    return (x + 360) % 360
 
 def to_solr_id(id):
     """Function that translate from metadata_identifier
@@ -319,9 +321,7 @@ def process_feature_type(tmpdoc):
                 logger.warning(
                     "The featureType found - %s - is not valid", featureType)
                 logger.warning("Fixing this locally")
-            if featureType.lower() == "timeseries":
-                featureType = 'timeSeries'
-            elif featureType == "timseries":
+            if featureType.lower() == "timeseries" or featureType == "timseries":
                 featureType = 'timeSeries'
 
             if featureType is not None:

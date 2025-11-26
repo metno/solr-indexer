@@ -17,30 +17,38 @@ implied. See the License for the specific language governing
 permissions and limitations under the License.
 """
 
-from .tools import flip
-from .tools import flatten
-from .tools import rewrap
-from .tools import to_solr_id
-from .tools import getZones
-from .tools import solr_ping
-from .tools import parse_date
-from .tools import checkDateFormat
-from .tools import getListOfFiles
-from .tools import process_feature_type
-from .tools import initThumb, add_nbs_thumbnail
-from .tools import initSolr, find_xml_files
-from .tools import create_wms_thumbnail, add_nbs_thumbnail_bulk
-from .tools import create_wms_thumbnail_api_wrapper
-from .tools import get_dataset, solr_add, solr_commit
-
+from .mmd_solr_spatial import handle_solr_spatial
+from .tools import (
+           add_nbs_thumbnail,
+           add_nbs_thumbnail_bulk,
+           checkDateFormat,
+           create_wms_thumbnail,
+           create_wms_thumbnail_api_wrapper,
+           find_xml_files,
+           flatten,
+           flip,
+           get_dataset,
+           getListOfFiles,
+           getZones,
+           initSolr,
+           initThumb,
+           parse_date,
+           process_feature_type,
+           rewrap,
+           rewrap_to_360,
+           solr_add,
+           solr_commit,
+           solr_ping,
+           to_solr_id,
+)
 
 __package__ = "tools"
 __version__ = "2.0.2"
 __date__ = "2024-01-23"
-__all__ = ["flip", "rewrap", "to_solr_id",
+__all__ = ["flip", "rewrap", "rewrap_to_360", "to_solr_id",
            "parse_date", "getZones", "checkDateFormat",
            "getListOfFiles", "flatten", "process_feature_type",
            "initThumb", "create_wms_thumbnail", "initSolr",
-           "get_dataset", "solr_add", "solr_commit",
+           "get_dataset", "solr_add", "solr_commit", "handle_solr_spatial",
            "create_wms_thumbnail_api_wrapper", "find_xml_files",
            "solr_ping", "add_nbs_thumbnail", "add_nbs_thumbnail_bulk"]
