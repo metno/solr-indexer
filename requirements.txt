@@ -10,4 +10,5 @@ xmltodict
 pygml
 requests
 python-dotenv
+pygeoif
 metvocab @ git+https://github.com/metno/met-vocab-tools@v1.2.0
