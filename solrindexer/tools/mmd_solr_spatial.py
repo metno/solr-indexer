@@ -49,7 +49,7 @@ def handle_solr_spatial(solr_doc, north, east, south, west, gml=None, srs=None):
 
     if gml is None:
         geom_solr_wkt, center = create_polygon_wkt_from_bbox(north, east, south, west)
-        solr_doc["geospatial_bounds3d"] = solr_doc['bbox'] 
+        solr_doc["geospatial_bounds3d"] = geom_solr_wkt
 
         if west == -180 and east == 180:
             logger.debug("Spanning whole longitude using ENVELOPE syntax to avoid coplanar error")

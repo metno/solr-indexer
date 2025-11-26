@@ -1058,10 +1058,13 @@ class IndexMMD:
 
     def __init__(self, mysolrserver, always_commit=False, authentication=None, config=None):
         # Set up logging
+<<<<<<< HEAD
         if mysolrserver is None:
             logger.error("No Solr URL was provided")
             sys.exit(1)
 
+=======
+>>>>>>> a457d07 (Merged features from Master)
         logger.info("Creating an instance of IndexMMD")
         logger.info(f"Always commit is: {always_commit}")
 
