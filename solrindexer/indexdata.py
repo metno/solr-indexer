@@ -1045,6 +1045,10 @@ class IndexMMD:
 
     def __init__(self, mysolrserver, always_commit=False, authentication=None, config=None):
         # Set up logging
+        if mysolrserver is None:
+            logger.error("No Solr URL was provided")
+            sys.exit(1)
+
         logger.info("Creating an instance of IndexMMD")
         logger.info(f"Always commit is: {always_commit}")
 
@@ -1064,7 +1068,7 @@ class IndexMMD:
         self.thumbClass = None
 
         # The config object
-        self.config = config
+        self.config = {} if config is None else config
 
         # Solr authentication
         self.authentication = authentication
