@@ -313,16 +313,20 @@ def process_feature_type(tmpdoc):
 
         if featureType is not None:
             logger.debug("Got featuretype: %s", featureType)
-            if featureType not in ['point', 'timeSeries',
-                                   'trajectory', 'profile', 'timeSeriesProfile',
-                                   'trajectoryProfile']:
+            validfeaturetypes = {'point': 'point', 'timeseries': 'timeSeries',
+                                 'trajectory': 'trajectory', 'profile': 'profile',
+                                 'timeseriesprofile': 'timeSeriesProfile',
+                                 'trajectoryprofile': 'trajectoryProfile'}
+
+            if featureType not in validfeaturetypes.values():
                 logger.warning(
                     "The featureType found - %s - is not valid", featureType)
                 logger.warning("Fixing this locally")
-            if featureType.lower() == "timeseries":
-                featureType = 'timeSeries'
-            elif featureType == "timseries":
-                featureType = 'timeSeries'
+                if featureType.lower() in validfeaturetypes.keys():
+                    featureType = validfeaturetypes[featureType.lower()]
+                else:
+                    print("The featureType cannot be mapped to any valid value")
+                    featureType = None
 
             if featureType is not None:
                 logger.debug('feature_type found: %s', featureType)
