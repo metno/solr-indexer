@@ -688,16 +688,24 @@ class MMD4SolR:
                                            .format(personnel_role_LUT[role], el_type)] \
                                         .append(personnel[entry][el])
                         elif entry_type == 'name':
+                            if isinstance(personnel[entry], dict):
+                                name = personnel[entry]['#text']
+                            else:
+                                name = personnel[entry]
                             mydict['personnel_{}_{}'.
                                    format(personnel_role_LUT[role], entry_type)] \
-                                .append(personnel[entry])
-                            mydict['personnel_name'].append(personnel[entry])
+                                .append(name)
+                            mydict['personnel_name'].append(name)
                         elif entry_type == 'organisation':
+                            if isinstance(personnel[entry], dict):
+                                organisation = personnel[entry]['#text']
+                            else:
+                                organisation = personnel[entry]
                             mydict['personnel_{}_{}'.
                                    format(personnel_role_LUT[role], entry_type)] \
-                                .append(personnel[entry])
+                                .append(organisation)
                             mydict['personnel_organisation'].append(
-                                personnel[entry])
+                                organisation)
                         else:
                             mydict['personnel_{}_{}'.
                                    format(personnel_role_LUT[role], entry_type)] \
