@@ -656,15 +656,28 @@ class MMD4SolR:
                                         personnel[entry][el]
                                     )
                                 else:
-                                    mydict[f"personnel_{personnel_role_LUT[role]}_address_{el_type}"].append(
-                                        personnel[entry][el]
-                                    )
-                        elif entry_type == "name":
-                            mydict[f"personnel_{personnel_role_LUT[role]}_{entry_type}"].append(personnel[entry])
-                            mydict["personnel_name"].append(personnel[entry])
-                        elif entry_type == "organisation":
-                            mydict[f"personnel_{personnel_role_LUT[role]}_{entry_type}"].append(personnel[entry])
-                            mydict["personnel_organisation"].append(personnel[entry])
+                                    mydict['personnel_{}_address_{}'
+                                           .format(personnel_role_LUT[role], el_type)] \
+                                        .append(personnel[entry][el])
+                        elif entry_type == 'name':
+                            if isinstance(personnel[entry], dict):
+                                name = personnel[entry]['#text']
+                            else:
+                                name = personnel[entry]
+                            mydict['personnel_{}_{}'.
+                                   format(personnel_role_LUT[role], entry_type)] \
+                                .append(name)
+                            mydict['personnel_name'].append(name)
+                        elif entry_type == 'organisation':
+                            if isinstance(personnel[entry], dict):
+                                organisation = personnel[entry]['#text']
+                            else:
+                                organisation = personnel[entry]
+                            mydict['personnel_{}_{}'.
+                                   format(personnel_role_LUT[role], entry_type)] \
+                                .append(organisation)
+                            mydict['personnel_organisation'].append(
+                                organisation)
                         else:
                             mydict[f"personnel_{personnel_role_LUT[role]}_{entry_type}"].append(personnel[entry])
 
