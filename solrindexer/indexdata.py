@@ -645,6 +645,8 @@ class MMD4SolR:
                     if entry_type == "role":
                         mydict[f"personnel_{personnel_role_LUT[role]}_role"].append(personnel[entry])
                         mydict["personnel_role"].append(personnel[entry])
+                    elif entry_type == 'type':
+                        pass
                     else:
                         # Treat address specifically and handle faceting elements
                         # personnel_role, personnel_name, personnel_organisation.
@@ -1312,6 +1314,7 @@ class IndexMMD:
         """
         logger.info("Adding records to SolR core.")
         res = None
+        logger.debug(mmd_records)
         try:
             res = self.solrc.add(mmd_records)
         except Exception as e:
