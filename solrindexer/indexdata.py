@@ -137,11 +137,13 @@ class MMD4SolR:
         mmd_collection = MMDGroup("mmd", "https://vocab.met.no/mmd/Collection_Keywords")
         mmd_dataset_status = MMDGroup("mmd", "https://vocab.met.no/mmd/Dataset_Production_Status")
         mmd_quality_control = MMDGroup("mmd", "https://vocab.met.no/mmd/Quality_Control")
+        mmd_metadata_source = MMDGroup("mmd", "https://vocab.met.no/mmd/Metadata_Source")
         mmd_controlled_elements = {
             "mmd:iso_topic_category": mmd_iso_topic_category,
             "mmd:collection": mmd_collection,
             "mmd:dataset_production_status": mmd_dataset_status,
             "mmd:quality_control": mmd_quality_control,
+            "mmd:metadata_source": mmd_metadata_source,
         }
         for element in mmd_controlled_elements:
             logger.debug("Checking %s for compliance with controlled vocabulary", element)
@@ -621,7 +623,6 @@ class MMD4SolR:
                 mydict[f"personnel_{personnel_role_LUT[role]}_name"] = []
                 mydict[f"personnel_{personnel_role_LUT[role]}_email"] = []
                 mydict[f"personnel_{personnel_role_LUT[role]}_phone"] = []
-                mydict[f"personnel_{personnel_role_LUT[role]}_fax"] = []
                 mydict[f"personnel_{personnel_role_LUT[role]}_organisation"] = []
                 mydict[f"personnel_{personnel_role_LUT[role]}_address"] = []
                 # don't think this is needed Øystein Godøy, METNO/FOU, 2021-09-08
@@ -849,7 +850,8 @@ class MMD4SolR:
             mydict["keywords_cfstdn"] = []
             mydict["keywords_gemet"] = []
             mydict["keywords_northemes"] = []
-            logger.debug(mmd["mmd:keywords"])
+            mydict["keywords_none"] = []
+            #logger.debug(mmd["mmd:keywords"])
             # If there is only one keyword list
             if isinstance(mmd["mmd:keywords"], dict):
                 vocab = mmd["mmd:keywords"]["@vocabulary"]
@@ -876,6 +878,8 @@ class MMD4SolR:
                                     mydict["keywords_gemet"].append(elem)
                                 if vocab == "NORTHEMES":
                                     mydict["keywords_northemes"].append(elem)
+                                if vocab == "None":
+                                    mydict["keywords_none"].append(elem)
                                 mydict["keywords_vocabulary"].append(vocab)
                                 mydict["keywords_keyword"].append(elem)
             # If there are multiple keyword lists
@@ -901,6 +905,8 @@ class MMD4SolR:
                                     mydict["keywords_gemet"].append(keyword)
                                 if elem["@vocabulary"] == "NORTHEMES":
                                     mydict["keywords_northemes"].append(keyword)
+                                if elem["@vocabulary"] == "None":
+                                    mydict["keywords_none"].append(keyword)
                                 mydict["keywords_vocabulary"].append(elem["@vocabulary"])
                                 mydict["keywords_keyword"].append(keyword)
                         else:
@@ -919,6 +925,8 @@ class MMD4SolR:
                                 mydict["keywords_gemet"].append(elem["mmd:keyword"])
                             if elem["@vocabulary"] == "NORTHEMES":
                                 mydict["keywords_northemes"].append(elem["mmd:keyword"])
+                            if elem["@vocabulary"] == "None":
+                                mydict["keywords_none"].append(elem["mmd:keyword"])
                             mydict["keywords_vocabulary"].append(elem["@vocabulary"])
                             mydict["keywords_keyword"].append(elem["mmd:keyword"])
 
@@ -937,6 +945,8 @@ class MMD4SolR:
                     mydict["keywords_gemet"].append(mmd["mmd:keywords"]["mmd:keyword"])
                 if mmd["mmd:keywords"]["@vocabulary"] == "NORTHEMES":
                     mydict["keywords_northemes"].append(mmd["mmd:keywords"]["mmd:keyword"])
+                if mmd["mmd:keywords"]["@vocabulary"] == "None":
+                    mydict["keywords_none"].append(mmd["mmd:keywords"]["mmd:keyword"])
                 mydict["keywords_vocabulary"].append(mmd["mmd:keywords"]["@vocabulary"])
                 mydict["keywords_keyword"].append(mmd["mmd:keywords"]["mmd:keyword"])
 
@@ -1035,6 +1045,10 @@ class MMD4SolR:
         """ Quality control """
         if "mmd:quality_control" in mmd and mmd["mmd:quality_control"] is not None:
             mydict["quality_control"] = str(mmd["mmd:quality_control"])
+
+        """ Metadata Source """
+        if "mmd:metadata_source" in mmd and mmd["mmd:metadata_source"] is not None:
+            mydict["metadata_source"] = str(mmd["mmd:metadata_source"])
 
         """ Adding MMD document as base64 string"""
         # Check if this can be simplified in the workflow.
