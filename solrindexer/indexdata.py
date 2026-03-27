@@ -953,27 +953,49 @@ class MMD4SolR:
         logger.debug("Project")
         mydict["project_short_name"] = []
         mydict["project_long_name"] = []
+        # project name will be the short name if available, otherwise long name is used.
+        mydict["project_name"] = []
         if "mmd:project" in mmd:
             if mmd["mmd:project"] is None:
                 mydict["project_short_name"].append("Not provided")
                 mydict["project_long_name"].append("Not provided")
+                mydict["project_name"].append("Not provided")
             elif isinstance(mmd["mmd:project"], list):
                 # Check if multiple nodes are present
                 for e in mmd["mmd:project"]:
-                    mydict["project_short_name"].append(e["mmd:short_name"])
-                    mydict["project_long_name"].append(e["mmd:long_name"])
+                    pname = None
+                    if "mmd:short_name" in e and e["mmd:short_name"] is not None:
+                        mydict["project_short_name"].append(e["mmd:short_name"])
+                        pname = e["mmd:short_name"]
+                    else:
+                        mydict["project_short_name"].append("Not provided")
+
+                    if "mmd:long_name" in e and e["mmd:long_name"] is not None:
+                        mydict["project_long_name"].append(e["mmd:long_name"])
+                        if pname is None:
+                            pname = e["mmd:long_name"]
+                    else:
+                        mydict["project_long_name"].append("Not provided")
+
+                    mydict["project_name"].append(pname)
             else:
                 # Extract information as appropriate
                 e = mmd["mmd:project"]
-                if "mmd:short_name" in e:
+                pname = None
+                if "mmd:short_name" in e and e["mmd:short_name"] is not None:
                     mydict["project_short_name"].append(e["mmd:short_name"])
+                    pname = e["mmd:short_name"]
                 else:
                     mydict["project_short_name"].append("Not provided")
 
-                if "mmd:long_name" in e:
+                if "mmd:long_name" in e and e["mmd:long_name"] is not None:
                     mydict["project_long_name"].append(e["mmd:long_name"])
+                    if pname is not None:
+                        pname = e["mmd:long_name"]
                 else:
                     mydict["project_long_name"].append("Not provided")
+
+                mydict["project_name"].append(pname)
 
         logger.debug("Platform")
         # FIXME add check for empty sub elements...
