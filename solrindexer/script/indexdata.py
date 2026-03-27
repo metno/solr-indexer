@@ -19,22 +19,22 @@ implied. See the License for the specific language governing
 permissions and limitations under the License.
 """
 
+import argparse
+import logging
 import os
 import sys
-import logging
-import argparse
-import cartopy.crs as ccrs
-import requests
 import time
-from dotenv import load_dotenv
 from datetime import datetime
 
+import cartopy.crs as ccrs
+import requests
+from dotenv import load_dotenv
 from requests.auth import HTTPBasicAuth
-from solrindexer.indexdata import MMD4SolR, IndexMMD
-from solrindexer.tools import to_solr_id
-from solrindexer.script.searchindex import parse_cfg
 
+from solrindexer.indexdata import IndexMMD, MMD4SolR
+from solrindexer.script.searchindex import parse_cfg
 from solrindexer.thumb.thumbnail import WMSThumbNail
+from solrindexer.tools import to_solr_id
 
 logger = logging.getLogger(__name__)
 if os.getenv("SOLRINDEXER_LOGLEVEL", "INFO") == "DEBUG":
@@ -135,6 +135,7 @@ def main():
     thumb_impl = cfg.get('thumbnail_impl', 'legacy')
     if cfg['scope'] == 'NBS' and tflg:
         logger.info("Using NBS specific thumbnail_url creating from file on lustre")
+        mapprojection = None
     else:
         if thumb_impl == 'legacy' and tflg:
             mapprojection = ccrs.PlateCarree()  # Fallback
@@ -227,8 +228,8 @@ def main():
         myfiles = [args.input_file]
     elif args.list_file:
         try:
-            f2 = open(args.list_file, "r")
-        except IOError as e:
+            f2 = open(args.list_file)
+        except OSError as e:
             logger.error('Could not open file: %s %e', args.list_file, e)
             return
         myfiles = f2.readlines()
