@@ -221,17 +221,38 @@ class MMD4SolR:
         if "mmd:temporal_extent" in mmd:
             # logger.debug(mmd['mmd:temporal_extent'])
             if isinstance(mmd["mmd:temporal_extent"], list):
+                missing_none_end = 0
                 for item in mmd["mmd:temporal_extent"]:
-                    for mykey in item:
-                        if (item[mykey] is None) or (item[mykey] == "--"):
-                            mydate = ""
-                            item[mykey] = mydate
-                        else:
-                            try:
-                                mydate = dateutil.parser.parse(str(item[mykey]))
-                                item[mykey] = mydate.strftime("%Y-%m-%dT%H:%M:%SZ")
-                            except Exception as e:
-                                logger.error("Date format could not be parsed: %s", e)
+                    # extract start
+                    if "mmd:start_date" not in item or item["mmd:start_date"] is None:
+                        raise ValueError("Missing mmd:temporal_extent start_date. File will be skipped.")
+                    else:
+                        start_date = item["mmd:start_date"]
+                        try:
+                            mydate = dateutil.parser.parse(str(start_date))
+                            item["mmd:start_date"] = mydate.strftime("%Y-%m-%dT%H:%M:%SZ")
+                        except Exception as e:
+                            logger.error("Date format could not be parsed: %s", e)
+                    if "mmd:end_date" not in item or item["mmd:end_date"] is None:
+                        mydate = ""
+                        item["mmd:end_date"] = mydate
+                        missing_none_end += 1
+                    else:
+                        end_date = item["mmd:end_date"]
+                        try:
+                            mydate = dateutil.parser.parse(str(end_date))
+                            item["mmd:end_date"] = mydate.strftime("%Y-%m-%dT%H:%M:%SZ")
+                        except Exception as e:
+                            logger.error("Date format could not be parsed: %s", e)
+                        # if end_date is present, check that it is smaller than start_date using dateobject
+                        if item['mmd:end_date'] < item['mmd:start_date']:
+                            raise Exception('Start and end dates are in the wrong order')
+                # check that only 1 pair has open ended
+                if missing_none_end > 1:
+                    raise Exception('More than one open ended temporal extent')
+                else:
+                    # place the open ended at the end
+                    mmd["mmd:temporal_extent"] = sorted(mmd["mmd:temporal_extent"], key=lambda d: not d['mmd:end_date'])
             else:
                 # logger.debug(mmd['mmd:temporal_extent'].items())
                 for mykey, myitem in mmd["mmd:temporal_extent"].items():
@@ -248,6 +269,11 @@ class MMD4SolR:
                             mmd["mmd:temporal_extent"][mykey] = mydate.strftime("%Y-%m-%dT%H:%M:%SZ")
                         except Exception as e:
                             logger.error("Date format could not be parsed: %s", e)
+                # if end_date is present, check that it is smaller than start_date using dateobject
+                if 'mmd:end_date' in mmd['mmd:temporal_extent'] and mmd['mmd:temporal_extent']['mmd:end_date'] != "":
+                    if mmd['mmd:temporal_extent']['mmd:end_date'] < mmd['mmd:temporal_extent']['mmd:start_date']:
+                        raise Exception('Start and end dates are in the wrong order')
+
 
     def tosolr(self):
         """
@@ -416,34 +442,37 @@ class MMD4SolR:
         logger.debug("Temporal extent")
         if "mmd:temporal_extent" in mmd:
             if isinstance(mmd["mmd:temporal_extent"], list):
-                maxtime = dateutil.parser.parse("1000-01-01T00:00:00Z")
-                mintime = dateutil.parser.parse("2099-01-01T00:00:00Z")
+                mydict["temporal_extent_start_date"] = []
+                mydict["temporal_extent_end_date"] = []
+                mydict["temporal_extent_period_dr"] = []
                 for item in mmd["mmd:temporal_extent"]:
-                    for myval in item.values():
-                        if myval != "":
-                            mytime = dateutil.parser.parse(myval)
-                        if mytime < mintime:
-                            mintime = mytime
-                        if mytime > maxtime:
-                            maxtime = mytime
-                mydict["temporal_extent_start_date"] = mintime.strftime("%Y-%m-%dT%H:%M:%SZ")
-                mydict["temporal_extent_end_date"] = maxtime.strftime("%Y-%m-%dT%H:%M:%SZ")
+                    mytime = dateutil.parser.parse(item["mmd:start_date"])
+                    mydict["temporal_extent_start_date"].append(mytime.strftime("%Y-%m-%dT%H:%M:%SZ"))
+                    st = item["mmd:start_date"]
+                    if item["mmd:end_date"]:
+                        mytime = dateutil.parser.parse(item["mmd:end_date"])
+                        mydict["temporal_extent_end_date"].append(mytime.strftime("%Y-%m-%dT%H:%M:%SZ"))
+                        end = item["mmd:end_date"]
+                        logger.debug("Creating daterange with end date")
+                        mydict["temporal_extent_period_dr"].append("[" + st + " TO " + end + "]")
+                    else:
+                        logger.debug("Creating daterange with open end date")
+                        mydict["temporal_extent_period_dr"].append("[" + st + " TO *]")
             else:
                 mydict["temporal_extent_start_date"] = str(mmd["mmd:temporal_extent"]["mmd:start_date"])
                 if "mmd:end_date" in mmd["mmd:temporal_extent"]:
                     if mmd["mmd:temporal_extent"]["mmd:end_date"] is not None:
                         mydict["temporal_extent_end_date"] = str(mmd["mmd:temporal_extent"]["mmd:end_date"])
 
-            if "temporal_extent_end_date" in mydict:
-                logger.debug("Creating daterange with end date")
-                st = str(mydict["temporal_extent_start_date"])
-                end = str(mydict["temporal_extent_end_date"])
-                mydict["temporal_extent_period_dr"] = "[" + st + " TO " + end + "]"
-            else:
-                logger.debug("Creating daterange with open end date")
-                st = str(mydict["temporal_extent_start_date"])
-                mydict["temporal_extent_period_dr"] = "[" + st + " TO *]"
-            logger.debug("Temporal extent date range: %s", mydict["temporal_extent_period_dr"])
+                if "temporal_extent_end_date" in mydict:
+                    logger.debug("Creating daterange with end date")
+                    st = str(mydict["temporal_extent_start_date"])
+                    end = str(mydict["temporal_extent_end_date"])
+                    mydict["temporal_extent_period_dr"] = "[" + st + " TO " + end + "]"
+                else:
+                    st = str(mydict["temporal_extent_start_date"])
+                    mydict["temporal_extent_period_dr"] = "[" + st + " TO *]"
+                logger.debug("Temporal extent date range: %s", mydict["temporal_extent_period_dr"])
         logger.debug("Geographical extent")
         # Assumes longitudes positive eastwards and in the are -180:180
         mmd_geographic_extent = mmd.get("mmd:geographic_extent", None)
