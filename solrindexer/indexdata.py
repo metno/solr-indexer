@@ -646,16 +646,22 @@ class MMD4SolR:
             mydict["personnel_role"] = []
             mydict["personnel_name"] = []
             mydict["personnel_organisation"] = []
+            personnel_list = []
             # Fix role based lists
+            personnel_mmd_fields = ['mmd:role', 'mmd:name', 'mmd:email', 'mmd:organisation',
+               'mmd:type', 'mmd:phone', 'mmd:contact_address']
+            address_fields = ['mmd:address', 'mmd:city', 'mmd:province_or_state',
+               'mmd:postal_code', 'mmd:country']
             for role in personnel_role_LUT:
-                mydict[f"personnel_{personnel_role_LUT[role]}_role"] = []
+                #mydict[f"personnel_{personnel_role_LUT[role]}_role"] = []
+                mydict[f"personnel_{personnel_role_LUT[role]}_type"] = []
                 mydict[f"personnel_{personnel_role_LUT[role]}_name"] = []
+                mydict[f"personnel_{personnel_role_LUT[role]}_name_uri"] = []
                 mydict[f"personnel_{personnel_role_LUT[role]}_email"] = []
                 mydict[f"personnel_{personnel_role_LUT[role]}_phone"] = []
                 mydict[f"personnel_{personnel_role_LUT[role]}_organisation"] = []
-                mydict[f"personnel_{personnel_role_LUT[role]}_address"] = []
-                # don't think this is needed Øystein Godøy, METNO/FOU, 2021-09-08
-                # mydict['personnel_{}_address_address'.format(personnel_role_LUT[role])] = []
+                mydict[f"personnel_{personnel_role_LUT[role]}_organisation_uri"] = []
+                mydict[f"personnel_{personnel_role_LUT[role]}_address_address"] = []
                 mydict[f"personnel_{personnel_role_LUT[role]}_address_city"] = []
                 mydict[f"personnel_{personnel_role_LUT[role]}_address_province_or_state"] = []
                 mydict[f"personnel_{personnel_role_LUT[role]}_address_postal_code"] = []
@@ -663,6 +669,7 @@ class MMD4SolR:
 
             # Fill lists with information
             for personnel in personnel_elements:
+                personnel_list.append({key: value for key, value in personnel.items() if value})
                 role = personnel["mmd:role"]
                 if not role:
                     logger.warning("No role available for personnel")
@@ -670,46 +677,94 @@ class MMD4SolR:
                 if role not in personnel_role_LUT:
                     logger.warning("Wrong role provided for personnel")
                     break
-                for entry in personnel:
+                #skip if all mandatory are empty
+                if not any(personnel.get(key) for key in ['mmd:name', 'mmd:organisation', 'mmd:email']):
+                    continue
+                for entry in personnel_mmd_fields:
+                    # make sure all personnel has the wanted fields. Set missing to empty string
+                    if entry not in personnel or personnel[entry] is None:
+                        #logger.debug("adding %s", entry)
+                        personnel[entry] = ''
                     entry_type = entry.split(":")[-1]
                     if entry_type == "role":
-                        mydict[f"personnel_{personnel_role_LUT[role]}_role"].append(personnel[entry])
-                        mydict["personnel_role"].append(personnel[entry])
-                    elif entry_type == 'type':
-                        pass
-                    else:
-                        # Treat address specifically and handle faceting elements
-                        # personnel_role, personnel_name, personnel_organisation.
-                        if entry_type == "contact_address":
-                            for el in personnel[entry]:
-                                el_type = el.split(":")[-1]
-                                if el_type == "address":
-                                    mydict[f"personnel_{personnel_role_LUT[role]}_{el_type}"].append(
-                                        personnel[entry][el]
-                                    )
-                                else:
-                                    mydict[f'personnel_{personnel_role_LUT[role]}_address_{el_type}'
-                                           ] \
-                                        .append(personnel[entry][el])
-                        elif entry_type == 'name':
-                            if isinstance(personnel[entry], dict):
-                                name = personnel[entry]['#text']
-                            else:
-                                name = personnel[entry]
-                            mydict[f'personnel_{personnel_role_LUT[role]}_{entry_type}'] \
-                                .append(name)
+                        if personnel[entry] not in mydict["personnel_role"]:
+                            mydict["personnel_role"].append(personnel[entry])
+                    if entry_type == 'name':
+                        if isinstance(personnel[entry], dict):
+                            name = personnel[entry]['#text']
+                            name_uri = personnel[entry]['@uri']
+                        else:
+                            name = personnel[entry]
+                            name_uri = ''
+                        mydict[f'personnel_{personnel_role_LUT[role]}_{entry_type}'] \
+                            .append(name)
+                        mydict[f"personnel_{personnel_role_LUT[role]}_name_uri"] \
+                            .append(name_uri)
+                        if name not in mydict["personnel_name"]:
                             mydict['personnel_name'].append(name)
-                        elif entry_type == 'organisation':
-                            if isinstance(personnel[entry], dict):
-                                organisation = personnel[entry]['#text']
-                            else:
-                                organisation = personnel[entry]
-                            mydict[f'personnel_{personnel_role_LUT[role]}_{entry_type}'] \
-                                .append(organisation)
+                    if entry_type == 'organisation':
+                        if isinstance(personnel[entry], dict):
+                            organisation = personnel[entry]['#text']
+                            organisation_uri = personnel[entry]['@uri']
+                        else:
+                            organisation = personnel[entry]
+                            organisation_uri = ''
+                        mydict[f'personnel_{personnel_role_LUT[role]}_{entry_type}'] \
+                            .append(organisation)
+                        mydict[f"personnel_{personnel_role_LUT[role]}_organisation_uri"] \
+                            .append(organisation_uri)
+                        if organisation not in mydict["personnel_organisation"]:
                             mydict['personnel_organisation'].append(
                                 organisation)
+                    if entry_type == 'email':
+                        mydict[f"personnel_{personnel_role_LUT[role]}_{entry_type}"] \
+                            .append(personnel[entry])
+                    #Non mandatory elements
+                    if entry_type == "type" or entry_type == 'phone':
+                        mydict[f"personnel_{personnel_role_LUT[role]}_{entry_type}"] \
+                            .append(personnel[entry])
+                    # Treat address specifically and handle faceting elements
+                    # personnel_role, personnel_name, personnel_organisation.
+                    if entry_type == "contact_address":
+                        if personnel[entry]:
+                            for adf in address_fields:
+                                el_type = adf.split(":")[-1]
+                                mydict[f'personnel_{personnel_role_LUT[role]}_address_{el_type}'
+                                       ] \
+                                    .append(personnel[entry][adf])
                         else:
-                            mydict[f"personnel_{personnel_role_LUT[role]}_{entry_type}"].append(personnel[entry])
+                            for adf in address_fields:
+                                el_type = adf.split(":")[-1]
+                                mydict[f'personnel_{personnel_role_LUT[role]}_address_{el_type}'
+                                       ] \
+                                    .append('')
+            for role in personnel_role_LUT:
+                if not any(mydict[f"personnel_{personnel_role_LUT[role]}_type"]):
+                    del mydict[f"personnel_{personnel_role_LUT[role]}_type"]
+                if not any(mydict[f"personnel_{personnel_role_LUT[role]}_name"]):
+                    del mydict[f"personnel_{personnel_role_LUT[role]}_name"]
+                if not any(mydict[f"personnel_{personnel_role_LUT[role]}_name_uri"]):
+                    del mydict[f"personnel_{personnel_role_LUT[role]}_name_uri"]
+                if not any(mydict[f"personnel_{personnel_role_LUT[role]}_email"]):
+                    del mydict[f"personnel_{personnel_role_LUT[role]}_email"]
+                if not any(mydict[f"personnel_{personnel_role_LUT[role]}_phone"]):
+                    del mydict[f"personnel_{personnel_role_LUT[role]}_phone"]
+                if not any(mydict[f"personnel_{personnel_role_LUT[role]}_organisation"]):
+                    del mydict[f"personnel_{personnel_role_LUT[role]}_organisation"]
+                if not any(mydict[f"personnel_{personnel_role_LUT[role]}_organisation_uri"]):
+                    del mydict[f"personnel_{personnel_role_LUT[role]}_organisation_uri"]
+                if not any(mydict[f"personnel_{personnel_role_LUT[role]}_address_address"]):
+                    del mydict[f"personnel_{personnel_role_LUT[role]}_address_address"]
+                if not any(mydict[f"personnel_{personnel_role_LUT[role]}_address_city"]):
+                    del mydict[f"personnel_{personnel_role_LUT[role]}_address_city"]
+                if not any(mydict[f"personnel_{personnel_role_LUT[role]}_address_province_or_state"]):
+                    del mydict[f"personnel_{personnel_role_LUT[role]}_address_province_or_state"]
+                if not any(mydict[f"personnel_{personnel_role_LUT[role]}_address_postal_code"]):
+                    del mydict[f"personnel_{personnel_role_LUT[role]}_address_postal_code"]
+                if not any(mydict[f"personnel_{personnel_role_LUT[role]}_address_country"]):
+                    del mydict[f"personnel_{personnel_role_LUT[role]}_address_country"]
+
+        mydict["personnel_json"] = json.dumps(personnel_list, ensure_ascii=False, separators=(',', ':'))
 
         logger.debug("Data center")
         if "mmd:data_center" in mmd:
