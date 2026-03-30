@@ -229,23 +229,23 @@ class MMD4SolR:
                     else:
                         start_date = item["mmd:start_date"]
                         try:
-                            mydate = dateutil.parser.parse(str(start_date))
-                            item["mmd:start_date"] = mydate.strftime("%Y-%m-%dT%H:%M:%SZ")
+                            start_date_parsed = dateutil.parser.parse(str(start_date))
+                            item["mmd:start_date"] = start_date_parsed.strftime("%Y-%m-%dT%H:%M:%SZ")
                         except Exception as e:
                             logger.error("Date format could not be parsed: %s", e)
-                    if "mmd:end_date" not in item or item["mmd:end_date"] is None:
-                        mydate = ""
-                        item["mmd:end_date"] = mydate
+                    if "mmd:end_date" not in item or item["mmd:end_date"] is None or item["mmd:end_date"] == '--':
+                        end_date = ""
+                        item["mmd:end_date"] = end_date
                         missing_none_end += 1
                     else:
                         end_date = item["mmd:end_date"]
                         try:
-                            mydate = dateutil.parser.parse(str(end_date))
-                            item["mmd:end_date"] = mydate.strftime("%Y-%m-%dT%H:%M:%SZ")
+                            end_date_parsed = dateutil.parser.parse(str(end_date))
+                            item["mmd:end_date"] = end_date_parsed.strftime("%Y-%m-%dT%H:%M:%SZ")
                         except Exception as e:
                             logger.error("Date format could not be parsed: %s", e)
                         # if end_date is present, check that it is smaller than start_date using dateobject
-                        if item['mmd:end_date'] < item['mmd:start_date']:
+                        if end_date_parsed < start_date_parsed:
                             raise Exception('Start and end dates are in the wrong order')
                 # check that only 1 pair has open ended
                 if missing_none_end > 1:
