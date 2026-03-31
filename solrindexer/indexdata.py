@@ -764,7 +764,7 @@ class MMD4SolR:
                 if not any(mydict[f"personnel_{personnel_role_LUT[role]}_address_country"]):
                     del mydict[f"personnel_{personnel_role_LUT[role]}_address_country"]
 
-        mydict["personnel_json"] = json.dumps(personnel_list, ensure_ascii=False, separators=(',', ':'))
+            mydict["personnel_json"] = json.dumps(personnel_list, ensure_ascii=False, separators=(',', ':'))
 
         logger.debug("Data center")
         if "mmd:data_center" in mmd:
