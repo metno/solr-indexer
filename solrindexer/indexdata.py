@@ -763,8 +763,11 @@ class MMD4SolR:
                     del mydict[f"personnel_{personnel_role_LUT[role]}_address_postal_code"]
                 if not any(mydict[f"personnel_{personnel_role_LUT[role]}_address_country"]):
                     del mydict[f"personnel_{personnel_role_LUT[role]}_address_country"]
-
+            # Add json structure
             mydict["personnel_json"] = json.dumps(personnel_list, ensure_ascii=False, separators=(',', ':'))
+            # Clone personnel_name and personnel_organisation to special facet fields
+            mydict["personnel_name_facet"] = mydict["personnel_name"]
+            mydict["personnel_organisation_facet"] = mydict["personnel_organisation"]
 
         logger.debug("Data center")
         if "mmd:data_center" in mmd:
@@ -911,6 +914,10 @@ class MMD4SolR:
                         mydict[f"related_url_{related_information_LUT[value]}_desc"].append(related_information[ts])
                     else:
                         mydict[f"related_url_{related_information_LUT[value]}_desc"].append("Not Available")
+            # Add observation facility to special facet field
+            if "related_url_obs_facility_desc" in mydict:
+                mydict["observation_facility_facet"] = mydict["related_url_obs_facility_desc"]
+
         logger.debug("ISO TopicCategory")
 
         if "mmd:iso_topic_category" in mmd:
