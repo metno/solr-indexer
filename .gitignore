@@ -6,3 +6,6 @@ idxenv
 *__pycache__*
 .env
 .*
+etc/
+!etc/cfg-template.cfg
+venv/
