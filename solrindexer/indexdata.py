@@ -37,6 +37,7 @@ UPDATES:
 
 import base64
 import json
+import html
 import logging
 import sys
 
@@ -1165,11 +1166,9 @@ class MMD4SolR:
 
         """ Adding MMD document as base64 string"""
         # Check if this can be simplified in the workflow.
-        xml_root = ET.parse(str(self.filename))
-        xml_string = ET.tostring(xml_root)
-        encoded_xml_string = base64.b64encode(xml_string)
-        xml_b64 = (encoded_xml_string).decode("utf-8")
-        mydict["mmd_xml_file"] = xml_b64
+        xml_tree = ET.parse(str(self.filename))
+        xml_string = ET.tostring(xml_tree, pretty_print=True, encoding="unicode")
+        mydict["mmd_xml_file"] = html.unescape(xml_string)
 
         """Set defualt parent/child flags"""
         mydict["isParent"] = False
