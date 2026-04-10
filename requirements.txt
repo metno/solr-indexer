@@ -6,7 +6,6 @@ python-dateutil
 validators
 PyYAML
 requests
-xmltodict
 pygml
 requests
 python-dotenv

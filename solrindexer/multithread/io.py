@@ -18,10 +18,10 @@ permissions and limitations under the License.
 """
 
 import logging
-import xmltodict
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from concurrent.futures import ThreadPoolExecutor
+from solrindexer.xmlutils import parse_xml_file
 
 # Logging Setup
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 def load_file(filename):
     """
-    Load xml file and convert to dict using xmltodict
+    Load xml file and convert to dict using lxml-backed parser
     """
     filename = str(filename).strip().rstrip()
     try:
@@ -37,18 +37,11 @@ def load_file(filename):
     except Exception as e:
         logger.error('Not a valid filepath %s error was %s' % (filename, e))
         return None
-    with open(file, encoding='utf-8') as fd:
-        try:
-            xmlfile = fd.read()
-        except Exception as e:
-            logger.error('Could not read file %s error was %s' % (filename, e))
-            return None
-        try:
-            mmddict = xmltodict.parse(xmlfile)
-        except Exception as e:
-            logger.error('Could not parse the xmlfile: %s  with error %s' % (filename, e))
-            return None
-        return mmddict
+    try:
+        return parse_xml_file(str(file))
+    except Exception as e:
+        logger.error('Could not parse the xmlfile: %s  with error %s' % (filename, e))
+        return None
 
 
 def load_files(filelist, threads=10):

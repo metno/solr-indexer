@@ -18,27 +18,30 @@ permissions and limitations under the License.
 """
 
 import logging
-import threading
-import queue
-import time
 import math
+import queue
+import threading
+import time
+from concurrent import futures as Futures
+from concurrent.futures import ThreadPoolExecutor
 
-from solrindexer.indexdata import MMD4SolR
-from solrindexer.indexdata import IndexMMD
-
-from solrindexer.tools import to_solr_id, process_feature_type
-from solrindexer.tools import create_wms_thumbnail, get_dataset, solr_add
-from solrindexer.tools import create_wms_thumbnail_api_wrapper, add_nbs_thumbnail_bulk
+from solrindexer.indexdata import IndexMMD, MMD4SolR
 from solrindexer.multithread.io import load_file
 from solrindexer.multithread.threads import concurrently, multiprocess
-
-from concurrent.futures import ThreadPoolExecutor
-from concurrent import futures as Futures
+from solrindexer.tools import (
+    add_nbs_thumbnail_bulk,
+    create_wms_thumbnail,
+    create_wms_thumbnail_api_wrapper,
+    get_dataset,
+    process_feature_type,
+    solr_add,
+    to_solr_id,
+)
 
 logger = logging.getLogger(__name__)
 
 
-class BulkIndexer(object):
+class BulkIndexer:
     """ Do multithreaded bulkindexing given a list of file names.
     ...
 
@@ -90,11 +93,9 @@ class BulkIndexer(object):
         if file is not None and file.endswith('\n'):
             file = file[:-1]
         mydoc = MMD4SolR(filename=None, mydoc=mmd, bulkFile=file)
-        try:
-            mydoc.check_mmd()
-        except Exception as e:
+        if not mydoc.check_mmd():
             logger.error(
-                "File %s did not pass the mmd check, cannot index. Reason: %s" % (file, e))
+                "File %s did not pass the mmd check, cannot index." % file)
             return (None, status)
 
         # Convert mmd xml dict to solr dict
