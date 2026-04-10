@@ -19,19 +19,17 @@ permissions and limitations under the License.
 
 import logging
 import math
-import queue
 import threading
 import time
 from concurrent import futures as Futures
 from concurrent.futures import ThreadPoolExecutor
 
+from solrindexer.failure_tracker import FailureTracker
 from solrindexer.indexdata import IndexMMD, MMD4SolR
 from solrindexer.multithread.io import load_file
 from solrindexer.multithread.threads import concurrently, multiprocess
 from solrindexer.tools import (
     add_nbs_thumbnail_bulk,
-    create_wms_thumbnail,
-    create_wms_thumbnail_api_wrapper,
     get_dataset,
     process_feature_type,
     solr_add,
@@ -60,7 +58,7 @@ class BulkIndexer:
     """
 
     def __init__(self, inputList, solr_url, threads=20, chunksize=2500, auth=None,
-                 tflg=False, thumbClass=None, config=None):
+                 tflg=False, thumbClass=None, config=None, failure_tracker=None):
         """ Initialize BulkIndexer"""
         logger.debug("Initializing BulkIndexer.")
         self.inputList = inputList
@@ -70,6 +68,7 @@ class BulkIndexer:
         self.indexthreads = list()
         self.thumbClass = thumbClass
         self.config = config
+        self.failure_tracker = failure_tracker or FailureTracker()
 
         # self.solrcon = pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=auth)
         # self.  = IndexMMD(solr_url, False, authentication=auth)
@@ -88,14 +87,47 @@ class BulkIndexer:
         """
 
         if mmd is None:
-            logger.warning("File %s was not parsed" % file)
+            logger.warning(f"File {file} was not parsed")
+            self.failure_tracker.add_failure(
+                filename=file,
+                error_message="File was not parsed (XML parsing failed)",
+                error_stage="parsing"
+            )
             return (None, status)
         if file is not None and file.endswith('\n'):
             file = file[:-1]
-        mydoc = MMD4SolR(filename=None, mydoc=mmd, bulkFile=file)
+        xsd_path = self.config.get('mmd-xsd-path') if self.config else None
+        metadata_id = None
+
+        def _warning_callback(message, warning_stage="validation"):
+            nonlocal metadata_id
+            if metadata_id is None:
+                metadata_id = mydoc.get_metadata_identifier()
+            self.failure_tracker.add_warning(
+                filename=file,
+                warning_message=message,
+                warning_stage=warning_stage,
+                metadata_identifier=metadata_id,
+            )
+
+        mydoc = MMD4SolR(
+            filename=None,
+            mydoc=mmd,
+            bulkFile=file,
+            xsd_path=xsd_path,
+            warning_callback=_warning_callback,
+        )
         if not mydoc.check_mmd():
             logger.error(
-                "File %s did not pass the mmd check, cannot index." % file)
+                f"File {file} did not pass the mmd check, cannot index.")
+            # Try to extract metadata_identifier even if validation failed
+            metadata_id = mydoc.get_metadata_identifier()
+            self.failure_tracker.add_failure(
+                filename=file,
+                error_message="Failed MMD validation checks",
+                error_stage="validation",
+                metadata_identifier=metadata_id
+            )
             return (None, status)
 
         # Convert mmd xml dict to solr dict
@@ -103,25 +135,54 @@ class BulkIndexer:
             tmpdoc = mydoc.tosolr()
         except Exception as e:
             logger.error(
-                "File %s could not be converted to solr document. Reason: %s" % (file, e))
+                f"File {file} could not be converted to solr document. Reason: {e}")
+            metadata_id = mydoc.get_metadata_identifier()
+            self.failure_tracker.add_failure(
+                filename=file,
+                error_message=f"Solr document conversion failed: {str(e)}",
+                error_stage="conversion",
+                metadata_identifier=metadata_id
+            )
             return (None, status)
 
         """ Do some sanity checking of the documents and skip docs with problems"""
         if tmpdoc is None:
-            logger.warning("Solr document for file %s was empty" % (file))
+            logger.warning(f"Solr document for file {file} was empty")
+            self.failure_tracker.add_failure(
+                filename=file,
+                error_message="Generated Solr document was empty",
+                error_stage="conversion"
+            )
             return (None, status)
 
         if 'id' not in tmpdoc:
             logger.warning("File %s have no id. Missing metadata_identifier?" % file)
+            self.failure_tracker.add_failure(
+                filename=file,
+                error_message="Missing 'id' field in Solr document (missing metadata_identifier)",
+                error_stage="conversion"
+            )
             return (None, status)
 
         if tmpdoc['id'] is None or tmpdoc['id'] == 'Unknown':
             logger.warning(
                 "Skipping process file %s. Metadata identifier: Unknown, or missing" % file)
+            self.failure_tracker.add_failure(
+                filename=file,
+                error_message="Metadata identifier is None or 'Unknown'",
+                error_stage="conversion",
+                metadata_identifier=tmpdoc['id']
+            )
             return (None, status)
 
         if 'temporal_extent_start_date' not in tmpdoc:
-            logger.error("Could not find start date in  %s.", file)
+            logger.error("Could not find start date in  %s." % file)
+            self.failure_tracker.add_failure(
+                filename=file,
+                error_message="Missing temporal_extent_start_date field",
+                error_stage="conversion",
+                metadata_identifier=tmpdoc.get('id')
+            )
             return (None, status)
 
         if 'related_dataset' in tmpdoc:
@@ -172,12 +233,21 @@ class BulkIndexer:
             solr_docs, status = zip(*result)
             return solr_docs, status
 
-    def add2solr(self, docs, error_queue):
-        """ Add documents to SolR"""
+    def add2solr(self, docs, file_ids=None):
+        """ Add documents to SolR
+
+        Parameters
+        ----------
+        docs : list
+            List of Solr documents to index
+        file_ids : dict, optional
+            Dict mapping document IDs to originating filenames, for failure tracking
+        """
 
         """ Start timer"""
         st = time.perf_counter()
         pst = time.process_time()
+        file_ids = file_ids or {}
 
         try:
             solr_add(docs)
@@ -188,7 +258,15 @@ class BulkIndexer:
             error_msg = "%s, PID: %s Some documents failed to be added to solr. \
                 reason: %s"%(tname, tid, e)
             logger.error(error_msg)
-            error_queue.put(str(error_msg))
+            # Track each document that failed to index
+            for doc in docs:
+                filename = file_ids.get(doc.get('id'), 'unknown')
+                self.failure_tracker.add_failure(
+                    filename=filename,
+                    error_message=f"Solr indexing failed: {str(e)}",
+                    error_stage="indexing",
+                    metadata_identifier=doc.get('id')
+                )
 
         # If success
         et = time.perf_counter()
@@ -208,14 +286,11 @@ class BulkIndexer:
         """Main bulkindexer function"""
         chunksize = self.chunksize
 
-        logger.debug("-- Got %d input files", len(filelist))
+        logger.debug("-- Got %d input file(s)", len(filelist))
         # Define some lists to keep track of the processing
         parent_ids_pending = set()  # Keep track of pending parent ids
         parent_ids_processed = set()  # Keep track parent ids already processed
         parent_ids_found = set()    # Keep track of parent ids found
-
-        # Create a queue for solr indexing errors
-        index_error_queue = queue.Queue()
 
         # keep track of batch process
         files_processed = 0
@@ -238,6 +313,7 @@ class BulkIndexer:
             ###################################################################
             """
             logger.info("---- Reading files concurrently %d ----", self.threads)
+            file_ids = {}  # Map document ID to source filename
             for (file, mmd) in concurrently(fn=load_file, inputs=files,
                                             max_concurrency=self.threads):
 
@@ -247,12 +323,16 @@ class BulkIndexer:
                 # Add the document and the status to the document-list
                 docs.append(doc)
                 statuses.append(status)
+
+                # Track which file produced this document (if valid)
+                if doc is not None and 'id' in doc:
+                    file_ids[doc['id']] = file
             """################################## THREADS FINISHED ##################"""
-            Futures.ALL_COMPLETED
             # Check if we got some children in the batch pointing to a parent id
-            parentids = set(
-                [element for element in statuses if element is not None])
-            logger.debug(parentids)
+            parentids = {
+                element for element in statuses if element is not None}
+            if parentids:
+                logger.debug(parentids)
 
             # Check if the parent(s) of the children(s) was found before.
             # If not, we add them to found.
@@ -312,7 +392,6 @@ class BulkIndexer:
                 """######################## STARTING THREADS ########################
                 # Load each file using multiple threads, and process documents as files are loaded
                 ###################################################################"""
-                thumb_impl = self.config.get('thumbnail_impl', 'legacy')
                 logger.info("---- Creating thumbnails concurrently %d ----", self.threads)
                 if self.config.get('scope', '') == 'NBS':
                     logger.info("Using NBS-specific thumbnail-logic")
@@ -321,19 +400,10 @@ class BulkIndexer:
                                                       max_concurrency=self.threads):
                         docs.remove(doc)
                         docs.append(newdoc)
-
-                elif (isinstance(self.thumbClass, dict) and thumb_impl == 'fastapi'):
-                    for (doc, newdoc) in multiprocess(fn=create_wms_thumbnail_api_wrapper,
-                                                      inputs=thumb_docs,
-                                                      max_concurrency=self.threads):
-                        docs.remove(doc)
-                        docs.append(newdoc)
                 else:
-                    for (doc, newdoc) in multiprocess(fn=create_wms_thumbnail,
-                                                      inputs=thumb_docs,
-                                                      max_concurrency=self.threads):
-                        docs.remove(doc)
-                        docs.append(newdoc)
+                    logger.warning(
+                        "Thumbnail flag enabled, but only NBS thumbnail generation is supported in this version"
+                    )
                 """################################## THREADS FINISHED ##################"""
             Futures.ALL_COMPLETED
             # Run over the list of parentids found in this chunk, and look for the parent
@@ -476,7 +546,7 @@ class BulkIndexer:
             # max threads is set in config
             logger.info("---- Indexing documents ----")
             indexthread = threading.Thread(target=self.add2solr, name="Index thread %s" % (
-                len(self.indexthreads)+1), args=(docs, index_error_queue))
+                len(self.indexthreads)+1), args=(docs, file_ids))
             indexthread.start()
             self.indexthreads.append(indexthread)
             logger.debug("Starting thread: %s", indexthread.getName())
@@ -529,9 +599,6 @@ class BulkIndexer:
         for thr in self.indexthreads:
             thr.join()
 
-        while not index_error_queue.empty():
-            logger.error(index_error_queue.get())
-
         Futures.ALL_COMPLETED
         # Store the tracking information and return back to calling script
         parent_ids_found_ = parent_ids_found.copy()
@@ -552,4 +619,5 @@ class BulkIndexer:
                 doc_ids_processed_,
                 docs_failed_,
                 docs_indexed_,
-                files_processed_)
+                files_processed_,
+                self.failure_tracker)

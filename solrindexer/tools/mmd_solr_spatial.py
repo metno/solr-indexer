@@ -33,7 +33,7 @@ def handle_solr_spatial(solr_doc, north, east, south, west, gml=None, srs=None):
     """
     # Add bbox field
     logger.info("Adding solr spatial fields and geometries")
-    logger.debug(f"North: {north}, East: {east}, South: {south}, West: {west}")
+    logger.debug(f"Got geographic rectangle north: {north}, east: {east}, south: {south}, west: {west}")
     solr_doc['bbox'] = generate_solr_envelope(north, east, south, west)
     if gml is not None:
         """

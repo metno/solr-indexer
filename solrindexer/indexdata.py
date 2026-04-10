@@ -29,9 +29,9 @@ import pysolr
 import requests
 from metvocab.mmdgroup import MMDGroup
 
-from solrindexer.thumb.thumbnail_api import create_wms_thumbnail_api
 from solrindexer.tools import (
     add_nbs_thumbnail,
+    handle_solr_spatial,
     parse_date,
     process_feature_type,
     to_solr_id,
@@ -67,9 +67,11 @@ class MMD4SolR:
         "metadata_source": "https://vocab.met.no/mmd/Metadata_Source",
     }
 
-    def __init__(self, filename=None, mydoc=None, bulkFile=None):
+    def __init__(self, filename=None, mydoc=None, bulkFile=None, xsd_path=None, warning_callback=None):
         logger.debug("Creating an instance of MMD4SolR")
         self.filename = filename if filename is not None else bulkFile
+        self.xsd_path = xsd_path
+        self.warning_callback = warning_callback
         self.root = None
 
         if filename is not None:
@@ -94,6 +96,29 @@ class MMD4SolR:
         if ascii_icons:
             return {"ok": "[OK]", "warn": "[WARN]", "fail": "[FAIL]"}[kind]
         return {"ok": "✔", "warn": "⚠", "fail": "✖"}[kind]
+
+    def _record_warning(self, msg, *args, warning_stage="validation"):
+        """Log warning and optionally forward it to a per-document collector."""
+        logger.warning(msg, *args)
+        if not callable(self.warning_callback):
+            return
+        try:
+            rendered = msg % args if args else msg
+        except Exception:
+            rendered = str(msg)
+        self.warning_callback(rendered, warning_stage)
+
+    def get_metadata_identifier(self):
+        """
+        Extract the metadata_identifier from the MMD document.
+
+        Used for failure reporting to identify documents even when validation fails.
+        Returns None if not found.
+        """
+        try:
+            return self._first_text("./mmd:metadata_identifier")
+        except Exception:
+            return None
 
     def _nodes(self, xpath):
         return self.root.xpath(xpath, namespaces=self.NSMAP)
@@ -129,7 +154,40 @@ class MMD4SolR:
             return None
         return self._text(nodes[0])
 
+    def _validate_xsd(self):
+        """Validate the MMD document against the configured XSD schema.
+
+        Does not abort processing: logs a warning listing all validation
+        errors when the document does not conform to the schema.
+        Returns True when valid (or when no schema is configured).
+        """
+        if not self.xsd_path:
+            return True
+        try:
+            schema_doc = ET.parse(self.xsd_path)
+            schema = ET.XMLSchema(schema_doc)
+        except Exception as exc:
+            self._record_warning(
+                "%s Could not load XSD from %s: %s",
+                self._icon("warn"), self.xsd_path, exc,
+            )
+            return True  # config error — do not block indexing
+
+        if schema.validate(self.root):
+            logger.debug("%s XSD validation passed for %s", self._icon("ok"), self.filename)
+            return True
+
+        errors = schema.error_log
+        self._record_warning(
+            "%s XSD validation failed for %s — %d error(s):",
+            self._icon("warn"), self.filename, len(errors),
+        )
+        for err in errors:
+            self._record_warning("line %d: %s", err.line, err.message)
+        return False  # warning-only; caller decides whether to continue
+
     def check_mmd(self):
+        self._validate_xsd()  # warn-only; does not affect required-field result
         try:
             return self._check_mmd_body()
         except Exception as exc:
@@ -138,13 +196,14 @@ class MMD4SolR:
 
     def _check_mmd_body(self):
         status_ok = True
+        logger.debug("Checking mmd file %s", self.filename)
         for tag in self.REQUIRED_ELEMENTS:
             value = self._first_text(f"./mmd:{tag}")
             if value:
-                logger.info("%s check_mmd mmd:%s", self._icon("ok"), tag)
+                logger.debug("%s check_mmd mmd:%s", self._icon("ok"), tag)
             else:
                 status_ok = False
-                logger.warning("%s check_mmd missing required mmd:%s", self._icon("fail"), tag)
+                self._record_warning("%s check_mmd missing required mmd:%s", self._icon("fail"), tag)
 
         for tag, vocab_url in self.CONTROLLED_ELEMENTS.items():
             values = self._all_text(f"./mmd:{tag}")
@@ -153,7 +212,7 @@ class MMD4SolR:
             group = MMDGroup("mmd", vocab_url)
             for value in values:
                 if not group.search(value):
-                    logger.warning(
+                    self._record_warning(
                         "%s mmd:%s has non-controlled value: %s",
                         self._icon("warn"),
                         tag,
@@ -168,7 +227,7 @@ class MMD4SolR:
                     [self._text(node) for node in keywords.xpath("./mmd:keyword", namespaces=self.NSMAP)]
                 )
         if not gcmd_values:
-            logger.warning("%s Keywords in GCMD are not available", self._icon("warn"))
+            self._record_warning("%s Keywords in GCMD are not available", self._icon("warn"))
 
         return status_ok
 
@@ -244,17 +303,24 @@ class MMD4SolR:
         extents = self._nodes("./mmd:geographic_extent")
         if not extents:
             return
-        rectangle = self._extract_rectangle(extents[0])
+        extent = extents[0]
+        rectangle = self._extract_rectangle(extent)
         if rectangle is None:
             return
+
+        rectangle_nodes = extent.xpath("./mmd:rectangle", namespaces=self.NSMAP)
+        if rectangle_nodes:
+            srs_name = rectangle_nodes[0].attrib.get("srsName") or "EPSG:4326"
+            solr_doc["geographic_extent_rectangle_srsName"] = srs_name
+            logger.debug("geographic extent srsName: %s", srs_name)
+
         north, south, east, west = rectangle
         solr_doc["geographic_extent_rectangle_north"] = north
         solr_doc["geographic_extent_rectangle_south"] = south
         solr_doc["geographic_extent_rectangle_east"] = east
         solr_doc["geographic_extent_rectangle_west"] = west
-        solr_doc["bbox"] = f"ENVELOPE({west},{east},{north},{south})"
-        if solr_doc["bbox"] != "ENVELOPE(-180.0,180.0,90.0,-90.0)":
-            solr_doc["geospatial_bounds"] = solr_doc["bbox"]
+        # Call handle_solr_spatial to add geometry_wkt, geometry_geojson, geospatial_bounds3d
+        solr_doc = handle_solr_spatial(solr_doc, north, east, south, west)
 
     def _extract_keywords(self, solr_doc):
         keyword_all = []
@@ -333,20 +399,67 @@ class MMD4SolR:
             solr_doc["personnel_json"] = json.dumps(personnel_json, ensure_ascii=False, separators=(",", ":"))
 
     def _extract_data_access(self, solr_doc):
-        urls, opendap = [], []
+        urls_by_field = {
+            "data_access_url_opendap": [],
+            "data_access_url_ogc_wms": [],
+            "data_access_url_ogc_wfs": [],
+            "data_access_url_ogc_wcs": [],
+            "data_access_url_http": [],
+            "data_access_url_odata": [],
+            "data_access_url_ftp": [],
+        }
+
+        type_to_field = {
+            "HTTP": "data_access_url_http",
+            "OPENDAP": "data_access_url_opendap",
+            "OGC WMS": "data_access_url_ogc_wms",
+            "OGC WFS": "data_access_url_ogc_wfs",
+            "OGC WCS": "data_access_url_ogc_wcs",
+            "FTP": "data_access_url_ftp",
+            "ODATA": "data_access_url_odata",
+        }
+        data_access_json = []
+
         for node in self._nodes("./mmd:data_access"):
+            access_type_raw = self._first_text_for(node, "./mmd:type")
+            description = self._first_text_for(node, "./mmd:description")
             resource = self._first_text_for(node, "./mmd:resource")
+            wms_layers = [
+                self._text(layer)
+                for layer in node.xpath("./mmd:wms_layers/mmd:wms_layer", namespaces=self.NSMAP)
+                if self._text(layer)
+            ]
+
+            data_access_entry = {
+                "type": access_type_raw,
+                "description": description,
+                "resource": resource,
+            }
+            if wms_layers:
+                data_access_entry["wms_layers"] = wms_layers
+
+            data_access_json.append(data_access_entry)
+
             if not resource:
                 continue
-            urls.append(resource)
-            access_type = (self._first_text_for(node, "./mmd:type") or "").lower()
-            if "opendap" in access_type:
-                opendap.append(resource)
-        if urls:
-            solr_doc["data_access_url"] = urls
-            solr_doc["data_access_url_http"] = urls
-        if opendap:
-            solr_doc["data_access_url_opendap"] = opendap
+
+            access_type = (access_type_raw or "").strip().upper()
+            target_field = type_to_field.get(access_type)
+            if target_field is None:
+                continue
+
+            urls_by_field[target_field].append(resource)
+
+        for field_name, values in urls_by_field.items():
+            if values:
+                solr_doc[field_name] = values
+
+        if data_access_json:
+            solr_doc["data_access_json"] = json.dumps(
+                data_access_json,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
 
     def _extract_projects(self, solr_doc):
         short_names, long_names, project_names = [], [], []
@@ -366,8 +479,8 @@ class MMD4SolR:
 
         metadata_identifier = self._first_text("./mmd:metadata_identifier")
         if metadata_identifier:
-            solr_doc["metadata_identifier"] = metadata_identifier
             solr_doc["id"] = to_solr_id(metadata_identifier)
+            solr_doc["metadata_identifier"] = metadata_identifier
 
         solr_doc["metadata_status"] = self._first_text("./mmd:metadata_status") or "Unknown"
         solr_doc["dataset_production_status"] = self._first_text("./mmd:dataset_production_status") or "Unknown"
@@ -529,44 +642,6 @@ class IndexMMD:
             status = res.json()
             return status["status"][core]["index"]
 
-    def add_thumbnail(self, url, wms_layers_mmd, thumbnail_type="wms"):
-        """Add thumbnail to SolR
-        Args:
-            type: Thumbnail type. (wms, ts)
-        Returns:
-            thumbnail: base64 string representation of image
-        """
-        logger.info("adding thumbnail for: %s" % url)
-        if thumbnail_type == "wms":
-            try:
-                thumbnail = self.thumbClass.create_wms_thumbnail(url, self.id, wms_layers_mmd)
-                return thumbnail
-            except Exception as e:
-                logger.error("Thumbnail creation from OGC WMS failed: %s", e)
-                return None
-        # time_series
-        elif thumbnail_type == "ts":
-            # create_ts_thumbnail(...)
-            thumbnail = "TMP"
-            return thumbnail
-        else:
-            logger.error(f"Invalid thumbnail type: {thumbnail_type}")
-            return None
-
-    def add_thumbnail_api(self, wmsconfig):
-        """Create thumnails using the thumbnail-generator-api"""
-
-        getCapUrl = wmsconfig.get("wms_url")
-        if getCapUrl is not None:
-            logger.debug("Got WMS url: %s. Creating thumbnail using API", getCapUrl)
-            wmsconfig.update({"id": self.id})
-            logger.debug("Creating wms with config: %s", wmsconfig)
-            response = create_wms_thumbnail_api(wmsconfig)
-            return response
-        else:
-            logger.debug("No wms url. Skipping thumbnail generation")
-            return None
-
     def index_record(self, records2ingest, addThumbnail, level=None, thumbClass=None):
         # FIXME, update the text below Øystein Godøy, METNO/FOU, 2023-03-19
         """Add thumbnail to SolR
@@ -605,7 +680,6 @@ class IndexMMD:
             if input_record["metadata_status"] == "Inactive":
                 logger.warning("This record will be set inactive...")
                 # return False
-            myfeature = None
 
             """ Handle explicit dataset level parent/children relations"""
             if level == 1:
@@ -619,62 +693,14 @@ class IndexMMD:
             """
 
             if "data_access_url_ogc_wms" in input_record and addThumbnail:
-                logger.info("Checking thumbnails...")
-                getCapUrl = input_record["data_access_url_ogc_wms"]
-                if isinstance(getCapUrl, list):
-                    getCapUrl = getCapUrl[0]
-
-                # logger.debug(type(getCapUrl))
-                # logger.debug(getCapUrl)
-                thumb_impl = self.config.get("thumbnail_impl", "legacy")
-                mmd_layers = None
-
-                if "data_access_wms_layers" in input_record:
-                    mmd_layers = input_record["data_access_wms_layers"]
-                if mmd_layers is None:
-                    mmd_layers = []
-                if not myfeature:
-                    self.thumbnail_type = "wms"
-                if isinstance(thumbClass, dict) and thumb_impl == "fastapi":
-                    logger.debug("Creating WMS thumbnail using new API using url %s", getCapUrl)
-                    thumbClass.update({"wms_url": getCapUrl})
-                    thumbClass.update({"wms_layers_mmd": mmd_layers})
-
-                    response = self.add_thumbnail_api(thumbClass)
-                    logger.debug("WMS api response: %s", response)
-                    error = response.get("error")
-                    status_code = response.get("status_code")
-                    if error is None and status_code == 200:
-                        thumbnail_url = response.get("data", None).get("thumbnail_url", None)
-                        if thumbnail_url is not None:
-                            logger.debug("Adding thumbnail_url field with value: %s", thumbnail_url)
-                            input_record.update({"thumbnail_url": thumbnail_url})
-                        # else:
-                        #     logger.warning("Could not properly generate thumbnail")
-                        #     # If WMS is not available, remove this data_access element
-                        #     # from the XML that is indexed
-                        #     del input_record['data_access_url_ogc_wms']
-                    else:
-                        logger.error("Could not generate thumbnail, reason: %s, status_code %s", error, status_code)
-                    # Store task id for later processing
-                    task_id = response.get("data", None).get("task_id", None)
-                    if task_id is not None:
-                        logger.debug("Added task_id: %s to list.", task_id)
-                        self.wms_task_list.append(task_id)
-                elif self.config.get("scope", "") == "NBS":
+                if self.config.get("scope", "") == "NBS":
                     logger.debug("Calling add_nbs_thumbnail()-function")
                     input_record = add_nbs_thumbnail(input_record, self.config)
                 else:
-                    logger.debug("Creating WMS thumbnail using legacy method using url: %s", getCapUrl)
-                    thumbnail_data = self.add_thumbnail(getCapUrl, mmd_layers)
-
-                    if thumbnail_data is None:
-                        logger.warning("Could not properly parse WMS GetCapabilities document")
-                        # If WMS is not available, remove this data_access element
-                        # from the XML that is indexed
-                        del input_record["data_access_url_ogc_wms"]
-                    else:
-                        input_record.update({"thumbnail_data": thumbnail_data})
+                    logger.warning(
+                        "Skipping thumbnail generation for record %s: only NBS scope is supported",
+                        input_record.get("id", "unknown"),
+                    )
 
             if "data_access_url_opendap" in input_record:
                 # Thumbnail of timeseries to be added
@@ -744,24 +770,6 @@ class IndexMMD:
             else:
                 logger.warning("The featureType found is a new typo...")
         return featureType
-
-    def create_thumbnail(self, doc):
-        """Add thumbnail to SolR
-        Args:
-            type: solr document
-        Returns:
-            solr document with thumbnail
-        """
-        url = str(doc["data_access_url_ogc_wms"]).strip()
-        logger.debug("adding thumbnail for: %s", url)
-        id = str(doc["id"]).strip()
-        try:
-            thumbnail_data = self.thumbClass.create_wms_thumbnail(url, id)
-            doc.update({"thumbnail_data": thumbnail_data})
-            return doc
-        except Exception as e:
-            logger.error("Thumbnail creation from OGC WMS failed: %s", e)
-            return doc
 
     def delete_level1(self, datasetid):
         """Require ID as input"""

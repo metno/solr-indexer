@@ -17,14 +17,12 @@ implied. See the License for the specific language governing
 permissions and limitations under the License.
 """
 
-import os
 import logging
+import os
 import sys
-# import http
 
-from .indexdata import IndexMMD
-from .indexdata import MMD4SolR
 from .bulkindexer import BulkIndexer
+from .indexdata import IndexMMD, MMD4SolR
 
 __package__ = "solrindexer"
 __version__ = "2.2.3"
@@ -38,72 +36,52 @@ class InfoFilter(logging.Filter):
 
 
 def _init_logging(log_obj):
-    """Call to initialise logging."""
-    # Read environment variables
-    want_level = os.environ.get("SOLRINDEXER_LOGLEVEL", "INFO")
-    log_file = os.environ.get("SOLRINDEXER_LOGFILE", None)
+    """Initialize package logging from environment variables.
 
-    # Determine log level and format
-    if hasattr(logging, want_level):
-        log_level = getattr(logging, want_level)
-    else:
+    Behavior:
+    - Reads log level from SOLRINDEXER_LOGLEVEL (default: INFO)
+    - Reads optional logfile path from SOLRINDEXER_LOGFILE
+    - Uses detailed format in DEBUG and concise format in INFO+
+    - Sends DEBUG/INFO to stdout and WARNING+ to stderr (no duplicates)
+    """
+    want_level = os.environ.get("SOLRINDEXER_LOGLEVEL", "INFO").upper()
+    log_file = os.environ.get("SOLRINDEXER_LOGFILE")
+
+    log_level = getattr(logging, want_level, logging.INFO)
+    if not hasattr(logging, want_level):
         print(
-            "Invalid logging level '%s' in environment variable SOLRINDEXER_LOGLEVEL" % want_level)
-        log_level = logging.INFO
+            f"Invalid logging level '{want_level}' in environment variable SOLRINDEXER_LOGLEVEL",
+            file=sys.stderr,
+        )
 
-    if log_level < logging.INFO:
-        msg_format = "[{asctime:}] [{thread:d}] [{threadName:s}]"
-        msg_format += " {name:>28}:{lineno:<4d} {levelname:8s} {message:}"
-    else:
-        msg_format = "[{asctime:}] [{processName:s}] [{threadName:s}] {levelname:8s} {message:}"
+    debug_fmt = "[{asctime:}]  [{processName:s}] [{threadName:s}] [{levelname:7s}] {name}:{lineno:<4d} : {message:}"
+    info_fmt = "[{asctime:}] {levelname:8s}: {message:}"
+    chosen_format = logging.Formatter(fmt=debug_fmt if log_level == logging.DEBUG else info_fmt, style="{")
 
-    log_format = logging.Formatter(fmt=msg_format, style="{")
+    # Make init idempotent (important for tests/import cycles)
+    log_obj.handlers.clear()
     log_obj.setLevel(log_level)
+    log_obj.propagate = False
 
-    # Create stream handlers
-    # h_stdout = logging.StreamHandler()
-    # h_stdout.setLevel(log_level)
-    # h_stdout.setFormatter(log_format)
-    # log_obj.addHandler(h_stdout)
-
-    if log_file is not None:
-        h_file = logging.FileHandler(log_file, encoding="utf-8")
-        h_file.setLevel(log_level)
-        h_file.setFormatter(log_format)
-        log_obj.addHandler(h_file)
-
-    # Create a handler for stdout, set its level to INFO.
-    stdout_format = "[{asctime:}] [{processName:s}] [{threadName:s}] {message:}"
-    stdout_log_format = logging.Formatter(fmt=stdout_format, style="{")
+    # stdout: DEBUG/INFO only (lets shell users redirect stdout separately)
     stdout_handler = logging.StreamHandler(sys.stdout)
-    if log_level == logging.INFO:
-        stdout_handler.setLevel(logging.INFO)
-        stdout_handler.addFilter(InfoFilter())
-        stdout_handler.setFormatter(stdout_log_format)
-    if log_level == logging.DEBUG:
-        stdout_handler.setLevel(logging.DEBUG)
-        stdout_handler.setFormatter(log_format)
-
-    # Create a handler for stderr, set its level to WARNING.
-    stderr_format = "[{asctime:}] [{thread:d}] [{threadName:s}]"
-    stderr_format += " {name:>28}:{lineno:<4d} {levelname:8s} {message:}"
-    stderr_handler = logging.StreamHandler(sys.stderr)
-    stderr_log_format = logging.Formatter(fmt=stderr_format, style="{")
-    stderr_handler.setLevel(logging.WARNING)
-    stderr_handler.setFormatter(stderr_log_format)
-
-    # Add the handlers to the logger.
+    stdout_handler.setLevel(log_level)
+    stdout_handler.setFormatter(chosen_format)
+    stdout_handler.addFilter(lambda record: record.levelno <= logging.INFO)
     log_obj.addHandler(stdout_handler)
+
+    # stderr: WARNING and above
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setLevel(logging.WARNING)
+    stderr_handler.setFormatter(chosen_format)
     log_obj.addHandler(stderr_handler)
 
-    # if log_level == logging.DEBUG:
-    # http.client.HTTPConnection.debuglevel = 1
-    # http.client.HTTPSConnection.debuglevel = 1
-    # Set logger level to the lowest level, this level is used to determine
-    # whether a incoming message should be processed.
-    # logger.setLevel(logging.INFO)
-
-    return
+    # Optional logfile: all enabled levels
+    if log_file:
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        file_handler.setLevel(log_level)
+        file_handler.setFormatter(chosen_format)
+        log_obj.addHandler(file_handler)
 
 
 # Logging Setup

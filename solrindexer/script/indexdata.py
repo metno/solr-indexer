@@ -12,7 +12,6 @@ from requests.auth import HTTPBasicAuth
 from solrindexer.bulkindexer import BulkIndexer
 from solrindexer.indexdata import IndexMMD
 from solrindexer.script.searchindex import parse_cfg
-from solrindexer.thumb.thumbnail import WMSThumbNail
 from solrindexer.tools import initSolr, solr_ping, to_solr_id
 
 logger = logging.getLogger(__name__)
@@ -100,31 +99,11 @@ def _resolve_input_files(args):
 def _resolve_thumbnail_flags(args, cfg):
     if args.no_thumbnail:
         return False
-    if args.thumbnail:
-        return True
-    return bool(cfg.get("tflg", False))
-
-
-def _build_thumbnail_generator(cfg, enabled):
-    if not enabled:
-        return None
-
-    if cfg.get("scope") == "NBS":
-        return None
-
-    return WMSThumbNail(
-        wms_layer=cfg.get("wms-thumbnail-layer"),
-        wms_style=cfg.get("wms-thumbnail-style"),
-        wms_zoom_level=cfg.get("wms-thumbnail-zoom-level", 0),
-        wms_timeout=cfg.get("wms-timeout", 120),
-        add_coastlines=cfg.get("wms-thumbnail-coastlines"),
-        projection=cfg.get("wms-thumbnail-projection"),
-        thumbnail_type=cfg.get("thumbnail_type"),
-        thumbnail_extent=cfg.get("wms-thumbnail-extent"),
-        thumbnail_api_host=cfg.get("thumbnail_api_host"),
-        thumbnail_api_endpoint=cfg.get("thumbnail_api_endpoint"),
-        thumbnail_impl=cfg.get("thumbnail_impl", "legacy"),
-    )
+    enabled = bool(args.thumbnail or cfg.get("tflg", False))
+    if enabled and cfg.get("scope") != "NBS":
+        logger.warning("Thumbnail generation is only supported for NBS scope in this version")
+        return False
+    return enabled
 
 
 def main():
@@ -169,7 +148,8 @@ def main():
         chunksize = args.chunksize if args.chunksize is not None else int(cfg.get("batch-size", DEFAULT_CHUNKSIZE))
 
         thumbnails_enabled = _resolve_thumbnail_flags(args, cfg)
-        thumb_class = _build_thumbnail_generator(cfg, thumbnails_enabled)
+        # Thumbnail generation is handled only for NBS scope.
+        thumb_class = None
 
         logger.info(
             "Starting indexing with files=%d threshold=%d workers=%d chunksize=%d thumbnails=%s",
@@ -190,7 +170,12 @@ def main():
             thumbClass=thumb_class,
             config=cfg,
         )
-        bulk.bulkindex(files)
+        result = bulk.bulkindex(files)
+
+        # Extract failure tracker from result tuple (8th element)
+        if result and len(result) >= 8:
+            failure_tracker = result[7]
+            failure_tracker.log_summary()
 
         if cfg.get("end-solr-commit", False):
             indexer = IndexMMD(solr_url, args.always_commit, authentication, cfg)

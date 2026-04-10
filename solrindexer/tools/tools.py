@@ -31,12 +31,7 @@ import dateutil.parser
 import netCDF4
 import pysolr
 import requests
-import shapely
 import validators
-from shapely import wkt
-from shapely.ops import transform
-
-from solrindexer.thumb.thumbnail_api import create_wms_thumbnail_api
 
 # Logging Setup
 logger = logging.getLogger(__name__)
@@ -48,6 +43,16 @@ IDREPLS = [':', '/', '.']
 DATETIME_REGEX = re.compile(
     r"^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})T(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})(\.\d+)?Z$"  # NOQA: E501
 )
+
+# Canonical feature type values keyed by normalized lowercase input.
+validfeaturetypes = {
+    'point': 'point',
+    'timeseries': 'timeSeries',
+    'trajectory': 'trajectory',
+    'profile': 'profile',
+    'timeseriesprofile': 'timeSeriesProfile',
+    'trajectoryprofile': 'trajectoryProfile',
+}
 
 # Global thumb class
 global thumbClass
@@ -164,12 +169,11 @@ def parse_date(_date):
 
     date = str(_date).strip()
 
-    logger.debug("parsing date: %s", date)
     test = checkDateFormat(date)
     if test:
-        logger.debug("date already solr compatible.")
         return date
     elif not test:
+        logger.debug("Parsing date format %s to Solr date format", date)
         try:
             parsed_date = dateutil.parser.parse(date)
             date = parsed_date.strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -180,10 +184,10 @@ def parse_date(_date):
         logger.debug(date)
         test = checkDateFormat(date)
         if test:
-            logger.debug("parsed solr date: %s", date)
+            logger.debug("Parsed Solr date: %s", date)
             return date
         else:
-            logger.debug("dateformat not solr compatible. fixing...")
+            logger.debug("Date util failed to parse date %s. fixing...", date)
             if re.search(r'\+\d\d:\d\dZ$', date) is not None:
                 date = re.sub(r'\+\d\d:\d\d', '', date)
                 try:
@@ -257,191 +261,85 @@ def flatten(mylist):
     return [item for sublist in mylist for item in sublist]
 
 
+def _check_opendap_url(tmpdoc):
+    """Get first OPeNDAP URL as string, or None when missing."""
+    dapurl = tmpdoc.get('data_access_url_opendap')
+    if isinstance(dapurl, list):
+        dapurl = dapurl[0] if dapurl else None
+    if dapurl is None:
+        return None
+    if not validators.url(dapurl):
+        logger.warning("Opendap url not valid: %s", dapurl)
+        return None
+
+    return str(dapurl).strip()
+
+
+def _fix_nersc_url(dapurl):
+    """Apply HTTPS fix for legacy NERSC THREDDS URLs."""
+    if dapurl.startswith("http://thredds.nersc"):
+        return dapurl.replace("http:", "https:", 1)
+    return dapurl
+
+
+def _extract_feature_type(dapurl):
+    """Open remote dataset and return extracted featureType attribute."""
+    ds = None
+    try:
+        ds = netCDF4.Dataset(dapurl, 'r')
+        return ds.getncattr('featureType')
+    except AttributeError:
+        return None
+    except Exception as e:
+        logger.error("Something failed extracting featureType from %s. Reason: %s", dapurl, e)
+        return None
+    finally:
+        if ds is not None:
+            logger.debug("Closing netCDF file.")
+            ds.close()
+
+
+def _canonical_feature_type(feature_type):
+    """Map extracted feature type to canonical case-sensitive value."""
+    if feature_type is None:
+        return None
+    return validfeaturetypes.get(str(feature_type).strip().lower())
+
+
 def process_feature_type(tmpdoc):
     """
     Look for feature type and update document
     """
-    dapurl = None
     tmpdoc_ = tmpdoc
-    metadata_status = tmpdoc.get('metadata_status', 'unknown')
-    if metadata_status == 'Inactive' or metadata_status == 'inactive':
+    metadata_status = str(tmpdoc.get('metadata_status', 'unknown')).lower()
+    if metadata_status == 'inactive':
         return tmpdoc
-    if 'data_access_url_opendap' in tmpdoc:
-        dapurl = tmpdoc['data_access_url_opendap']
-        if (isinstance(dapurl, list)):
-            dapurl = dapurl[0]
-        dapurl = str(dapurl).strip()
-        valid = validators.url(dapurl)
-        # Special fix for nersc.
-        if dapurl.startswith("http://thredds.nersc"):
-            dapurl.replace("http:", "https:")
 
-        if not valid:
-            logger.warn("Opendap url not valid: %s", dapurl)
-            return tmpdoc_
-
-    # if 'storage_information_file_location' in tmpdoc:
-    #     fileloc = str(tmpdoc['storage_information_file_location']).strip()
-    #     if os.path.isfile(fileloc):
-    #         dapurl = fileloc
-    #         logger.debug("Setting dapurl to read from lustre location: %s", dapurl)
-    if dapurl is not None:
-        logger.debug("Trying to open netCDF file: %s", dapurl)
-        # lock.acquire()
-        ds = None
-        try:
-            ds = netCDF4.Dataset(dapurl, 'r')
-        except Exception as e:
-            logger.error("Something failed reading netcdf %s. Reason: %s", dapurl, e)
-            if ds is not None:
-                ds.close()
-            # Set to inactive if file not found.
-            # if str(e).ststartswith('[Errno -90] NetCDF: file not found:'):
-            #     logger.info("Setting dataset %s to Inactive", tmpdoc_['metadata_identifier'])
-            #     tmpdoc_.update({"metadata_status": "Inactive"})
-            return tmpdoc_
-
-        # Try to get the global attribute featureType
-        featureType = None
-        try:
-            featureType = ds.getncattr('featureType')
-        except AttributeError:
-            pass
-        except Exception as e:
-            logger.error("Something failed extracting featureType: %s", str(e))
-            ds.close()
-            # lock.release()
-            return tmpdoc_
-
-        if featureType is not None:
-            logger.debug("Got featuretype: %s", featureType)
-            validfeaturetypes = {'point': 'point', 'timeseries': 'timeSeries',
-                                 'trajectory': 'trajectory', 'profile': 'profile',
-                                 'timeseriesprofile': 'timeSeriesProfile',
-                                 'trajectoryprofile': 'trajectoryProfile'}
-
-            if featureType not in validfeaturetypes.values():
-                logger.warning(
-                    "The featureType found - %s - is not valid", featureType)
-                logger.warning("Fixing this locally")
-                if featureType.lower() in validfeaturetypes.keys():
-                    featureType = validfeaturetypes[featureType.lower()]
-                else:
-                    print("The featureType cannot be mapped to any valid value")
-                    featureType = None
-
-            if featureType is not None:
-                logger.debug('feature_type found: %s', featureType)
-                tmpdoc_.update({'feature_type': featureType})
-            else:
-                logger.debug('Neither gridded nor discrete sampling \
-                            geometry found in this record...')
-
-        polygon = None
-        try:
-            polygon = ds.getncattr('geospatial_bounds')
-        except AttributeError:
-            pass
-        except Exception as e:
-            logger.error("Something failed extracting geospatial_bounds: %s", str(e))
-            ds.close()
-            # lock.release()
-            return tmpdoc_
-            # Check if we have plogon.
-
-        if polygon is not None:
-            logger.debug("Reading geospatial_bounds")
-            try:
-                polygon_ = wkt.loads(polygon)
-            except Exception as e:
-                logger.warning("Could not parse geospatial_bounds: %s, Reason: %s", polygon, e)
-                ds.close()
-                return tmpdoc_
-            geom_type = polygon_.geom_type
-            logger.debug("Got geospatial type %s with bounds: %s", geom_type, polygon)
-            if geom_type == 'Point':
-                point_ = polygon_
-                point = polygon_.wkt
-                if shapely.has_z(point_):
-                    point_ = shapely.force_2d(point_)
-                    point = point_.wkt
-                if 'polygon_rpt' in tmpdoc_:
-                    parsed_point = wkt.loads(tmpdoc_['polygon_rpt'])
-                    if not parsed_point.equals(point_):
-                        point = transform(flip, point_).wkt
-                tmpdoc_.update({'geospatial_bounds': point})
-
-            elif geom_type == 'MultiPoint':
-                mpoint_ = polygon_
-                mpoint = polygon_.wkt
-                if shapely.has_z(polygon_):
-                    mpoint_ = shapely.force_2d(polygon_)
-                    mpoint = mpoint_.wkt
-                mpoint = transform(flip, mpoint_).wkt
-                tmpdoc_.update({'geospatial_bounds': mpoint})
-
-            else:
-                try:
-                    polygon = transform(flip, polygon_)
-                except Exception:
-                    logger.warning("Could not transform incoming geospatial bounds: %s", polygon_)
-                    pass
-                else:
-                    tmpdoc_.update({'geospatial_bounds': polygon.wkt})
-                    tmpdoc_.update({'polygon_rpt': polygon.wkt})
-
-        bounds_crs = None
-        try:
-            bounds_crs = ds.getncattr('geospatial_bounds_crs')
-        except AttributeError:
-            pass
-        except Exception as e:
-            logger.error("Something failed extracting geospatial_bounds_crs: %s", str(e))
-            ds.close()
-            # lock.release()
-            return tmpdoc_
-            # Check if we have plogon.
-        if bounds_crs is not None:
-            crs = str(bounds_crs).strip()
-            logger.debug("Got geospatial bounds CRS: %s", crs)
-            tmpdoc_.update({'geographic_extent_polygon_srsName': crs})
-
-        logger.debug("Closing netCDF file.")
-        ds.close()
-        # lock.release()
+    dapurl = _check_opendap_url(tmpdoc)
+    if dapurl is None:
         return tmpdoc_
 
+    # Special fix for NERSC.
+    dapurl = _fix_nersc_url(dapurl)
+
+    logger.debug("Trying to open netCDF file: %s", dapurl)
+    feature_type = _extract_feature_type(dapurl)
+    if feature_type is None:
+        return tmpdoc_
+
+    canonical_feature_type = _canonical_feature_type(feature_type)
+    if canonical_feature_type is None:
+        logger.warning("The featureType found - %s - is not valid", feature_type)
+        return tmpdoc_
+
+    if str(feature_type) != canonical_feature_type:
+        logger.warning("Fixing featureType locally: %s -> %s", feature_type, canonical_feature_type)
+
+    logger.debug('feature_type found: %s', canonical_feature_type)
+    tmpdoc_.update({'feature_type': canonical_feature_type})
     return tmpdoc_
 
-
-def create_wms_thumbnail(doc):
-    """ Add thumbnail to SolR
-        Args:
-            type: solr document
-        Returns:
-            solr document with thumbnail
-    """
-    # global thumbClass
-    doc_ = doc.copy()
-    ogc_wms_url = doc['data_access_url_ogc_wms']
-    if isinstance(ogc_wms_url, list):
-        ogc_wms_url = ogc_wms_url[0]
-    url = str(ogc_wms_url).strip()
-    id = str(doc['id']).strip()
-    logger.debug("adding thumbnail for %s with url: %s", id, url)
-    wms_layers_mmd = []
-    if 'data_access_wms_layers' in doc:
-        wms_layers_mmd = doc['data_access_wms_layers']
-        logger.debug("wms_layers_mmd is: %s", wms_layers_mmd)
-    try:
-        thumbnail_data = thumbClass.create_wms_thumbnail(url, id, wms_layers_mmd)
-        doc_.update({'thumbnail_data': thumbnail_data})
-    except Exception as e:
-        logger.error("Thumbnail creation from OGC WMS failed: %s, id: %s", e, id)
-        # raise Exception("Thumbnail creation from OGC WMS failed: %s, id: %s", e, id)
-        pass
-    finally:
-        return doc_
+    return tmpdoc_
 
 
 def add_nbs_thumbnail(doc, config):
@@ -542,48 +440,6 @@ def add_nbs_thumbnail_bulk(doc):
                 else:
                     logger.error("NBS thumbnail not found: %s", thumb_path)
     return doc
-
-
-def create_wms_thumbnail_api_wrapper(doc):
-    """ Add thumbnail to SolR using API wms generator
-        Args:
-            type: solr document
-        Returns:
-            solr document with thumbnail
-    """
-    # global thumbClass
-    wmsconfig = thumbClass.copy()
-    doc_ = doc.copy()
-    url = str(doc['data_access_url_ogc_wms']).strip()
-    id = str(doc['id']).strip()
-    logger.debug("adding thumbnail for %s with url: %s", id, url)
-    wms_layers_mmd = []
-    if 'data_access_wms_layers' in doc:
-        wms_layers_mmd = doc['data_access_wms_layers']
-        logger.debug("wms_layers_mmd is: %s", wms_layers_mmd)
-    wmsconfig.update({'wms_url': url})
-    wmsconfig.update({'wms_layers_mmd': wms_layers_mmd})
-    wmsconfig.update({"id": id})
-    logger.debug("Calling WMS ThumbnailAPI with settings: %s", wmsconfig)
-    response = create_wms_thumbnail_api(wmsconfig)
-    logger.debug("WMS api response: %s", response)
-    error = response.get('error')
-    status_code = response.get('status_code')
-    if error is None and status_code == 200:
-        thumbnail_url = response.get("data", None).get("thumbnail_url", None)
-        if thumbnail_url is not None:
-            logger.debug("Adding thumbnail_url field with value: %s",
-                         thumbnail_url)
-            doc_.update({'thumbnail_url': thumbnail_url})
-        else:
-            logger.warning("Could not properly generate thumbnail")
-        #     # If WMS is not available, remove this data_access element
-        #     # from the XML that is indexed
-        #     del input_record['data_access_url_ogc_wms']
-    else:
-        logger.error("Could not generate thumbnail, reason: %s, status_code %s",
-                     error, status_code)
-    return doc_
 
 
 def main():

@@ -22,8 +22,6 @@ from .tools import (
            add_nbs_thumbnail,
            add_nbs_thumbnail_bulk,
            checkDateFormat,
-           create_wms_thumbnail,
-           create_wms_thumbnail_api_wrapper,
            find_xml_files,
            flatten,
            flip,
@@ -48,7 +46,7 @@ __date__ = "2024-01-23"
 __all__ = ["flip", "rewrap", "rewrap_to_360", "to_solr_id",
            "parse_date", "getZones", "checkDateFormat",
            "getListOfFiles", "flatten", "process_feature_type",
-           "initThumb", "create_wms_thumbnail", "initSolr",
+           "initThumb", "initSolr",
            "get_dataset", "solr_add", "solr_commit", "handle_solr_spatial",
-           "create_wms_thumbnail_api_wrapper", "find_xml_files",
+           "find_xml_files",
            "solr_ping", "add_nbs_thumbnail", "add_nbs_thumbnail_bulk"]

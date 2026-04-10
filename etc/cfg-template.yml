@@ -5,7 +5,7 @@
 #Logging (optional)
 logfile: <YOUR LOGFILE>
 
-# Solr connection information (Required)  
+# Solr connection information (Required)
 solrserver: <YOUR SolR Server>
 solrcore: <YOUR SolR Core>
 
@@ -14,29 +14,17 @@ solrcore: <YOUR SolR Core>
 #auth-basic-username: <USERNAME>
 #auth-basic-password: <PASSWORD>
 
-
-# Valid map projections include Mercator, PlateCarree, PolarStereographic
-# (Optional) 
-wms-thumbnail-projection: Mercator
-wms-timeout: 480
-
 # Bulkindexer settings (optional)
 batch-size: 250
 #Worker processes
 workers: 3
 threads: 4
 
-#Thumbnail implementation. [legacy, fastapi] (optional, legacy will be default if not specified)
-# legacy: stores the generated thumbnail in the solr document 
-#         in the binary field thumbnail as base64 encoded string
-# fastapi: calls thumbnail-generator api, and get an url for the thumbnail, stored in thumbnail_url field in solr.
-#          the thumbnail is then served by nginx from that url.
-#thumbnail_impl: fastapi
-#thumbnail_api_host: http://localhost:8000
-#thumbnail_api_endpoint: /api/v1/thumbnail/wms/generate_thumbnail
-
+# Path to the MMD XSD schema file for optional pre-indexing validation (optional)
+# If set, each MMD document is validated against the schema before indexing.
+# Validation failures are logged as warnings and do not stop indexing.
+#mmd-xsd-path: /path/to/mmd/xsd/mmd.xsd
 
 # NBS specific thumnail configuration (optional)
 #nbs-thumbnails-base-path: <Base file path where to find NBS products and thumbnail.png>
-#nbs-thumbnails-base-url: <Base url from where the thumbnails will be served> 
-
+#nbs-thumbnails-base-url: <Base url from where the thumbnails will be served>
