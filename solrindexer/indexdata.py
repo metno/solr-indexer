@@ -17,6 +17,7 @@ implied. See the License for the specific language governing
 permissions and limitations under the License.
 """
 
+import contextlib
 import html
 import json
 import logging
@@ -474,6 +475,138 @@ class MMD4SolR:
             solr_doc["project_long_name"] = long_names
             solr_doc["project_name"] = project_names
 
+    def _extract_platform(self, solr_doc):
+        acc = {
+            "platform_short_name": [],
+            "platform_long_name": [],
+            "platform_name": [],
+            "platform_resource": [],
+            "platform_orbit_relative": [],
+            "platform_orbit_absolute": [],
+            "platform_orbit_direction": [],
+            "platform_instrument_short_name": [],
+            "platform_instrument_long_name": [],
+            "platform_instrument_name": [],
+            "platform_instrument_resource": [],
+            "platform_instrument_mode": [],
+            "platform_instrument_polarisation": [],
+            "platform_instrument_product_type": [],
+            "platform_ancillary_cloud_coverage": [],
+            "platform_ancillary_scene_coverage": [],
+            "platform_ancillary_timeliness": [],
+        }
+        platform_json = []
+
+        for node in self._nodes("./mmd:platform"):
+            short = self._first_text_for(node, "./mmd:short_name")
+            long = self._first_text_for(node, "./mmd:long_name")
+            resource = self._first_text_for(node, "./mmd:resource")
+            orbit_rel_raw = self._first_text_for(node, "./mmd:orbit_relative")
+            orbit_abs_raw = self._first_text_for(node, "./mmd:orbit_absolute")
+            orbit_dir = self._first_text_for(node, "./mmd:orbit_direction")
+
+            if short:
+                acc["platform_short_name"].append(short)
+            if long:
+                acc["platform_long_name"].append(long)
+            if short and long:
+                acc["platform_name"].append(f"{short}: {long}")
+            if resource:
+                acc["platform_resource"].append(resource)
+            if orbit_rel_raw:
+                with contextlib.suppress(ValueError):
+                    acc["platform_orbit_relative"].append(int(orbit_rel_raw))
+            if orbit_abs_raw:
+                with contextlib.suppress(ValueError):
+                    acc["platform_orbit_absolute"].append(int(orbit_abs_raw))
+            if orbit_dir:
+                acc["platform_orbit_direction"].append(orbit_dir)
+
+            platform_entry = {}
+            if short:
+                platform_entry["short_name"] = short
+            if long:
+                platform_entry["long_name"] = long
+            if resource:
+                platform_entry["resource"] = resource
+            if orbit_dir:
+                platform_entry["orbit_direction"] = orbit_dir
+            if orbit_rel_raw:
+                platform_entry["orbit_relative"] = orbit_rel_raw
+            if orbit_abs_raw:
+                platform_entry["orbit_absolute"] = orbit_abs_raw
+
+            instrument_nodes = node.xpath("./mmd:instrument", namespaces=self.NSMAP)
+            if instrument_nodes:
+                inst = instrument_nodes[0]
+                inst_short = self._first_text_for(inst, "./mmd:short_name")
+                inst_long = self._first_text_for(inst, "./mmd:long_name")
+                inst_resource = self._first_text_for(inst, "./mmd:resource")
+                inst_mode = self._first_text_for(inst, "./mmd:mode")
+                inst_pol = self._first_text_for(inst, "./mmd:polarisation")
+                inst_prod = self._first_text_for(inst, "./mmd:product_type")
+
+                if inst_short:
+                    acc["platform_instrument_short_name"].append(inst_short)
+                if inst_long:
+                    acc["platform_instrument_long_name"].append(inst_long)
+                if inst_short and inst_long:
+                    acc["platform_instrument_name"].append(f"{inst_short}: {inst_long}")
+                if inst_resource:
+                    acc["platform_instrument_resource"].append(inst_resource)
+                if inst_mode:
+                    acc["platform_instrument_mode"].append(inst_mode)
+                if inst_pol:
+                    acc["platform_instrument_polarisation"].append(inst_pol)
+                if inst_prod:
+                    acc["platform_instrument_product_type"].append(inst_prod)
+
+                inst_entry = {k: v for k, v in {
+                    "short_name": inst_short,
+                    "long_name": inst_long,
+                    "resource": inst_resource,
+                    "mode": inst_mode,
+                    "polarisation": inst_pol,
+                    "product_type": inst_prod,
+                }.items() if v}
+                if inst_entry:
+                    platform_entry["instrument"] = inst_entry
+
+            ancillary_nodes = node.xpath("./mmd:ancillary", namespaces=self.NSMAP)
+            if ancillary_nodes:
+                anc = ancillary_nodes[0]
+                cloud_raw = self._first_text_for(anc, "./mmd:cloud_coverage")
+                scene_raw = self._first_text_for(anc, "./mmd:scene_coverage")
+                timeliness = self._first_text_for(anc, "./mmd:timeliness")
+
+                if cloud_raw:
+                    with contextlib.suppress(ValueError):
+                        acc["platform_ancillary_cloud_coverage"].append(float(cloud_raw))
+                if scene_raw:
+                    with contextlib.suppress(ValueError):
+                        acc["platform_ancillary_scene_coverage"].append(float(scene_raw))
+                if timeliness:
+                    acc["platform_ancillary_timeliness"].append(timeliness)
+
+                anc_entry = {k: v for k, v in {
+                    "cloud_coverage": cloud_raw,
+                    "scene_coverage": scene_raw,
+                    "timeliness": timeliness,
+                }.items() if v}
+                if anc_entry:
+                    platform_entry["ancillary"] = anc_entry
+
+            platform_json.append(platform_entry)
+
+        for field, values in acc.items():
+            if values:
+                solr_doc[field] = values
+
+        if platform_json:
+            solr_doc["platform_json"] = json.dumps(
+                platform_json, ensure_ascii=False, separators=(",", ":")
+            )
+
     def tosolr(self):
         solr_doc = {}
 
@@ -529,6 +662,7 @@ class MMD4SolR:
         self._extract_personnel(solr_doc)
         self._extract_data_access(solr_doc)
         self._extract_projects(solr_doc)
+        self._extract_platform(solr_doc)
 
         iso_topic_category = self._all_text("./mmd:iso_topic_category")
         if iso_topic_category:
