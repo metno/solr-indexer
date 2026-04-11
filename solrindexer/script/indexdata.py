@@ -16,7 +16,6 @@ from solrindexer.tools import initSolr, solr_ping, to_solr_id
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_BULK_THRESHOLD = 500
 DEFAULT_THREADS = 20
 DEFAULT_CHUNKSIZE = 2500
 
@@ -35,12 +34,6 @@ def parse_arguments():
         help="Metadata identifier of existing Solr document to mark as parent",
     )
 
-    parser.add_argument(
-        "--bulk-threshold",
-        type=int,
-        default=None,
-        help="Use single-worker mode at or below this file count",
-    )
     parser.add_argument("--threads", type=int, default=None, help="Number of worker threads")
     parser.add_argument("--chunksize", type=int, default=None, help="Batch size for bulk indexing")
 
@@ -109,7 +102,11 @@ def _resolve_thumbnail_flags(args, cfg):
 def main():
     try:
         args = parse_arguments()
-        cfg = parse_cfg(args.cfgfile)
+        try:
+            cfg = parse_cfg(args.cfgfile)
+        except (FileNotFoundError, ValueError) as e:
+            logger.error("%s", str(e))
+            sys.exit(1)
 
         if args.nbs:
             cfg["scope"] = "NBS"
@@ -125,6 +122,7 @@ def main():
             pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=authentication),
             authentication,
         )
+        logger.info("Solr connection establised: %s", solr_url)
         solr_ping()
 
         # Keep parent marking as a focused operation.
@@ -138,13 +136,14 @@ def main():
         if not files:
             raise ValueError("No input files found")
 
-        threshold = (
-            args.bulk_threshold
-            if args.bulk_threshold is not None
-            else int(cfg.get("bulk-file-threshold", DEFAULT_BULK_THRESHOLD))
-        )
         configured_threads = args.threads if args.threads is not None else int(cfg.get("threads", DEFAULT_THREADS))
-        workers = 1 if len(files) <= threshold else configured_threads
+        # Use single worker for single file input, multiple workers for batch inputs
+        if args.input_file:
+            workers = 1
+            logger.debug("Single file input: using 1 worker (sequential processing)")
+        else:
+            workers = configured_threads
+            logger.debug(f"Multiple file input: using {workers} workers (concurrent processing)")
         chunksize = args.chunksize if args.chunksize is not None else int(cfg.get("batch-size", DEFAULT_CHUNKSIZE))
 
         thumbnails_enabled = _resolve_thumbnail_flags(args, cfg)
@@ -152,9 +151,8 @@ def main():
         thumb_class = None
 
         logger.info(
-            "Starting indexing with files=%d threshold=%d workers=%d chunksize=%d thumbnails=%s",
+            "Starting indexing with files=%d workers=%d chunksize=%d thumbnails=%s",
             len(files),
-            threshold,
             workers,
             chunksize,
             thumbnails_enabled,
@@ -184,8 +182,40 @@ def main():
 
         logger.info("Done")
     except Exception as exc:
-        logger.error("Indexing failed: %s", exc)
+        # args may not always be defined if exception occurs during arg parsing
+        # but it should be defined for most cases since parse_arguments is first
+        error_msg = _format_error_message(exc, args if 'args' in locals() else None)
+        logger.error("%s", error_msg)
         sys.exit(1)
+
+
+def _format_error_message(exc, args):
+    """Format error messages with context for common failures."""
+    exc_type = type(exc).__name__
+    exc_str = str(exc)
+
+    if isinstance(exc, FileNotFoundError):
+        # Check if it's an input file error
+        if args and args.input_file and args.input_file in exc_str:
+            return f"Input file not found: {args.input_file}\nPlease check that the file exists and the path is correct."
+        if args and args.list_file and args.list_file in exc_str:
+            return f"List file not found: {args.list_file}\nPlease check that the file exists and the path is correct."
+        if args and args.directory and args.directory in exc_str:
+            return f"Directory not found: {args.directory}\nPlease check that the directory exists and the path is correct."
+        # Generic file not found
+        return f"File not found: {exc_str}\nPlease check that the path is correct and the file exists."
+
+    if isinstance(exc, ValueError):
+        return f"Configuration error: {exc_str}"
+
+    if isinstance(exc, ConnectionError):
+        return f"Failed to connect to Solr:\n{exc_str}\nPlease check the Solr server URL in the configuration."
+
+    if "Connection refused" in exc_str or "Failed to connect" in exc_str:
+        return f"Cannot connect to Solr server:\n{exc_str}\nPlease ensure the Solr server is running and accessible."
+
+    # Generic error with type info
+    return f"Indexing failed ({exc_type}): {exc_str}"
 
 
 def _main():  # pragma: no cover

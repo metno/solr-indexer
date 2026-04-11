@@ -23,13 +23,14 @@ AUTHOR:
 
 """
 
-import os
 import argparse
-import pysolr
-import yaml
-import sys
 import json
 import logging
+import os
+import sys
+
+import pysolr
+import yaml
 from dotenv import load_dotenv
 from requests.auth import HTTPBasicAuth
 
@@ -37,6 +38,32 @@ logger = logging.getLogger(__name__)
 if os.getenv("SOLRINDEXER_LOGLEVEL", "INFO") == "DEBUG":
     logger.setLevel(logging.DEBUG)
     logger.debug("Loglevel was set to DEBUG")
+
+
+SOLR_FL = "*,personnel_json:[json],data_access_json:[json],platform_json:[json],geometry_geojson:[json],related_information_json:[json],last_metadata_update_json:[json]"
+
+
+def _print_pretty_docs(docs):
+    """Print docs using rich JSON if available, otherwise plain pretty JSON."""
+    if not docs:
+        return
+
+    fields_to_remove = {"_version_", "_root_", "mmd_xml_file"}
+    filtered_docs = []
+    for doc in docs:
+        filtered_doc = {k: v for k, v in doc.items()
+                        if k not in fields_to_remove and not k.endswith("_facet")}
+        filtered_docs.append(filtered_doc)
+
+    pretty = json.dumps(filtered_docs, ensure_ascii=False, indent=2)
+    try:
+        from rich import print_json as rich_print_json
+
+        rich_print_json(pretty)
+        return
+    except ImportError:
+        pass
+    print(pretty)
 
 
 def parse_arguments():
@@ -60,10 +87,21 @@ def parse_arguments():
 
 
 def parse_cfg(cfgfile):
-    # Read config file
+    """Parse configuration file. Raises FileNotFoundError with helpful message if config file does not exist."""
     logger.info("Reading configuration: %s", cfgfile)
-    with open(cfgfile, 'r') as ymlfile:
-        cfgstr = yaml.full_load(ymlfile)
+    try:
+        with open(cfgfile) as ymlfile:
+            cfgstr = yaml.full_load(ymlfile)
+    except FileNotFoundError as e:
+        raise FileNotFoundError(
+            f"Configuration file not found: {cfgfile}\n"
+            f"Please check that the path is correct and the file exists."
+        ) from e
+    except yaml.YAMLError as e:
+        raise ValueError(
+            f"Failed to parse configuration file '{cfgfile}': {str(e)}\n"
+            f"Please check that the file is valid YAML."
+        ) from e
 
     return cfgstr
 
@@ -109,20 +147,14 @@ class IndexMMD:
     def search(self, myargs):
         """ Require Id as input """
         results = None
-        qString, sep, resQ = str(myargs.string).partition(':')
-        logger.debug("Input Query string: %s", qString)
-        if sep == '':
-            qString = 'full_text:' + qString
-            logger.debug("separator: %s", sep)
-        elif sep == ':':
-            qString = qString + sep + resQ
-        else:
-            logger.error("%s is not a valid search string", myargs.string)
-        logger.debug("Result query string: %s", resQ)
-        # args = ast.literal_eval()
+        q_string = str(myargs.string).strip()
+        if not q_string:
+            logger.error("Search string cannot be empty")
+            return None
+
         try:
-            logger.info("Searching with q=%s", qString)
-            results = self.solrc.search(qString, **{'wt': 'python', 'rows': 10})
+            logger.info("Searching with q=%s", q_string)
+            results = self.solrc.search(q_string, **{"wt": "json", "rows": 10, "fl": SOLR_FL})
         except Exception as e:
             logger.info("Something failed: %s", str(e))
 
@@ -139,7 +171,11 @@ def main():
         return 1
 
     #  Parse configuration file
-    cfg = parse_cfg(args.cfgfile)
+    try:
+        cfg = parse_cfg(args.cfgfile)
+    except (FileNotFoundError, ValueError) as e:
+        logger.error("%s", str(e))
+        return 1
 
     SolrServer = cfg['solrserver']
     myCore = cfg['solrcore']
@@ -195,12 +231,15 @@ def main():
         logger.info('Found %d matches', myresults.hits)
         logger.info('Looping through matches:')
         i = 0
+        docs = []
         for doc in myresults:
             logger.info('%d : %s', i, doc['id'])
+            docs.append(doc)
             deleteid = doc['id']
             if args.delete:
                 mysolr.delete_item(deleteid, commit=None)
             i += 1
+        _print_pretty_docs(docs)
         logger.info('Found %d matches',  myresults.hits)
     else:
         logger.info("Search contained no results")
@@ -212,9 +251,11 @@ def _main():  # pragma: no cover
     try:
         main()  # entry point in setup.cfg
     except ValueError as e:
-        logger.info(e)
+        logger.error("%s", str(e))
     except AttributeError as e:
-        logger.info(e)
+        logger.error("%s", str(e))
+    except FileNotFoundError as e:
+        logger.error("%s", str(e))
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -96,7 +96,7 @@ class MMD4SolR:
         ascii_icons = os.getenv("SOLRINDEXER_ASCII_ICONS", "0") == "1"
         if ascii_icons:
             return {"ok": "[OK]", "warn": "[WARN]", "fail": "[FAIL]"}[kind]
-        return {"ok": "✔", "warn": "⚠", "fail": "✖"}[kind]
+        return {"ok": "✅", "warn": "⚠️ ", "fail": "❌"}[kind]
 
     def _record_warning(self, msg, *args, warning_stage="validation"):
         """Log warning and optionally forward it to a per-document collector."""
@@ -257,6 +257,23 @@ class MMD4SolR:
             updates,
             key=lambda node: self._normalize_datetime(self._first_text_for(node, "./mmd:datetime")) or "",
         )
+        updates_json = []
+        for update in updates_sorted:
+            entry = {
+                "type": self._first_text_for(update, "./mmd:type"),
+                "datetime": self._normalize_datetime(self._first_text_for(update, "./mmd:datetime")),
+                "note": self._first_text_for(update, "./mmd:note"),
+            }
+            # Keep only non-empty values in each history entry.
+            updates_json.append({k: v for k, v in entry.items() if v})
+
+        if updates_json:
+            solr_doc["last_metadata_update_json"] = json.dumps(
+                updates_json,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+
         latest = updates_sorted[-1]
         dt = self._normalize_datetime(self._first_text_for(latest, "./mmd:datetime"))
         typ = self._first_text_for(latest, "./mmd:type")
@@ -267,6 +284,18 @@ class MMD4SolR:
             solr_doc["last_metadata_update_type"] = typ
         if note:
             solr_doc["last_metadata_update_note"] = note
+
+    def _extract_alternate_identifier(self, solr_doc):
+        alt_ids, types = [], []
+        for node in self._nodes("./mmd:alternate_identifier"):
+            alt_type = (node.attrib.get("type") or "")
+            value = self._text(node)
+            if not value:
+                continue
+            alt_ids.append(value)
+            types.append(alt_type)
+        solr_doc['alternate_identifier'] = alt_ids
+        solr_doc['alternate_identifier_type'] = types
 
     def _extract_temporal_extent(self, solr_doc):
         starts = []
@@ -349,7 +378,7 @@ class MMD4SolR:
 
         if keyword_all:
             solr_doc["keywords_keyword"] = keyword_all
-            solr_doc["keywords_vocabulary"] = vocab_all
+            solr_doc["keywords_vocabulary"] = sorted(set(vocab_all))
 
     def _extract_related_dataset(self, solr_doc):
         for node in self._nodes("./mmd:related_dataset"):
@@ -369,22 +398,32 @@ class MMD4SolR:
         roles, names, orgs = [], [], []
         for node in self._nodes("./mmd:personnel"):
             role = self._first_text_for(node, "./mmd:role")
+            personnel_type = self._first_text_for(node, "./mmd:type")
             name = self._first_text_for(node, "./mmd:name")
             organisation = self._first_text_for(node, "./mmd:organisation")
+            name_nodes = node.xpath("./mmd:name", namespaces=self.NSMAP)
+            organisation_nodes = node.xpath("./mmd:organisation", namespaces=self.NSMAP)
+            orcid_uri = name_nodes[0].attrib.get("uri") if name_nodes else None
+            ror_uri = organisation_nodes[0].attrib.get("uri") if organisation_nodes else None
             if role:
                 roles.append(role)
             if name:
                 names.append(name)
             if organisation:
                 orgs.append(organisation)
-            personnel_json.append(
-                {
-                    "role": role,
-                    "name": name,
-                    "organisation": organisation,
-                    "email": self._first_text_for(node, "./mmd:email"),
-                }
-            )
+            personnel_entry = {
+                "role": role,
+                "name": name,
+                "organisation": organisation,
+                "email": self._first_text_for(node, "./mmd:email"),
+            }
+            if personnel_type:
+                personnel_entry["type"] = personnel_type
+            if orcid_uri:
+                personnel_entry["orchid_uri"] = orcid_uri
+            if ror_uri:
+                personnel_entry["ror_uri"] = ror_uri
+            personnel_json.append(personnel_entry)
 
         if roles:
             solr_doc["personnel_role"] = sorted(set(roles))
@@ -462,6 +501,119 @@ class MMD4SolR:
                 separators=(",", ":"),
             )
 
+    def _extract_related_information(self, solr_doc):
+        """Extract mmd:related_information elements and map to Solr fields.
+
+        Creates:
+        - related_information_json: complete JSON with type, description, resource
+        - related_information_type: list of all types
+        - related_information_resource: list of all resources
+        - related_information_description: list of all descriptions
+        - related_url_*: type-specific URLs
+        - related_url_*_desc: type-specific descriptions
+        """
+        urls_by_field = {
+            "related_url_landing_page": [],
+            "related_url_user_guide": [],
+            "related_url_home_page": [],
+            "related_url_obs_facility": [],
+            "related_url_ext_metadata": [],
+            "related_url_scientific_publication": [],
+            "related_url_data_paper": [],
+            "related_url_data_management_plan": [],
+            "related_url_other_documentation": [],
+            "related_url_software": [],
+            "related_url_data_server_landing_page": [],
+        }
+
+        descs_by_field = {
+            "related_url_landing_page_desc": [],
+            "related_url_user_guide_desc": [],
+            "related_url_home_page_desc": [],
+            "related_url_obs_facility_desc": [],
+            "related_url_ext_metadata_desc": [],
+            "related_url_scientific_publication_desc": [],
+            "related_url_data_paper_desc": [],
+            "related_url_data_management_plan_desc": [],
+            "related_url_other_documentation_desc": [],
+            "related_url_software_desc": [],
+            "related_url_data_server_landing_page_desc": [],
+        }
+
+        type_to_field = {
+            "Dataset landing page": "related_url_landing_page",
+            "Users guide": "related_url_user_guide",
+            "Project home page": "related_url_home_page",
+            "Observation facility": "related_url_obs_facility",
+            "Extended metadata": "related_url_ext_metadata",
+            "Scientific publication": "related_url_scientific_publication",
+            "Data paper": "related_url_data_paper",
+            "Data management plan": "related_url_data_management_plan",
+            "Other documentation": "related_url_other_documentation",
+            "Software": "related_url_software",
+            "Data server landing page": "related_url_data_server_landing_page",
+        }
+
+        related_information_json = []
+        all_types = []
+        all_resources = []
+        all_descriptions = []
+
+        for node in self._nodes("./mmd:related_information"):
+            info_type = self._first_text_for(node, "./mmd:type")
+            description = self._first_text_for(node, "./mmd:description")
+            resource = self._first_text_for(node, "./mmd:resource")
+
+            # Add to general lists
+            if info_type:
+                all_types.append(info_type)
+            if resource:
+                all_resources.append(resource)
+            if description:
+                all_descriptions.append(description)
+
+            # Create JSON entry
+            related_info_entry = {
+                "type": info_type,
+                "description": description,
+                "resource": resource,
+            }
+            related_information_json.append(related_info_entry)
+
+            # Map to type-specific fields if resource exists
+            if resource:
+                target_field = type_to_field.get(info_type)
+                if target_field:
+                    urls_by_field[target_field].append(resource)
+                    if description:
+                        descs_by_field[target_field + "_desc"].append(description)
+
+        # Add type-specific URL fields
+        for field_name, values in urls_by_field.items():
+            if values:
+                solr_doc[field_name] = values
+
+        # Add type-specific description fields
+        for field_name, values in descs_by_field.items():
+            if values:
+                solr_doc[field_name] = values
+
+        # Add general arrays
+        if all_types:
+            solr_doc["related_information_type"] = all_types
+        if all_resources:
+            solr_doc["related_information_resource"] = all_resources
+        if all_descriptions:
+            solr_doc["related_information_description"] = all_descriptions
+
+        # Add JSON representation
+        if related_information_json:
+            solr_doc["related_information_json"] = json.dumps(
+                related_information_json,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+
     def _extract_projects(self, solr_doc):
         short_names, long_names, project_names = [], [], []
         for node in self._nodes("./mmd:project"):
@@ -474,6 +626,75 @@ class MMD4SolR:
             solr_doc["project_short_name"] = short_names
             solr_doc["project_long_name"] = long_names
             solr_doc["project_name"] = project_names
+
+    def _extract_data_center(self, solr_doc):
+        short_names, long_names, names, urls = [], [], [], []
+
+        for node in self._nodes("./mmd:data_center"):
+            short = self._first_text_for(node, "./mmd:data_center_name/mmd:short_name")
+            long = self._first_text_for(node, "./mmd:data_center_name/mmd:long_name")
+            url = self._first_text_for(node, "./mmd:data_center_url")
+
+            if short:
+                short_names.append(short)
+            if long:
+                long_names.append(long)
+            if short or long:
+                names.append(short or long)
+            if url:
+                urls.append(url)
+
+        if short_names:
+            solr_doc["data_center_short_name"] = short_names
+        if long_names:
+            solr_doc["data_center_long_name"] = long_names
+        if names:
+            solr_doc["data_center_name"] = names
+        if urls:
+            solr_doc["data_center_url"] = urls
+
+    def _extract_storage_information(self, solr_doc):
+        nodes = self._nodes("./mmd:storage_information")
+        if not nodes:
+            return
+
+        node = nodes[0]
+        file_name = self._first_text_for(node, "./mmd:file_name")
+        file_location = self._first_text_for(node, "./mmd:file_location")
+        file_format = self._first_text_for(node, "./mmd:file_format")
+        file_size_nodes = node.xpath("./mmd:file_size", namespaces=self.NSMAP)
+        checksum_nodes = node.xpath("./mmd:checksum", namespaces=self.NSMAP)
+        storage_expiry_date = self._normalize_datetime(
+            self._first_text_for(node, "./mmd:storage_expiry_date")
+        )
+
+        if file_name:
+            solr_doc["storage_information_file_name"] = file_name
+        if file_location:
+            solr_doc["storage_information_file_location"] = file_location
+        if file_format:
+            solr_doc["storage_information_file_format"] = file_format
+
+        if file_size_nodes:
+            file_size_node = file_size_nodes[0]
+            file_size = self._text(file_size_node)
+            file_size_unit = file_size_node.attrib.get("unit")
+            if file_size:
+                solr_doc["storage_information_file_size"] = file_size
+            if file_size_unit:
+                solr_doc["storage_information_file_size_unit"] = file_size_unit
+
+        if checksum_nodes:
+            checksum_node = checksum_nodes[0]
+            checksum = self._text(checksum_node)
+            checksum_type = checksum_node.attrib.get("type")
+            if checksum:
+                solr_doc["storage_information_file_checksum"] = checksum
+            if checksum_type:
+                solr_doc["storage_information_file_checksum_type"] = checksum_type
+
+        if storage_expiry_date:
+            solr_doc["storage_information_file_storage_expiry_date"] = storage_expiry_date
 
     def _extract_platform(self, solr_doc):
         acc = {
@@ -509,8 +730,8 @@ class MMD4SolR:
                 acc["platform_short_name"].append(short)
             if long:
                 acc["platform_long_name"].append(long)
-            if short and long:
-                acc["platform_name"].append(f"{short}: {long}")
+            if short or long:
+                acc["platform_name"].append(short or long)
             if resource:
                 acc["platform_resource"].append(resource)
             if orbit_rel_raw:
@@ -550,8 +771,8 @@ class MMD4SolR:
                     acc["platform_instrument_short_name"].append(inst_short)
                 if inst_long:
                     acc["platform_instrument_long_name"].append(inst_long)
-                if inst_short and inst_long:
-                    acc["platform_instrument_name"].append(f"{inst_short}: {inst_long}")
+                if inst_short or inst_long:
+                    acc["platform_instrument_name"].append(inst_short or inst_long)
                 if inst_resource:
                     acc["platform_instrument_resource"].append(inst_resource)
                 if inst_mode:
@@ -615,6 +836,8 @@ class MMD4SolR:
             solr_doc["id"] = to_solr_id(metadata_identifier)
             solr_doc["metadata_identifier"] = metadata_identifier
 
+        self._extract_alternate_identifier(solr_doc)
+
         solr_doc["metadata_status"] = self._first_text("./mmd:metadata_status") or "Unknown"
         solr_doc["dataset_production_status"] = self._first_text("./mmd:dataset_production_status") or "Unknown"
 
@@ -653,6 +876,9 @@ class MMD4SolR:
             license_text = self._first_text_for(node, "./mmd:license_text")
             if license_text:
                 solr_doc["use_constraint_license_text"] = license_text
+        spatial_rep= self._first_text("./mmd:spatial_representation")
+        if spatial_rep:
+            solr_doc["spatial_representation"] = spatial_rep
 
         self._extract_last_metadata_update(solr_doc)
         self._extract_temporal_extent(solr_doc)
@@ -661,7 +887,10 @@ class MMD4SolR:
         self._extract_related_dataset(solr_doc)
         self._extract_personnel(solr_doc)
         self._extract_data_access(solr_doc)
+        self._extract_related_information(solr_doc)
         self._extract_projects(solr_doc)
+        self._extract_data_center(solr_doc)
+        self._extract_storage_information(solr_doc)
         self._extract_platform(solr_doc)
 
         iso_topic_category = self._all_text("./mmd:iso_topic_category")

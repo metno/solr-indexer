@@ -41,7 +41,8 @@ def _init_logging(log_obj):
     Behavior:
     - Reads log level from SOLRINDEXER_LOGLEVEL (default: INFO)
     - Reads optional logfile path from SOLRINDEXER_LOGFILE
-    - Uses detailed format in DEBUG and concise format in INFO+
+    - Uses rich.logging.RichHandler for console output when rich is installed,
+      otherwise falls back to a plain stdout/stderr split handler setup
     - Sends DEBUG/INFO to stdout and WARNING+ to stderr (no duplicates)
     """
     want_level = os.environ.get("SOLRINDEXER_LOGLEVEL", "INFO").upper()
@@ -56,31 +57,54 @@ def _init_logging(log_obj):
 
     debug_fmt = "[{asctime:}]  [{processName:s}] [{threadName:s}] [{levelname:7s}] {name}:{lineno:<4d} : {message:}"
     info_fmt = "[{asctime:}] {levelname:8s}: {message:}"
-    chosen_format = logging.Formatter(fmt=debug_fmt if log_level == logging.DEBUG else info_fmt, style="{")
+    plain_format = logging.Formatter(fmt=debug_fmt if log_level == logging.DEBUG else info_fmt, style="{")
 
     # Make init idempotent (important for tests/import cycles)
     log_obj.handlers.clear()
     log_obj.setLevel(log_level)
     log_obj.propagate = False
 
-    # stdout: DEBUG/INFO only (lets shell users redirect stdout separately)
-    stdout_handler = logging.StreamHandler(sys.stdout)
-    stdout_handler.setLevel(log_level)
-    stdout_handler.setFormatter(chosen_format)
-    stdout_handler.addFilter(lambda record: record.levelno <= logging.INFO)
-    log_obj.addHandler(stdout_handler)
+    try:
+        from rich.console import Console
+        from rich.logging import RichHandler
+        show_path = log_level == logging.DEBUG
 
-    # stderr: WARNING and above
-    stderr_handler = logging.StreamHandler(sys.stderr)
-    stderr_handler.setLevel(logging.WARNING)
-    stderr_handler.setFormatter(chosen_format)
-    log_obj.addHandler(stderr_handler)
+        # DEBUG/INFO → stdout
+        stdout_rich = RichHandler(
+            level=log_level,
+            console=Console(file=sys.stdout),
+            rich_tracebacks=True,
+            show_path=show_path,
+        )
+        stdout_rich.addFilter(lambda record: record.levelno <= logging.INFO)
+        log_obj.addHandler(stdout_rich)
 
-    # Optional logfile: all enabled levels
+        # WARNING+ → stderr (respects 2>/dev/null)
+        stderr_rich = RichHandler(
+            level=logging.WARNING,
+            console=Console(file=sys.stderr, stderr=True),
+            rich_tracebacks=True,
+            show_path=show_path,
+        )
+        log_obj.addHandler(stderr_rich)
+    except ImportError:
+        # Fallback: stdout for DEBUG/INFO, stderr for WARNING+
+        stdout_handler = logging.StreamHandler(sys.stdout)
+        stdout_handler.setLevel(log_level)
+        stdout_handler.setFormatter(plain_format)
+        stdout_handler.addFilter(lambda record: record.levelno <= logging.INFO)
+        log_obj.addHandler(stdout_handler)
+
+        stderr_handler = logging.StreamHandler(sys.stderr)
+        stderr_handler.setLevel(logging.WARNING)
+        stderr_handler.setFormatter(plain_format)
+        log_obj.addHandler(stderr_handler)
+
+    # Optional logfile: always plain text regardless of rich availability
     if log_file:
         file_handler = logging.FileHandler(log_file, encoding="utf-8")
         file_handler.setLevel(log_level)
-        file_handler.setFormatter(chosen_format)
+        file_handler.setFormatter(plain_format)
         log_obj.addHandler(file_handler)
 
 

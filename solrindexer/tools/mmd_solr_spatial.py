@@ -32,14 +32,14 @@ def handle_solr_spatial(solr_doc, north, east, south, west, gml=None, srs=None):
     the string representation to make for better visualizaiton.
     """
     # Add bbox field
-    logger.info("Adding solr spatial fields and geometries")
+    logger.debug("Adding solr spatial fields and geometries")
     logger.debug(f"Got geographic rectangle north: {north}, east: {east}, south: {south}, west: {west}")
     solr_doc['bbox'] = generate_solr_envelope(north, east, south, west)
     if gml is not None:
         """
         Use the provided GML Geometry for indexing.
         """
-        logger.info("Got GML Geometry, parsing and processing")
+        logger.debug("Got GML Geometry, parsing and processing")
         geom_wkt = parse_gml_to_wkt(gml)
         geom_wkt = validate_fix_geometry(geom_wkt)
         solr_doc["geospatial_bounds3d"] = geom_wkt

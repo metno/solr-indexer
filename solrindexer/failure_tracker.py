@@ -99,9 +99,11 @@ class FailureTracker:
         summary_lines = []
         summary_lines.append("")
         summary_lines.append("=" * 80)
+        failed_files = len({f.filename for f in self.failures})
+        warned_files = len({w.filename for w in self.warnings})
         summary_lines.append(
-            f"PROCESSING SUMMARY - {len(self.failures)} FAILURE(S), "
-            f"{len(self.warnings)} WARNING(S)"
+            f"PROCESSING SUMMARY - {len(self.failures)} FAILURE(S) in {failed_files} file(s), "
+            f"{len(self.warnings)} WARNING(S) in {warned_files} file(s)"
         )
         summary_lines.append("=" * 80)
         summary_lines.append("")

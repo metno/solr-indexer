@@ -1,6 +1,5 @@
 import pytest
-
-from solrindexer.searchindex import parse_cfg
+from solrindexer.script.searchindex import parse_cfg
 
 
 @pytest.mark.searchindex
