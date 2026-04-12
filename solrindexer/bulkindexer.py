@@ -35,6 +35,7 @@ from solrindexer.tools import (
     solr_add,
     to_solr_id,
 )
+from solrindexer.vocabulary import create_vocabulary_loader
 
 logger = logging.getLogger(__name__)
 
@@ -65,10 +66,26 @@ class BulkIndexer:
         self.threads = threads
         self.chunksize = chunksize
         self.total_in = len(inputList)
-        self.indexthreads = list()
+        self.indexthreads = []
         self.thumbClass = thumbClass
         self.config = config
         self.failure_tracker = failure_tracker or FailureTracker()
+
+        # Initialize vocabulary loader if configured
+        self.vocabulary_loader = None
+        if self.config:
+            vocabulary_backend = self.config.get("vocabulary-backend", "native")
+            vocabulary_ttl_path = self.config.get("vocabulary-ttl-path")
+            try:
+                self.vocabulary_loader = create_vocabulary_loader(
+                    ttl_path=vocabulary_ttl_path,
+                    backend=vocabulary_backend,
+                )
+                if self.vocabulary_loader is not None:
+                    logger.info(f"Vocabulary loader initialized with backend: {vocabulary_backend}")
+            except Exception as e:
+                logger.error(f"Failed to initialize vocabulary loader: {e}")
+                logger.warning("Continuing without vocabulary validation")
 
         # self.solrcon = pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=auth)
         # self.  = IndexMMD(solr_url, False, authentication=auth)
@@ -116,6 +133,7 @@ class BulkIndexer:
             bulkFile=file,
             xsd_path=xsd_path,
             warning_callback=_warning_callback,
+            vocabulary_loader=self.vocabulary_loader,
         )
         if not mydoc.check_mmd():
             logger.error(
@@ -255,8 +273,8 @@ class BulkIndexer:
         except Exception as e:
             tname = threading.current_thread().name
             tid = threading.get_native_id()
-            error_msg = "%s, PID: %s Some documents failed to be added to solr. \
-                reason: %s"%(tname, tid, e)
+            error_msg = f"{tname}, PID: {tid} Some documents failed to be added to solr. \
+                reason: {e}"
             logger.error(error_msg)
             # Track each document that failed to index
             for doc in docs:
@@ -282,6 +300,19 @@ class BulkIndexer:
         """Message logging callback function"""
         logger.info(msg)
 
+    def _log_parent_integrity(self, parent_ids_found, parent_ids_processed, parent_ids_pending):
+        """Log parent/child integrity summary after a bulk run."""
+        if parent_ids_found:
+            logger.info(" --- Parent/child integrity summary --- ")
+            logger.info("Parents found: %d", len(parent_ids_found))
+
+            if parent_ids_pending:
+                logger.warning("Unresolved parent IDs referenced by child documents:")
+                for parent_id in sorted(parent_ids_pending):
+                    logger.warning("  %s", parent_id)
+            else:
+                logger.info("✅ all parents resolved.")
+
     def bulkindex(self, filelist):
         """Main bulkindexer function"""
         chunksize = self.chunksize
@@ -305,8 +336,8 @@ class BulkIndexer:
                         batch_run, math.ceil(len(filelist) / chunksize))
             # select a chunk
             files = filelist[i:(i + chunksize)]
-            docs = list()
-            statuses = list()
+            docs = []
+            statuses = []
 
             """######################## STARTING THREADS ########################
             # Load each file using multiple threads, and process documents as files are loaded
@@ -600,6 +631,14 @@ class BulkIndexer:
             thr.join()
 
         Futures.ALL_COMPLETED
+
+        # Emit a final integrity summary with any unresolved parent references.
+        self._log_parent_integrity(
+            parent_ids_found=parent_ids_found,
+            parent_ids_processed=parent_ids_processed,
+            parent_ids_pending=parent_ids_pending,
+        )
+
         # Store the tracking information and return back to calling script
         parent_ids_found_ = parent_ids_found.copy()
         parent_ids_pending_ = parent_ids_pending.copy()

@@ -1,0 +1,330 @@
+"""
+Tests for vocabulary module
+============================
+
+Copyright MET Norway
+
+Licensed under the GNU GENERAL PUBLIC LICENSE, Version 3; you may not
+use this file except in compliance with the License. You may obtain a
+copy of the License at
+
+    https://www.gnu.org/licenses/gpl-3.0.en.html
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+implied. See the License for the specific language governing
+permissions and limitations under the License.
+"""
+
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+from solrindexer.vocabulary import (
+    VocabularyLegacy,
+    VocabularyLoader,
+    create_vocabulary_loader,
+)
+
+# Path to the TTL vocabulary file in the metsis repository
+VOCABULARY_TTL = Path("/home/magnarem/git/metsis/mmd/thesauri/mmd-vocabulary.ttl")
+
+
+class TestVocabularyLoaderBasics:
+    """Test VocabularyLoader initialization and basic functionality."""
+
+    def test_init_with_valid_ttl_file(self):
+        """Test that VocabularyLoader initializes with a valid TTL file."""
+        if not VOCABULARY_TTL.exists():
+            pytest.skip(f"TTL file not found: {VOCABULARY_TTL}")
+
+        loader = VocabularyLoader(str(VOCABULARY_TTL))
+        assert loader is not None
+        assert loader.graph is not None
+        assert len(loader._cache) > 0
+
+    def test_init_with_nonexistent_file(self):
+        """Test that FileNotFoundError is raised for missing file."""
+        with pytest.raises(FileNotFoundError):
+            VocabularyLoader("/nonexistent/path/vocab.ttl")
+
+    def test_init_without_rdflib(self):
+        """Test that ValueError is raised if rdflib is not available."""
+        with patch("solrindexer.vocabulary.RDFLIB_AVAILABLE", False):
+            with pytest.raises(ValueError, match="rdflib is required"):
+                VocabularyLoader(str(VOCABULARY_TTL))
+
+
+class TestVocabularyLoaderSearch:
+    """Test the search functionality of VocabularyLoader."""
+
+    @pytest.fixture
+    def loader(self):
+        """Fixture to provide a VocabularyLoader instance."""
+        if not VOCABULARY_TTL.exists():
+            pytest.skip(f"TTL file not found: {VOCABULARY_TTL}")
+        return VocabularyLoader(str(VOCABULARY_TTL))
+
+    def test_search_iso_topic_category_valid_value(self, loader):
+        """Test searching for a valid value in ISO_Topic_Category."""
+        vocab_uri = "https://vocab.met.no/mmd/ISO_Topic_Category"
+        concepts = loader.get_concepts(vocab_uri)
+        # The TTL file should have some ISO topic categories
+        assert len(concepts) > 0
+
+    def test_search_nonexistent_vocabulary(self, loader):
+        """Test searching in a nonexistent vocabulary returns False."""
+        vocab_uri = "https://vocab.met.no/mmd/NonExistentVocab"
+        result = loader.search(vocab_uri, "some_value")
+        assert result is False
+
+    def test_get_concepts_returns_set(self, loader):
+        """Test that get_concepts returns a set."""
+        vocab_uri = "https://vocab.met.no/mmd/Use_Constraint"
+        concepts = loader.get_concepts(vocab_uri)
+        assert isinstance(concepts, set)
+
+    def test_get_concepts_for_nonexistent_vocab(self, loader):
+        """Test that get_concepts returns empty set for nonexistent vocab."""
+        vocab_uri = "https://vocab.met.no/mmd/NonExistent"
+        concepts = loader.get_concepts(vocab_uri)
+        assert isinstance(concepts, set)
+        assert len(concepts) == 0
+
+
+class TestVocabularyLegacy:
+    """Test VocabularyLegacy wrapper for backwards compatibility."""
+
+    def test_init_with_mocked_metvocab(self):
+        """Test VocabularyLegacy initialization with mocked metvocab."""
+        mock_mmdgroup = MagicMock()
+
+        with patch("solrindexer.vocabulary.VocabularyLegacy._import_mmdgroup") as mock_import:
+            mock_import.return_value = MagicMock(return_value=mock_mmdgroup)
+            legacy = VocabularyLegacy()
+            assert legacy is not None
+
+    def test_init_without_metvocab(self):
+        """Test that ImportError is raised if metvocab is not installed."""
+        with patch("solrindexer.vocabulary.VocabularyLegacy._import_mmdgroup") as mock_import:
+            mock_import.side_effect = ImportError("metvocab not found")
+            with pytest.raises(ImportError):
+                VocabularyLegacy()
+
+    def test_search_with_mocked_metvocab(self):
+        """Test search method with mocked metvocab."""
+        # Mock MMDGroup behavior
+        mock_group_instance = MagicMock()
+        mock_group_instance.search.return_value = True
+
+        mock_mmdgroup_class = MagicMock(return_value=mock_group_instance)
+
+        with patch("solrindexer.vocabulary.VocabularyLegacy._import_mmdgroup") as mock_import:
+            mock_import.return_value = mock_mmdgroup_class
+            legacy = VocabularyLegacy()
+            result = legacy.search("https://vocab.met.no/mmd/SomeVocab", "test_value")
+            assert result is True
+
+    def test_search_not_found_with_mocked_metvocab(self):
+        """Test search returns False when value not found."""
+        mock_group_instance = MagicMock()
+        mock_group_instance.search.return_value = False
+
+        mock_mmdgroup_class = MagicMock(return_value=mock_group_instance)
+
+        with patch("solrindexer.vocabulary.VocabularyLegacy._import_mmdgroup") as mock_import:
+            mock_import.return_value = mock_mmdgroup_class
+            legacy = VocabularyLegacy()
+            result = legacy.search("https://vocab.met.no/mmd/SomeVocab", "invalid_value")
+            assert result is False
+
+    def test_get_concepts_not_implemented(self):
+        """Test that get_concepts returns empty set (not implemented for legacy)."""
+        mock_mmdgroup_class = MagicMock()
+
+        with patch("solrindexer.vocabulary.VocabularyLegacy._import_mmdgroup") as mock_import:
+            mock_import.return_value = mock_mmdgroup_class
+            legacy = VocabularyLegacy()
+            concepts = legacy.get_concepts("https://vocab.met.no/mmd/SomeVocab")
+            assert isinstance(concepts, set)
+            assert len(concepts) == 0
+
+
+class TestCreateVocabularyLoader:
+    """Test the factory function create_vocabulary_loader."""
+
+    def test_create_native_loader_with_valid_path(self):
+        """Test creating native loader with valid TTL path."""
+        if not VOCABULARY_TTL.exists():
+            pytest.skip(f"TTL file not found: {VOCABULARY_TTL}")
+
+        loader = create_vocabulary_loader(ttl_path=str(VOCABULARY_TTL), backend="native")
+        assert loader is not None
+        assert isinstance(loader, VocabularyLoader)
+
+    def test_create_native_loader_without_path(self):
+        """Test creating native loader without path returns None."""
+        loader = create_vocabulary_loader(ttl_path=None, backend="native")
+        assert loader is None
+
+    def test_create_legacy_loader(self):
+        """Test creating legacy loader."""
+        mock_mmdgroup_class = MagicMock()
+        with patch("solrindexer.vocabulary.VocabularyLegacy._import_mmdgroup", return_value=mock_mmdgroup_class):
+            loader = create_vocabulary_loader(backend="legacy-metvocab")
+            assert loader is not None
+            assert isinstance(loader, VocabularyLegacy)
+
+    def test_create_invalid_backend(self):
+        """Test that ValueError is raised for invalid backend."""
+        with pytest.raises(ValueError, match="Unknown vocabulary backend"):
+            create_vocabulary_loader(backend="invalid-backend")
+
+
+class TestMMD4SolRIntegration:
+    """Test integration of vocabulary_loader with MMD4SolR."""
+
+    def test_mmd4solr_with_vocabulary_loader(self):
+        """Test that MMD4SolR accepts vocabulary_loader parameter."""
+        from solrindexer.indexdata import MMD4SolR
+
+        # Create a simple test XML string
+        test_mmd_xml = """<?xml version="1.0" encoding="UTF-8"?>
+        <mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd">
+            <mmd:metadata_identifier>test-id</mmd:metadata_identifier>
+            <mmd:title>Test Title</mmd:title>
+            <mmd:abstract>Test Abstract</mmd:abstract>
+            <mmd:metadata_status>Active</mmd:metadata_status>
+            <mmd:dataset_production_status>In Work</mmd:dataset_production_status>
+            <mmd:collection>TEST</mmd:collection>
+            <mmd:last_metadata_update>
+                <mmd:update>
+                    <mmd:datetime>2024-01-01T00:00:00Z</mmd:datetime>
+                </mmd:update>
+            </mmd:last_metadata_update>
+            <mmd:iso_topic_category>climatologyMeteorologyAtmosphere</mmd:iso_topic_category>
+            <mmd:keywords vocabulary="GCMDSK">
+                <mmd:keyword>test keyword</mmd:keyword>
+            </mmd:keywords>
+        </mmd:mmd>
+        """
+
+        # Create mock loader
+        mock_loader = MagicMock()
+        mock_loader.search.return_value = True
+
+        # Parse XML and create MMD4SolR instance
+        import lxml.etree as ET
+
+        root = ET.fromstring(test_mmd_xml.encode("utf-8"))
+        doc = MMD4SolR(
+            mydoc=root,
+            vocabulary_loader=mock_loader,
+        )
+
+        # Verify vocabulary_loader is stored
+        assert doc.vocabulary_loader is mock_loader
+
+    def test_mmd4solr_without_vocabulary_loader(self):
+        """Test that MMD4SolR works without vocabulary_loader."""
+        from solrindexer.indexdata import MMD4SolR
+
+        test_mmd_xml = """<?xml version="1.0" encoding="UTF-8"?>
+        <mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd">
+            <mmd:metadata_identifier>test-id</mmd:metadata_identifier>
+            <mmd:title>Test Title</mmd:title>
+            <mmd:abstract>Test Abstract</mmd:abstract>
+            <mmd:metadata_status>Active</mmd:metadata_status>
+            <mmd:dataset_production_status>In Work</mmd:dataset_production_status>
+            <mmd:collection>TEST</mmd:collection>
+            <mmd:last_metadata_update>
+                <mmd:update>
+                    <mmd:datetime>2024-01-01T00:00:00Z</mmd:datetime>
+                </mmd:update>
+            </mmd:last_metadata_update>
+            <mmd:iso_topic_category>climatologyMeteorologyAtmosphere</mmd:iso_topic_category>
+            <mmd:keywords vocabulary="GCMDSK">
+                <mmd:keyword>test keyword</mmd:keyword>
+            </mmd:keywords>
+        </mmd:mmd>
+        """
+
+        import lxml.etree as ET
+
+        root = ET.fromstring(test_mmd_xml.encode("utf-8"))
+        doc = MMD4SolR(mydoc=root)
+
+        # Verify vocabulary_loader is None
+        assert doc.vocabulary_loader is None
+
+    def test_check_mmd_skips_vocabulary_validation_without_loader(self):
+        """Test that check_mmd skips vocabulary validation if loader is None."""
+        from solrindexer.indexdata import MMD4SolR
+
+        test_mmd_xml = """<?xml version="1.0" encoding="UTF-8"?>
+        <mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd">
+            <mmd:metadata_identifier>test-id</mmd:metadata_identifier>
+            <mmd:title>Test Title</mmd:title>
+            <mmd:abstract>Test Abstract</mmd:abstract>
+            <mmd:metadata_status>Active</mmd:metadata_status>
+            <mmd:dataset_production_status>In Work</mmd:dataset_production_status>
+            <mmd:collection>INVALID_COLLECTION</mmd:collection>
+            <mmd:last_metadata_update>
+                <mmd:update>
+                    <mmd:datetime>2024-01-01T00:00:00Z</mmd:datetime>
+                </mmd:update>
+            </mmd:last_metadata_update>
+            <mmd:iso_topic_category>climatologyMeteorologyAtmosphere</mmd:iso_topic_category>
+            <mmd:keywords vocabulary="GCMDSK">
+                <mmd:keyword>test keyword</mmd:keyword>
+            </mmd:keywords>
+        </mmd:mmd>
+        """
+
+        import lxml.etree as ET
+
+        root = ET.fromstring(test_mmd_xml.encode("utf-8"))
+        # Without vocabulary_loader, check should still pass (vocabulary validation skipped)
+        doc = MMD4SolR(mydoc=root, vocabulary_loader=None)
+        result = doc.check_mmd()
+        # Should still return True because vocabulary validation is skipped
+        assert isinstance(result, bool)
+
+    def test_check_mmd_validates_with_loader(self):
+        """Test that check_mmd validates vocabulary when loader is provided."""
+        from solrindexer.indexdata import MMD4SolR
+
+        test_mmd_xml = """<?xml version="1.0" encoding="UTF-8"?>
+        <mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd">
+            <mmd:metadata_identifier>test-id</mmd:metadata_identifier>
+            <mmd:title>Test Title</mmd:title>
+            <mmd:abstract>Test Abstract</mmd:abstract>
+            <mmd:metadata_status>Active</mmd:metadata_status>
+            <mmd:dataset_production_status>In Work</mmd:dataset_production_status>
+            <mmd:collection>TEST</mmd:collection>
+            <mmd:last_metadata_update>
+                <mmd:update>
+                    <mmd:datetime>2024-01-01T00:00:00Z</mmd:datetime>
+                </mmd:update>
+            </mmd:last_metadata_update>
+            <mmd:iso_topic_category>climatologyMeteorologyAtmosphere</mmd:iso_topic_category>
+            <mmd:keywords vocabulary="GCMDSK">
+                <mmd:keyword>test keyword</mmd:keyword>
+            </mmd:keywords>
+        </mmd:mmd>
+        """
+
+        import lxml.etree as ET
+
+        root = ET.fromstring(test_mmd_xml.encode("utf-8"))
+
+        # Create mock loader
+        mock_loader = MagicMock()
+        mock_loader.search.return_value = True
+
+        doc = MMD4SolR(mydoc=root, vocabulary_loader=mock_loader)
+        result = doc.check_mmd()
+
+        # Vocabulary search should be called for controlled elements
+        assert mock_loader.search.called

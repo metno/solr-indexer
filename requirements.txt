@@ -1,5 +1,5 @@
+rdflib
 lxml
-h5py
 netCDF4
 pysolr
 python-dateutil
@@ -7,7 +7,5 @@ validators
 PyYAML
 requests
 pygml
-requests
 python-dotenv
 pygeoif
-metvocab @ git+https://github.com/metno/met-vocab-tools@v1.2.0

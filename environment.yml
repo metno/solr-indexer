@@ -3,12 +3,7 @@ channels:
   - conda-forge
 dependencies:
   - python>=3.8
-  - matplotlib>=3.1
-  - numpy>=1.17
-  - scipy>=1.2
   - netcdf4>=1.6.4
-  - pyproj>=2.3
-  - cartopy
   - pip
   - pysolr
   - python-dateutil
@@ -25,3 +20,4 @@ dependencies:
   - urllib3
   - requests
   - python-dotenv
+  - rdflib

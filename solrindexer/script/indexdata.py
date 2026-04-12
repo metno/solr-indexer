@@ -5,6 +5,9 @@ import argparse
 import logging
 import os
 import sys
+import time
+from datetime import datetime
+from pathlib import Path
 
 import pysolr
 from dotenv import load_dotenv
@@ -20,6 +23,25 @@ DEFAULT_THREADS = 20
 DEFAULT_CHUNKSIZE = 2500
 
 
+def _format_duration(seconds):
+    """Format duration as HH:MM:SS."""
+    return time.strftime("%H:%M:%S", time.gmtime(max(0.0, seconds)))
+
+
+def _get_peak_memory_mb():
+    """Return peak process memory (RSS) in MB when available."""
+    try:
+        import resource
+
+        peak_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        # Linux reports KB, macOS reports bytes.
+        if sys.platform == "darwin":
+            return peak_rss / (1024 * 1024)
+        return peak_rss / 1024
+    except Exception:
+        return None
+
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Index MMD XML files into Solr")
     parser.add_argument("-c", "--cfg", dest="cfgfile", required=True, help="Configuration file")
@@ -27,6 +49,11 @@ def parse_arguments():
     parser.add_argument("-i", "--input_file", help="Individual file to ingest")
     parser.add_argument("-l", "--list_file", help="File containing xml file paths to ingest")
     parser.add_argument("-d", "--directory", help="Directory with xml files to ingest")
+    parser.add_argument(
+        "-r", "--recursive",
+        action="store_true",
+        help="Recursively search for XML files in directory and subdirectories (requires -d)"
+    )
     parser.add_argument(
         "-parent",
         "--mark_parent",
@@ -40,6 +67,16 @@ def parse_arguments():
     parser.add_argument("-t", "--thumbnail", action="store_true", help="Enable thumbnail indexing")
     parser.add_argument("-n", "--no_thumbnail", action="store_true", help="Disable thumbnail indexing")
     parser.add_argument("-nbs", "--nbs", action="store_true", help="Enable NBS thumbnail mode")
+
+    parser.add_argument(
+        "--vocabulary-ttl-path",
+        help="Path to TTL vocabulary file (overrides config)",
+    )
+    parser.add_argument(
+        "--vocabulary-backend",
+        choices=["native", "legacy-metvocab"],
+        help="Vocabulary backend to use (overrides config)",
+    )
 
     args = parser.parse_args()
     if not args.input_file and not args.list_file and not args.directory and not args.mark_parent:
@@ -81,10 +118,21 @@ def _resolve_input_files(args):
 
     if args.directory:
         files = []
-        for name in os.listdir(args.directory):
-            if name.lower().endswith(".xml"):
-                files.append(os.path.join(args.directory, name))
-        return sorted(files)
+        directory_path = Path(args.directory)
+
+        if args.recursive:
+            # Use rglob for efficient recursive search of XML files
+            for xml_file in sorted(directory_path.rglob("*.xml")):
+                if xml_file.is_file():
+                    files.append(str(xml_file))
+        else:
+            # Non-recursive: only look in top-level directory
+            for name in os.listdir(args.directory):
+                if name.lower().endswith(".xml"):
+                    files.append(os.path.join(args.directory, name))
+            files.sort()
+
+        return files
 
     return []
 
@@ -100,6 +148,10 @@ def _resolve_thumbnail_flags(args, cfg):
 
 
 def main():
+    start_dt = datetime.now().astimezone()
+    start_wall = time.perf_counter()
+    start_cpu = time.process_time()
+
     try:
         args = parse_arguments()
         try:
@@ -112,6 +164,12 @@ def main():
             cfg["scope"] = "NBS"
         else:
             cfg["scope"] = cfg.get("scope")
+
+        # Apply CLI overrides for vocabulary settings
+        if args.vocabulary_ttl_path:
+            cfg["vocabulary-ttl-path"] = args.vocabulary_ttl_path
+        if args.vocabulary_backend:
+            cfg["vocabulary-backend"] = args.vocabulary_backend
 
         solr_url = cfg["solrserver"] + cfg["solrcore"]
         authentication = _resolve_authentication(cfg)
@@ -169,7 +227,7 @@ def main():
             config=cfg,
         )
         result = bulk.bulkindex(files)
-
+        logger.info("Processed %s files.", len(files))
         # Extract failure tracker from result tuple (8th element)
         if result and len(result) >= 8:
             failure_tracker = result[7]
@@ -180,7 +238,31 @@ def main():
             indexer.commit()
             logger.info("Final Solr commit sent")
 
-        logger.info("Done")
+        end_dt = datetime.now().astimezone()
+        wall_elapsed = time.perf_counter() - start_wall
+        cpu_elapsed = time.process_time() - start_cpu
+        cpu_util_pct = (cpu_elapsed / wall_elapsed * 100.0) if wall_elapsed > 0 else 0.0
+        peak_memory_mb = _get_peak_memory_mb()
+
+        if peak_memory_mb is None:
+            logger.info(
+                "Done | start=%s end=%s wall=%s cpu=%s cpu_util=%.1f%% peak_rss_mb=unavailable",
+                start_dt.isoformat(timespec="seconds"),
+                end_dt.isoformat(timespec="seconds"),
+                _format_duration(wall_elapsed),
+                _format_duration(cpu_elapsed),
+                cpu_util_pct,
+            )
+        else:
+            logger.info(
+                "Done | start=%s end=%s wall=%s cpu=%s cpu_util=%.1f%% peak_rss_mb=%.1f",
+                start_dt.isoformat(timespec="seconds"),
+                end_dt.isoformat(timespec="seconds"),
+                _format_duration(wall_elapsed),
+                _format_duration(cpu_elapsed),
+                cpu_util_pct,
+                peak_memory_mb,
+            )
     except Exception as exc:
         # args may not always be defined if exception occurs during arg parsing
         # but it should be defined for most cases since parse_arguments is first

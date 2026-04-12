@@ -28,7 +28,6 @@ import lxml.etree as ET
 import netCDF4
 import pysolr
 import requests
-from metvocab.mmdgroup import MMDGroup
 
 from solrindexer.tools import (
     add_nbs_thumbnail,
@@ -68,11 +67,12 @@ class MMD4SolR:
         "metadata_source": "https://vocab.met.no/mmd/Metadata_Source",
     }
 
-    def __init__(self, filename=None, mydoc=None, bulkFile=None, xsd_path=None, warning_callback=None):
+    def __init__(self, filename=None, mydoc=None, bulkFile=None, xsd_path=None, warning_callback=None, vocabulary_loader=None):
         logger.debug("Creating an instance of MMD4SolR")
         self.filename = filename if filename is not None else bulkFile
         self.xsd_path = xsd_path
         self.warning_callback = warning_callback
+        self.vocabulary_loader = vocabulary_loader
         self.root = None
 
         if filename is not None:
@@ -210,9 +210,11 @@ class MMD4SolR:
             values = self._all_text(f"./mmd:{tag}")
             if not values:
                 continue
-            group = MMDGroup("mmd", vocab_url)
+            # Use vocabulary_loader if available, otherwise skip vocabulary validation
+            if self.vocabulary_loader is None:
+                continue
             for value in values:
-                if not group.search(value):
+                if not self.vocabulary_loader.search(vocab_url, value):
                     self._record_warning(
                         "%s mmd:%s has non-controlled value: %s",
                         self._icon("warn"),

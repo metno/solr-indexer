@@ -25,6 +25,19 @@ threads: 4
 # Validation failures are logged as warnings and do not stop indexing.
 #mmd-xsd-path: /path/to/mmd/xsd/mmd.xsd
 
+# Vocabulary validation settings (optional)
+# Path to the local MMD vocabulary TTL file for controlled-vocabulary validation.
+# When set, each MMD document's controlled fields (iso_topic_category, collection,
+# dataset_production_status, quality_control, metadata_source) are validated against
+# the vocabulary. Non-controlled values are logged as warnings and do not stop indexing.
+# The vocabulary is loaded once at startup and reused for all documents (efficient).
+#vocabulary-ttl-path: /path/to/mmd/thesauri/mmd-vocabulary.ttl
+
+# Vocabulary backend to use (optional, default: native)
+#   native          - use rdflib to read the local TTL file (requires vocabulary-ttl-path)
+#   legacy-metvocab - use the old metvocab/MMDGroup package (fetches from remote URLs)
+#vocabulary-backend: native
+
 # NBS specific thumnail configuration (optional)
 #nbs-thumbnails-base-path: <Base file path where to find NBS products and thumbnail.png>
 #nbs-thumbnails-base-url: <Base url from where the thumbnails will be served>
