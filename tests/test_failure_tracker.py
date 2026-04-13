@@ -173,6 +173,34 @@ def test_summary_grouping_by_filename():
     assert "3 FAILURE(S)" in summary
 
 
+def test_summary_failure_lines_include_fail_icon():
+    """Failure lines should include the fail icon in default (unicode) mode."""
+    tracker = FailureTracker()
+    tracker.add_failure(
+        filename="bad.xml",
+        error_message="File was not parsed (XML parsing failed)",
+        error_stage="parsing",
+    )
+
+    summary = tracker.get_summary()
+    assert "❌ [PARSING] File was not parsed (XML parsing failed)" in summary
+
+
+def test_summary_failure_lines_use_ascii_icon_when_enabled(monkeypatch):
+    """Failure lines should switch to ASCII icon when SOLRINDEXER_ASCII_ICONS=1."""
+    monkeypatch.setenv("SOLRINDEXER_ASCII_ICONS", "1")
+
+    tracker = FailureTracker()
+    tracker.add_failure(
+        filename="bad.xml",
+        error_message="File was not parsed (XML parsing failed)",
+        error_stage="parsing",
+    )
+
+    summary = tracker.get_summary()
+    assert "[FAIL] [PARSING] File was not parsed (XML parsing failed)" in summary
+
+
 def test_summary_contains_warnings_for_indexed_documents():
     """Warnings should appear in summary for documents without failures."""
     tracker = FailureTracker()

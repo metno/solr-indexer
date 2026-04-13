@@ -80,6 +80,8 @@ class MMD4SolR:
                 self.root = ET.parse(str(filename)).getroot()
             except Exception as exc:
                 logger.error("Could not open file %s. Reason: %s", filename, exc)
+                if isinstance(exc, OSError):
+                    raise FileNotFoundError(str(exc)) from exc
                 raise
         elif mydoc is not None:
             if isinstance(mydoc, ET._Element):
@@ -647,11 +649,15 @@ class MMD4SolR:
     def _extract_projects(self, solr_doc):
         short_names, long_names, project_names = [], [], []
         for node in self._nodes("./mmd:project"):
-            short = self._first_text_for(node, "./mmd:short_name") or "Not provided"
-            long = self._first_text_for(node, "./mmd:long_name") or "Not provided"
-            short_names.append(short)
-            long_names.append(long)
-            project_names.append(f"{short}: {long}")
+            short = self._first_text_for(node, "./mmd:short_name")
+            long = self._first_text_for(node, "./mmd:long_name")
+
+            if short:
+                short_names.append(short)
+            if long:
+                long_names.append(long)
+            if short or long:
+                project_names.append(short or long)
         if project_names:
             solr_doc["project_short_name"] = short_names
             solr_doc["project_long_name"] = long_names
@@ -939,6 +945,10 @@ class MMD4SolR:
         iso_topic_category = self._all_text("./mmd:iso_topic_category")
         if iso_topic_category:
             solr_doc["iso_topic_category"] = iso_topic_category
+
+        activity_type = self._all_text("./mmd:activity_type")
+        if activity_type:
+            solr_doc["activity_type"] = activity_type
 
         quality_control = self._first_text("./mmd:quality_control")
         if quality_control:

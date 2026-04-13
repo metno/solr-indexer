@@ -18,6 +18,7 @@ permissions and limitations under the License.
 """
 
 import logging
+import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -120,11 +121,22 @@ class BulkIndexer:
             file = file[:-1]
         xsd_path = self.config.get('mmd-xsd-path') if self.config else None
         metadata_id = None
+        validation_messages = []
+
+        def _clean_validation_message(message):
+            """Remove leading icon tokens from warning text for summary readability."""
+            return re.sub(r"^(?:\[FAIL\]|\[WARN\]|❌|⚠️)\s*", "", message).strip()
 
         def _warning_callback(message, warning_stage="validation"):
             nonlocal metadata_id
             if metadata_id is None:
                 metadata_id = mydoc.get_metadata_identifier()
+            if warning_stage == "validation":
+                validation_messages.append(message)
+                # Missing required-field messages are promoted to failure summary
+                # and should not be duplicated under warnings.
+                if "check_mmd missing required" in message:
+                    return
             self.failure_tracker.add_warning(
                 filename=file,
                 warning_message=message,
@@ -145,9 +157,31 @@ class BulkIndexer:
                 f"File {file} did not pass the mmd check, cannot index.")
             # Try to extract metadata_identifier even if validation failed
             metadata_id = mydoc.get_metadata_identifier()
+
+            missing_required_messages = [
+                _clean_validation_message(msg)
+                for msg in validation_messages
+                if "check_mmd missing required" in msg
+            ]
+            if missing_required_messages:
+                # Keep message order, drop duplicates.
+                missing_required_messages = list(dict.fromkeys(missing_required_messages))
+                failure_message = "; ".join(missing_required_messages)
+            else:
+                xsd_line_messages = [
+                    _clean_validation_message(msg)
+                    for msg in validation_messages
+                    if msg.strip().startswith("line ")
+                ]
+                if xsd_line_messages:
+                    xsd_line_messages = list(dict.fromkeys(xsd_line_messages))
+                    failure_message = "XSD validation failed: " + "; ".join(xsd_line_messages)
+                else:
+                    failure_message = "Failed MMD validation checks"
+
             self.failure_tracker.add_failure(
                 filename=file,
-                error_message="Failed MMD validation checks",
+                error_message=failure_message,
                 error_stage="validation",
                 metadata_identifier=metadata_id
             )
@@ -304,6 +338,16 @@ class BulkIndexer:
     def msg_callback(self, msg):
         """Message logging callback function"""
         logger.info(msg)
+
+    def _should_use_process_pool(self, doc_count):
+        """Decide whether process-pool overhead is worth it for this stage.
+
+        For tiny batches, inline processing is faster than spinning up workers.
+        """
+        if self.threads <= 1:
+            return False
+        min_docs = int((self.config or {}).get("process-pool-min-docs", 100))
+        return doc_count >= max(2, min_docs)
 
     def _log_parent_integrity(self, parent_ids_found, parent_ids_processed, parent_ids_pending):
         """Log parent/child integrity summary after a bulk run."""
@@ -570,22 +614,36 @@ class BulkIndexer:
             if skip_feature_type is not True:
                 dap_docs = [doc for doc in chunk_docs if 'data_access_url_opendap' in doc]
                 if dap_docs:
-                    logger.info("---- Process featureType with processes %d ----", self.threads)
                     t_feature_chunk_start = time.perf_counter()
-                    for (doc, (newdoc, ft_error)) in multiprocess(
-                        fn=process_feature_type,
-                        inputs=dap_docs,
-                        max_concurrency=self.threads,
-                    ):
-                        chunk_docs.remove(doc)
-                        chunk_docs.append(newdoc)
-                        if ft_error is not None:
-                            self.failure_tracker.add_warning(
-                                filename=chunk_file_ids.get(doc.get('id'), 'unknown'),
-                                warning_message=ft_error,
-                                warning_stage="feature_type",
-                                metadata_identifier=doc.get('id'),
-                            )
+                    if self._should_use_process_pool(len(dap_docs)):
+                        logger.info("---- Process featureType with processes %d ----", self.threads)
+                        for (doc, (newdoc, ft_error)) in multiprocess(
+                            fn=process_feature_type,
+                            inputs=dap_docs,
+                            max_concurrency=self.threads,
+                        ):
+                            chunk_docs.remove(doc)
+                            chunk_docs.append(newdoc)
+                            if ft_error is not None:
+                                self.failure_tracker.add_warning(
+                                    filename=chunk_file_ids.get(doc.get('id'), 'unknown'),
+                                    warning_message=ft_error,
+                                    warning_stage="feature_type",
+                                    metadata_identifier=doc.get('id'),
+                                )
+                    else:
+                        logger.info("---- Process featureType inline for small batch (%d docs) ----", len(dap_docs))
+                        for doc in dap_docs:
+                            newdoc, ft_error = process_feature_type(doc)
+                            chunk_docs.remove(doc)
+                            chunk_docs.append(newdoc)
+                            if ft_error is not None:
+                                self.failure_tracker.add_warning(
+                                    filename=chunk_file_ids.get(doc.get('id'), 'unknown'),
+                                    warning_message=ft_error,
+                                    warning_stage="feature_type",
+                                    metadata_identifier=doc.get('id'),
+                                )
                     t_feature_chunk = time.perf_counter() - t_feature_chunk_start
                     t_feature_type += t_feature_chunk
                     logger.debug(
@@ -598,15 +656,22 @@ class BulkIndexer:
             if self.tflg is True:
                 thumb_docs = [doc for doc in chunk_docs if 'data_access_url_ogc_wms' in doc]
                 if thumb_docs and nbs_scope:
-                    logger.info("---- Creating thumbnails concurrently %d ----", self.threads)
                     t_thumb_chunk_start = time.perf_counter()
-                    for (doc, newdoc) in multiprocess(
-                        fn=add_nbs_thumbnail_bulk,
-                        inputs=thumb_docs,
-                        max_concurrency=self.threads,
-                    ):
-                        chunk_docs.remove(doc)
-                        chunk_docs.append(newdoc)
+                    if self._should_use_process_pool(len(thumb_docs)):
+                        logger.info("---- Creating thumbnails concurrently %d ----", self.threads)
+                        for (doc, newdoc) in multiprocess(
+                            fn=add_nbs_thumbnail_bulk,
+                            inputs=thumb_docs,
+                            max_concurrency=self.threads,
+                        ):
+                            chunk_docs.remove(doc)
+                            chunk_docs.append(newdoc)
+                    else:
+                        logger.info("---- Creating thumbnails inline for small batch (%d docs) ----", len(thumb_docs))
+                        for doc in thumb_docs:
+                            newdoc = add_nbs_thumbnail_bulk(doc)
+                            chunk_docs.remove(doc)
+                            chunk_docs.append(newdoc)
                     t_thumb_chunk = time.perf_counter() - t_thumb_chunk_start
                     t_thumbnail += t_thumb_chunk
                     logger.debug(

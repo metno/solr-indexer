@@ -60,6 +60,16 @@ def _make_mmd_with_data_center(*data_center_fragments):
     return ET.fromstring(xml.encode())
 
 
+def _make_mmd_with_project(*project_fragments):
+    """Build a minimal MMD root element with the given mmd:project snippets."""
+    projects = "\n".join(project_fragments)
+    xml = f"""<mmd xmlns="http://www.met.no/schema/mmd">
+  <metadata_identifier>test-id</metadata_identifier>
+  {projects}
+</mmd>"""
+    return ET.fromstring(xml.encode())
+
+
 def _make_mmd_with_storage_information(storage_information_xml=""):
     """Build a minimal MMD root element with an optional mmd:storage_information snippet."""
     xml = f"""<mmd xmlns="http://www.met.no/schema/mmd">
@@ -196,7 +206,7 @@ def test_extract_personnel_json_includes_type_and_uris():
       "role": "Technical contact",
       "type": "Person",
       "name": "Ole Dole",
-      "orchid_uri": "https://orcid.org/0000-1111-2222-3333",
+      "orcid_uri": "https://orcid.org/0000-1111-2222-3333",
       "organisation": "Norwegian Meteorological Institute",
       "ror_uri": "https://ror.org/001n36p86",
       "email": "ole.dole@example.com",
@@ -286,7 +296,7 @@ def test_extract_platform_required_fields():
 
     assert solr["platform_short_name"] == ["Sentinel-1A"]
     assert solr["platform_long_name"] == ["Sentinel-1A (C-band SAR)"]
-    assert solr["platform_name"] == ["Sentinel-1A: Sentinel-1A (C-band SAR)"]
+    assert solr["platform_name"] == ["Sentinel-1A"]
     assert "platform_resource" not in solr
     assert "platform_instrument_short_name" not in solr
     assert "platform_ancillary_cloud_coverage" not in solr
@@ -328,7 +338,7 @@ def test_extract_platform_full_with_instrument_and_ancillary():
     assert solr["platform_orbit_direction"] == ["ascending"]
     assert solr["platform_instrument_short_name"] == ["SAR-C"]
     assert solr["platform_instrument_long_name"] == ["Synthetic Aperture Radar C-band"]
-    assert solr["platform_instrument_name"] == ["SAR-C: Synthetic Aperture Radar C-band"]
+    assert solr["platform_instrument_name"] == ["SAR-C"]
     assert solr["platform_instrument_resource"] == ["https://example.com/instrument"]
     assert solr["platform_instrument_mode"] == ["IW"]
     assert solr["platform_instrument_polarisation"] == ["VV+VH"]
@@ -361,9 +371,44 @@ def test_extract_platform_multiple_platforms():
 
     assert solr["platform_short_name"] == ["Sentinel-1A", "Sentinel-2A"]
     assert solr["platform_long_name"] == ["Sentinel-1A SAR", "Sentinel-2A MSI"]
-    assert solr["platform_name"] == ["Sentinel-1A: Sentinel-1A SAR", "Sentinel-2A: Sentinel-2A MSI"]
+    assert solr["platform_name"] == ["Sentinel-1A", "Sentinel-2A"]
     parsed = json.loads(solr["platform_json"])
     assert len(parsed) == 2
+
+
+@pytest.mark.indexdata
+def test_extract_platform_name_falls_back_to_long_name():
+    root = _make_mmd(
+        """<platform>
+          <long_name>Fallback Platform Name</long_name>
+        </platform>"""
+    )
+    doc = MMD4SolR(mydoc=root)
+    solr = {}
+    doc._extract_platform(solr)
+
+    assert "platform_short_name" not in solr
+    assert solr["platform_long_name"] == ["Fallback Platform Name"]
+    assert solr["platform_name"] == ["Fallback Platform Name"]
+
+
+@pytest.mark.indexdata
+def test_extract_platform_instrument_name_falls_back_to_long_name():
+    root = _make_mmd(
+        """<platform>
+          <short_name>Sentinel-1A</short_name>
+          <instrument>
+            <long_name>Fallback Instrument Name</long_name>
+          </instrument>
+        </platform>"""
+    )
+    doc = MMD4SolR(mydoc=root)
+    solr = {}
+    doc._extract_platform(solr)
+
+    assert "platform_instrument_short_name" not in solr
+    assert solr["platform_instrument_long_name"] == ["Fallback Instrument Name"]
+    assert solr["platform_instrument_name"] == ["Fallback Instrument Name"]
 
 
 @pytest.mark.indexdata
@@ -478,6 +523,42 @@ def test_extract_data_center_multiple_entries():
     assert solr["data_center_long_name"] == ["Norwegian Meteorological Institute"]
     assert solr["data_center_name"] == ["MET Norway", "NERSC"]
     assert solr["data_center_url"] == ["http://met.no", "https://nersc.no"]
+
+
+@pytest.mark.indexdata
+def test_extract_project_name_prefers_short_then_falls_back_to_long():
+    root = _make_mmd_with_project(
+        """<project>
+          <short_name>Nansen Legacy</short_name>
+          <long_name>Nansen Legacy Project</long_name>
+        </project>""",
+        """<project>
+          <long_name>Long Name Only Project</long_name>
+        </project>""",
+    )
+    doc = MMD4SolR(mydoc=root)
+    solr = {}
+    doc._extract_projects(solr)
+
+    assert solr["project_short_name"] == ["Nansen Legacy"]
+    assert solr["project_long_name"] == ["Nansen Legacy Project", "Long Name Only Project"]
+    assert solr["project_name"] == ["Nansen Legacy", "Long Name Only Project"]
+
+
+@pytest.mark.indexdata
+def test_tosolr_extracts_activity_type():
+    root = ET.fromstring(
+        b"""<mmd xmlns="http://www.met.no/schema/mmd">
+  <metadata_identifier>test-id</metadata_identifier>
+  <activity_type>Space Borne Instrument</activity_type>
+  <activity_type>Aircraft</activity_type>
+</mmd>"""
+    )
+    doc = MMD4SolR(mydoc=root)
+
+    solr = doc.tosolr()
+
+    assert solr["activity_type"] == ["Space Borne Instrument", "Aircraft"]
 
 
 @pytest.mark.indexdata

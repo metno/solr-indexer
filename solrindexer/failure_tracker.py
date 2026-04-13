@@ -18,6 +18,7 @@ permissions and limitations under the License.
 """
 
 import logging
+import os
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,14 @@ class FailureTracker:
     """Centralized tracker for all document processing failures."""
     failures: list[FailureRecord] = field(default_factory=list)
     warnings: list[WarningRecord] = field(default_factory=list)
+
+    @staticmethod
+    def _icon(kind: str) -> str:
+        """Return unicode icons with optional ASCII fallback."""
+        ascii_icons = os.getenv("SOLRINDEXER_ASCII_ICONS", "0") == "1"
+        if ascii_icons:
+            return {"ok": "[OK]", "warn": "[WARN]", "fail": "[FAIL]"}[kind]
+        return {"ok": "✅", "warn": "⚠️ ", "fail": "❌"}[kind]
 
     def add_failure(self, filename: str, error_message: str, error_stage: str = "",
                     metadata_identifier: str = None) -> None:
@@ -135,7 +144,9 @@ class FailureTracker:
                 # List all stages and errors for this file
                 for failure in sorted(file_failures, key=lambda f: f.error_stage or ""):
                     stage = failure.error_stage or "unknown"
-                    summary_lines.append(f"  [{stage.upper()}] {failure.error_message}")
+                    summary_lines.append(
+                        f"  {self._icon('fail')} [{stage.upper()}] {failure.error_message}"
+                    )
 
                 summary_lines.append("")
 

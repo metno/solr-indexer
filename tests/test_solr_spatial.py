@@ -1,12 +1,11 @@
 # solrindexer/tools/test_mmd_solr_spatial.py
 
 import pytest
-
 from solrindexer.tools.mmd_solr_spatial import (
     create_polygon_wkt_from_bbox,
     generate_solr_envelope,
     parse_envelope_to_bbox,
-    wkt_to_segmetized_geojson,
+    wkt_rect_to_segmetized_geom,
 )
 
 
@@ -64,9 +63,11 @@ def test_create_polygon_wkt_from_bbox_idl_crossing():
     wkt, centroid = create_polygon_wkt_from_bbox(60, -170, 50, 170)
     assert wkt.startswith("POLYGON")
     assert centroid.startswith("POINT")
-    # Should cross IDL, so east > 180 in the polygon coordinates
-    assert any(
-        float(coord) > 180 for coord in wkt.replace("POLYGON ((", "").replace("))", "").replace(",", " ").split()
+    # IDL crossing is represented by orientation here; denormalization to >180
+    # happens later in handle_solr_spatial for geometry output.
+    assert all(
+        -180 <= float(coord) <= 180
+        for coord in wkt.replace("POLYGON ((", "").replace("))", "").replace(",", " ").split()
     )
 
     from shapely.wkt import loads
@@ -80,13 +81,25 @@ def test_create_polygon_wkt_from_bbox_idl_crossing():
     [
         (91, 50, 10, 0),
         (60, -91, 10, 0),
-        (60, 50, 181, 0),
-        (60, 50, 10, -181),
     ],
 )
 def test_create_polygon_wkt_from_bbox_out_of_bounds(north, south, east, west):
     with pytest.raises(ValueError):
         create_polygon_wkt_from_bbox(north, east, south, west)
+
+
+@pytest.mark.parametrize(
+    "north,south,east,west",
+    [
+        (60, 50, 181, 0),
+        (60, 50, 10, -181),
+    ],
+)
+def test_create_polygon_wkt_from_bbox_allows_extended_longitudes(north, south, east, west):
+    wkt, centroid = create_polygon_wkt_from_bbox(north, east, south, west)
+
+    assert wkt.startswith("POLYGON")
+    assert centroid.startswith("POINT")
 
 
 def test_create_polygon_wkt_from_bbox_south_greater_than_north():
@@ -118,8 +131,8 @@ def test_parse_envelope_to_bbox_out_of_bounds():
 
 def test_wkt_to_segmetized_geojson_polygon():
     wkt, _ = create_polygon_wkt_from_bbox(60, 10, 50, 0)
-    geojson = wkt_to_segmetized_geojson(wkt)
-    assert "Polygon" in geojson
+    geojson = wkt_rect_to_segmetized_geom(wkt)
+    assert "POLYGON" in geojson
 
 
 def test_wkt_to_segmetized_geojson_linestring():
@@ -127,13 +140,13 @@ def test_wkt_to_segmetized_geojson_linestring():
 
     line = LineString([(0, 0), (1, 1)])
     wkt = line.wkt
-    geojson = wkt_to_segmetized_geojson(wkt)
-    assert "LineString" in geojson
+    geojson = wkt_rect_to_segmetized_geom(wkt)
+    assert "LINESTRING" in geojson
 
 
 def test_wkt_to_segmetized_geojson_point():
     from shapely.geometry import Point
 
     wkt = Point(1, 2).wkt
-    geojson = wkt_to_segmetized_geojson(wkt)
-    assert "Point" in geojson
+    geojson = wkt_rect_to_segmetized_geom(wkt)
+    assert "POINT" in geojson
