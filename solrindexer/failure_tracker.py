@@ -18,7 +18,6 @@ permissions and limitations under the License.
 """
 
 import logging
-import threading
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -47,7 +46,6 @@ class FailureTracker:
     """Centralized tracker for all document processing failures."""
     failures: list[FailureRecord] = field(default_factory=list)
     warnings: list[WarningRecord] = field(default_factory=list)
-    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def add_failure(self, filename: str, error_message: str, error_stage: str = "",
                     metadata_identifier: str = None) -> None:
@@ -71,8 +69,7 @@ class FailureTracker:
             error_message=error_message,
             error_stage=error_stage
         )
-        with self._lock:
-            self.failures.append(record)
+        self.failures.append(record)
 
     def add_warning(self, filename: str, warning_message: str, warning_stage: str = "",
                     metadata_identifier: str = None) -> None:
@@ -83,8 +80,7 @@ class FailureTracker:
             warning_message=warning_message,
             warning_stage=warning_stage,
         )
-        with self._lock:
-            self.warnings.append(record)
+        self.warnings.append(record)
 
     def get_summary(self) -> str:
         """

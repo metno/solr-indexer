@@ -284,12 +284,10 @@ def _fix_nersc_url(dapurl):
 def _extract_feature_type(dapurl):
     """Open remote dataset and return (featureType, error_msg).
 
-    Tries xarray first, falls back to netCDF4.  Either value in the
-    returned tuple may be None.  error_msg is only set when an actual
+    Uses xarray for thread-safe extraction (netCDF4 can segfault in multithreaded contexts).
+    Either value in the returned tuple may be None. error_msg is only set when an actual
     exception prevented extraction (not when the attribute is simply absent).
     """
-    # --- xarray attempt ---
-    xr_error = None
     try:
         import xarray as xr
         ds = xr.open_dataset(dapurl, decode_times=False)
@@ -299,34 +297,21 @@ def _extract_feature_type(dapurl):
             ds.close()
         return (ft, None)
     except ImportError:
-        xr_error = "xarray not available"
+        error_msg = "xarray not available"
+        logger.error(
+            "Cannot extract featureType from %s: xarray not installed",
+            dapurl,
+        )
+        return (None, error_msg)
     except AttributeError:
         return (None, None)
     except Exception as e:
-        xr_error = str(e)
-        logger.debug("xarray failed for %s: %s — falling back to netCDF4", dapurl, e)
-
-    # --- netCDF4 fallback ---
-    # ds = None
-    # try:
-    #     ds = netCDF4.Dataset(dapurl, 'r')
-    #     return (ds.getncattr('featureType'), None)
-    # except AttributeError:
-    #     return (None, None)
-    # except Exception as e:
-    #     error_msg = (
-    #         f"Feature type extraction failed"
-    #         f" (xarray: {xr_error}; netCDF4: {e})"
-    #     )
-    #     logger.error(
-    #         "Something failed extracting featureType from %s. Reason: %s",
-    #         dapurl, e,
-    #     )
-    #     return (None, error_msg)
-    # finally:
-    #     if ds is not None:
-    #         logger.debug("Closing netCDF file.")
-    #         ds.close()
+        error_msg = f"Feature type extraction failed: {e}"
+        logger.error(
+            "Something failed extracting featureType from %s. Reason: %s",
+            dapurl, e,
+        )
+        return (None, error_msg)
 
 
 def _canonical_feature_type(feature_type):

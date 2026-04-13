@@ -3,6 +3,7 @@ import json
 import lxml.etree as ET
 import pytest
 from solrindexer.indexdata import MMD4SolR
+from solrindexer.script.indexdata import _split_files_for_processes
 
 """ Global test variables"""
 infile = "./tests/data/reference_nc.xml"
@@ -753,3 +754,24 @@ def test_extract_related_information_no_related_information():
     assert "related_information_description" not in solr
     assert "related_information_json" not in solr
     assert "related_url_landing_page" not in solr
+
+
+@pytest.mark.indexdata
+def test_split_files_for_processes_round_robin_distribution():
+    files = [f"f{i}.xml" for i in range(7)]
+    shards = _split_files_for_processes(files, process_count=3)
+
+    assert len(shards) == 3
+    assert shards[0] == ["f0.xml", "f3.xml", "f6.xml"]
+    assert shards[1] == ["f1.xml", "f4.xml"]
+    assert shards[2] == ["f2.xml", "f5.xml"]
+
+
+@pytest.mark.indexdata
+def test_split_files_for_processes_caps_to_file_count():
+    files = ["a.xml", "b.xml"]
+    shards = _split_files_for_processes(files, process_count=10)
+
+    assert len(shards) == 2
+    assert shards[0] == ["a.xml"]
+    assert shards[1] == ["b.xml"]

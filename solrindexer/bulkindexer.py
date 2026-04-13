@@ -25,6 +25,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from solrindexer.failure_tracker import FailureTracker
 from solrindexer.indexdata import IndexMMD, MMD4SolR
 from solrindexer.multithread.io import load_file
+from solrindexer.multithread.threads import multiprocess
 from solrindexer.tools import (
     add_nbs_thumbnail_bulk,
     get_dataset,
@@ -361,8 +362,8 @@ class BulkIndexer:
         parentids = {pid for pid in {s for s in statuses if s is not None}
                      if pid not in parent_ids_processed}
 
-        parent_found = False
         for pid in parentids:
+            parent_found = False
             logger.debug("checking parent: %s", pid)
             parent = [el for el in docs if el['id'] == pid]
             logger.debug("parents found in this chunk: %s", parent)
@@ -429,14 +430,12 @@ class BulkIndexer:
                             parent_ids_pending.discard(pid)
 
     def bulkindex(self, filelist):
-        """Index MMD files to Solr using a per-file pipeline.
+        """Index MMD files to Solr using a two-phase pipeline.
 
-        Every file runs all stages (load → parse/validate → feature-type →
-        thumbnail) inside its own worker thread.  Completed documents are
-        collected by the main thread; once ``chunksize`` documents have
-        accumulated the parent/child graph is resolved and a background
-        thread flushes that chunk to Solr, allowing the worker pool to
-        continue without waiting for the HTTP round-trip.
+        Phase 1: load/parse/convert all files concurrently.
+        Phase 2: process feature_type/thumbnails and index in chunks.
+
+        Parent/child integrity is resolved once globally (not per chunk).
         """
 
         chunksize = self.chunksize
@@ -455,6 +454,16 @@ class BulkIndexer:
         docs_indexed = 0
         docs_skipped = 0
 
+        # Stage timing (wall-clock seconds)
+        t_bulk_start = time.perf_counter()
+        t_phase1 = 0.0
+        t_parent_prepare = 0.0
+        t_feature_type = 0.0
+        t_thumbnail = 0.0
+        t_index_dispatch = 0.0
+        t_final_parent = 0.0
+        t_index_join = 0.0
+
         # ------------------------------------------------------------------ #
         # Per-file closure: runs entirely inside a worker thread.             #
         # Returns (doc, status); never raises — exceptions go to tracker.     #
@@ -465,80 +474,16 @@ class BulkIndexer:
 
             # Stage 2: parse, validate, convert to Solr doc
             doc, status = self.mmd2solr(mmd, None, file_path)
-            if doc is None:
-                return (None, status)
-
-            # Stage 3: feature-type lookup (I/O-bound — network to OPeNDAP)
-            if not skip_feature_type and 'data_access_url_opendap' in doc:
-                try:
-                    newdoc, ft_error = process_feature_type(doc)
-                    doc = newdoc
-                    if ft_error is not None:
-                        self.failure_tracker.add_warning(
-                            filename=file_path,
-                            warning_message=ft_error,
-                            warning_stage="feature_type",
-                            metadata_identifier=doc.get('id'),
-                        )
-                except Exception as e:
-                    self.failure_tracker.add_warning(
-                        filename=file_path,
-                        warning_message=f"feature_type stage raised unexpectedly: {e}",
-                        warning_stage="feature_type",
-                        metadata_identifier=doc.get('id'),
-                    )
-
-            # Stage 4: NBS thumbnail lookup (I/O-bound — filesytem)
-            if self.tflg and nbs_scope and 'data_access_url_ogc_wms' in doc:
-                try:
-                    doc = add_nbs_thumbnail_bulk(doc)
-                except Exception as e:
-                    self.failure_tracker.add_warning(
-                        filename=file_path,
-                        warning_message=f"thumbnail stage raised unexpectedly: {e}",
-                        warning_stage="thumbnail",
-                        metadata_identifier=doc.get('id'),
-                    )
-            elif self.tflg and not nbs_scope and 'data_access_url_ogc_wms' in doc:
-                logger.warning(
-                    "Thumbnail flag enabled, but only NBS thumbnail generation is supported"
-                )
-
             return (doc, status)
 
-        # ------------------------------------------------------------------ #
-        # Streaming collection loop                                           #
-        # ------------------------------------------------------------------ #
-        pending_docs: list = []
-        pending_file_ids: dict = {}
-        pending_statuses: list = []
+        docs: list = []
+        statuses: list = []
+        file_ids: dict = {}
 
-        def _flush_chunk():
-            """Resolve parent/child for accumulated docs, then fire index thread."""
-            nonlocal docs_indexed
-            if not pending_docs:
-                return
-            doc_ids_processed.update(d['id'] for d in pending_docs)
-            self._resolve_parent_child(
-                pending_docs, pending_file_ids,
-                parent_ids_pending, parent_ids_processed,
-                parent_ids_found, doc_ids_processed,
-                pending_statuses,
-            )
-            docs_indexed += len(pending_docs)
-            logger.info("---- Indexing %d documents ----", len(pending_docs))
-            indexthread = threading.Thread(
-                target=self.add2solr,
-                name="Index thread %d" % (len(self.indexthreads) + 1),
-                args=(list(pending_docs), dict(pending_file_ids)),
-            )
-            indexthread.start()
-            self.indexthreads.append(indexthread)
-            logger.debug("Started %s", indexthread.name)
-            pending_docs.clear()
-            pending_file_ids.clear()
-            pending_statuses.clear()
-
+        # ------------------------------------------------------------------ #
+        # Phase 1: Read and convert all files concurrently                    #
+        # ------------------------------------------------------------------ #
+        t_phase1_start = time.perf_counter()
         with ThreadPoolExecutor(max_workers=self.threads) as executor:
             futures = {executor.submit(_pipeline, f): f for f in filelist}
             total = len(futures)
@@ -564,21 +509,133 @@ class BulkIndexer:
                 if doc is None:
                     docs_skipped += 1
                 else:
-                    pending_docs.append(doc)
-                    pending_file_ids[doc['id']] = file_path
-                    pending_statuses.append(status)
+                    docs.append(doc)
+                    statuses.append(status)
+                    file_ids[doc['id']] = file_path
 
                 if completed % chunksize == 0 or completed == total:
                     logger.info("Progress: completed %d / %d files", completed, total)
+        t_phase1 = time.perf_counter() - t_phase1_start
+        logger.debug(
+            "timing.phase1_load_convert=%.3fs files=%d docs_ok=%d docs_skipped=%d",
+            t_phase1,
+            files_processed,
+            len(docs),
+            docs_skipped,
+        )
 
-                if len(pending_docs) >= chunksize:
-                    _flush_chunk()
+        # Build parent-tracking state once for the full document set.
+        t_parent_prepare_start = time.perf_counter()
+        doc_ids_processed.update(d['id'] for d in docs)
+        parentids = {s for s in statuses if s is not None}
+        parent_ids_found.update(parentids)
+        for pid in parentids:
+            if pid in doc_ids_processed:
+                # Parent present in this run: mark directly before indexing.
+                parent_docs = [el for el in docs if el['id'] == pid]
+                if parent_docs:
+                    parent_doc = parent_docs[0]
+                    if parent_doc.get('isParent') is False:
+                        parent_doc.update({'isParent': True})
+                    parent_ids_processed.add(pid)
+                else:
+                    parent_ids_pending.add(pid)
+            else:
+                parent_ids_pending.add(pid)
+        t_parent_prepare = time.perf_counter() - t_parent_prepare_start
+        logger.debug(
+            "timing.parent_prepare=%.3fs parent_refs=%d pending=%d processed=%d",
+            t_parent_prepare,
+            len(parentids),
+            len(parent_ids_pending),
+            len(parent_ids_processed),
+        )
 
-        # Flush any remainder left after the pool closes
-        _flush_chunk()
+        # ------------------------------------------------------------------ #
+        # Phase 2: Process and index in chunks                                #
+        # ------------------------------------------------------------------ #
+        if skip_feature_type is True:
+            logger.info("skip-feature-type is True in config. Skipping feature type..")
+
+        for i in range(0, len(docs), chunksize):
+            chunk_docs = list(docs[i:i + chunksize])
+            if not chunk_docs:
+                continue
+
+            chunk_file_ids = {
+                doc['id']: file_ids.get(doc['id'], 'unknown')
+                for doc in chunk_docs
+            }
+
+            if skip_feature_type is not True:
+                dap_docs = [doc for doc in chunk_docs if 'data_access_url_opendap' in doc]
+                if dap_docs:
+                    logger.info("---- Process featureType with processes %d ----", self.threads)
+                    t_feature_chunk_start = time.perf_counter()
+                    for (doc, (newdoc, ft_error)) in multiprocess(
+                        fn=process_feature_type,
+                        inputs=dap_docs,
+                        max_concurrency=self.threads,
+                    ):
+                        chunk_docs.remove(doc)
+                        chunk_docs.append(newdoc)
+                        if ft_error is not None:
+                            self.failure_tracker.add_warning(
+                                filename=chunk_file_ids.get(doc.get('id'), 'unknown'),
+                                warning_message=ft_error,
+                                warning_stage="feature_type",
+                                metadata_identifier=doc.get('id'),
+                            )
+                    t_feature_chunk = time.perf_counter() - t_feature_chunk_start
+                    t_feature_type += t_feature_chunk
+                    logger.debug(
+                        "timing.chunk_feature_type=%.3fs chunk_size=%d dap_docs=%d",
+                        t_feature_chunk,
+                        len(chunk_docs),
+                        len(dap_docs),
+                    )
+
+            if self.tflg is True:
+                thumb_docs = [doc for doc in chunk_docs if 'data_access_url_ogc_wms' in doc]
+                if thumb_docs and nbs_scope:
+                    logger.info("---- Creating thumbnails concurrently %d ----", self.threads)
+                    t_thumb_chunk_start = time.perf_counter()
+                    for (doc, newdoc) in multiprocess(
+                        fn=add_nbs_thumbnail_bulk,
+                        inputs=thumb_docs,
+                        max_concurrency=self.threads,
+                    ):
+                        chunk_docs.remove(doc)
+                        chunk_docs.append(newdoc)
+                    t_thumb_chunk = time.perf_counter() - t_thumb_chunk_start
+                    t_thumbnail += t_thumb_chunk
+                    logger.debug(
+                        "timing.chunk_thumbnail=%.3fs chunk_size=%d thumb_docs=%d",
+                        t_thumb_chunk,
+                        len(chunk_docs),
+                        len(thumb_docs),
+                    )
+                elif thumb_docs:
+                    logger.warning(
+                        "Thumbnail flag enabled, but only NBS thumbnail generation is supported"
+                    )
+
+            docs_indexed += len(chunk_docs)
+            logger.info("---- Indexing %d documents ----", len(chunk_docs))
+            t_index_dispatch_start = time.perf_counter()
+            indexthread = threading.Thread(
+                target=self.add2solr,
+                name="Index thread %d" % (len(self.indexthreads) + 1),
+                args=(chunk_docs, chunk_file_ids),
+            )
+            indexthread.start()
+            self.indexthreads.append(indexthread)
+            logger.debug("Started %s", indexthread.name)
+            t_index_dispatch += (time.perf_counter() - t_index_dispatch_start)
 
         # Resolve any parents that remained pending until the very end
         ppending = set(parent_ids_pending)
+        t_final_parent_start = time.perf_counter()
         if ppending:
             logger.info(" --- Final parent/child integrity pass --- ")
             logger.debug("Checking %d unresolved parent IDs", len(ppending))
@@ -595,10 +652,27 @@ class BulkIndexer:
                             logger.error("Could not update parent. reason: %s", e)
                         parent_ids_processed.add(pid)
                         parent_ids_pending.discard(pid)
+        t_final_parent = time.perf_counter() - t_final_parent_start
 
         # Wait for all Solr index threads to finish
+        t_index_join_start = time.perf_counter()
         for thr in self.indexthreads:
             thr.join()
+        t_index_join = time.perf_counter() - t_index_join_start
+
+        t_bulk_total = time.perf_counter() - t_bulk_start
+        logger.debug(
+            "timing.bulkindex total=%.3fs phase1=%.3fs parent_prepare=%.3fs feature_type=%.3fs "
+            "thumbnail=%.3fs index_dispatch=%.3fs final_parent=%.3fs index_join=%.3fs",
+            t_bulk_total,
+            t_phase1,
+            t_parent_prepare,
+            t_feature_type,
+            t_thumbnail,
+            t_index_dispatch,
+            t_final_parent,
+            t_index_join,
+        )
 
         self._log_parent_integrity(
             parent_ids_found=parent_ids_found,

@@ -50,7 +50,7 @@ def testDateFormatInValid():
 # ---------------------------------------------------------------------------
 
 class TestExtractFeatureType:
-    """Tests for _extract_feature_type (xarray-first, netCDF4 fallback)."""
+    """Tests for _extract_feature_type (xarray only, thread-safe)."""
 
     @pytest.mark.indexdata
     def test_xarray_success(self):
@@ -79,39 +79,20 @@ class TestExtractFeatureType:
         assert err is None
 
     @pytest.mark.indexdata
-    def test_xarray_fails_netcdf4_fallback_success(self):
-        """When xarray raises, netCDF4 fallback kicks in and succeeds."""
-        mock_nc = MagicMock()
-        mock_nc.getncattr.return_value = "trajectory"
-
+    def test_xarray_fails_returns_error_message(self):
+        """When xarray raises, returns (None, error_msg) — no fallback available."""
         with patch("xarray.open_dataset", side_effect=RuntimeError("xr boom")):
-            with patch("netCDF4.Dataset", return_value=mock_nc):
-                ft, err = _extract_feature_type("http://fake.dap/ds")
-
-        assert ft == "trajectory"
-        assert err is None
-        mock_nc.close.assert_called_once()
-
-    @pytest.mark.indexdata
-    def test_both_fail_returns_error_message(self):
-        """When both xarray and netCDF4 fail, returns (None, error_msg)."""
-        with patch("xarray.open_dataset", side_effect=RuntimeError("xr boom")):
-            with patch("netCDF4.Dataset", side_effect=OSError("nc boom")):
-                ft, err = _extract_feature_type("http://fake.dap/ds")
+            ft, err = _extract_feature_type("http://fake.dap/ds")
 
         assert ft is None
         assert err is not None
         assert "xr boom" in err
-        assert "nc boom" in err
 
     @pytest.mark.indexdata
-    def test_netcdf4_attribute_error_returns_none_no_error(self):
-        """AttributeError on netCDF4 (no featureType) is not treated as an error."""
-        with patch("xarray.open_dataset", side_effect=RuntimeError("xr boom")):
-            mock_nc = MagicMock()
-            mock_nc.getncattr.side_effect = AttributeError
-            with patch("netCDF4.Dataset", return_value=mock_nc):
-                ft, err = _extract_feature_type("http://fake.dap/ds")
+    def test_xarray_attribute_error_returns_none_no_error(self):
+        """AttributeError on xarray (no featureType) is not treated as an error."""
+        with patch("xarray.open_dataset", side_effect=AttributeError):
+            ft, err = _extract_feature_type("http://fake.dap/ds")
 
         assert ft is None
         assert err is None
@@ -150,8 +131,7 @@ class TestProcessFeatureType:
         """Extraction failure surfaces as non-None error_msg, doc is returned unchanged."""
         doc = self._make_doc()
         with patch("xarray.open_dataset", side_effect=RuntimeError("xr boom")):
-            with patch("netCDF4.Dataset", side_effect=OSError("nc boom")):
-                result_doc, err = process_feature_type(doc)
+            result_doc, err = process_feature_type(doc)
 
         assert result_doc is doc
         assert err is not None

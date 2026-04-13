@@ -3,6 +3,7 @@
 
 import argparse
 import logging
+import multiprocessing as mp
 import os
 import sys
 import time
@@ -13,9 +14,10 @@ import pysolr
 from dotenv import load_dotenv
 from requests.auth import HTTPBasicAuth
 from solrindexer.bulkindexer import BulkIndexer
+from solrindexer.failure_tracker import FailureTracker
 from solrindexer.indexdata import IndexMMD
 from solrindexer.script.searchindex import parse_cfg
-from solrindexer.tools import initSolr, solr_ping, to_solr_id
+from solrindexer.tools import get_dataset, initSolr, solr_add, solr_ping, to_solr_id
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +64,12 @@ def parse_arguments():
     )
 
     parser.add_argument("--threads", type=int, default=None, help="Number of worker threads")
+    parser.add_argument(
+        "--processes",
+        type=int,
+        default=1,
+        help="Number of BulkIndexer processes for large bulk runs",
+    )
     parser.add_argument("--chunksize", type=int, default=None, help="Batch size for bulk indexing")
 
     parser.add_argument("-t", "--thumbnail", action="store_true", help="Enable thumbnail indexing")
@@ -92,6 +100,227 @@ def parse_arguments():
         parser.print_help()
         parser.exit(2)
     return args
+
+
+def _split_files_for_processes(files, process_count):
+    """Split files into near-even shards using round-robin assignment."""
+    if process_count <= 1 or len(files) <= 1:
+        return [files]
+
+    shards = [[] for _ in range(min(process_count, len(files)))]
+    for idx, file_path in enumerate(files):
+        shards[idx % len(shards)].append(file_path)
+    return [shard for shard in shards if shard]
+
+
+def _bulkindex_worker(
+    worker_id,
+    shard_files,
+    solr_url,
+    cfg,
+    workers,
+    chunksize,
+    thumbnails_enabled,
+    result_queue,
+):
+    """Run one BulkIndexer instance inside a dedicated process."""
+    try:
+        authentication = _resolve_authentication(cfg)
+        initSolr(
+            solr_url,
+            pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=authentication),
+            authentication,
+        )
+
+        bulk = BulkIndexer(
+            shard_files,
+            solr_url,
+            threads=workers,
+            chunksize=chunksize,
+            auth=authentication,
+            tflg=thumbnails_enabled,
+            thumbClass=None,
+            config=cfg,
+        )
+        result = bulk.bulkindex(shard_files)
+        if not result or len(result) < 8:
+            result_queue.put(
+                {
+                    "worker_id": worker_id,
+                    "ok": False,
+                    "error": "BulkIndexer returned no result tuple",
+                }
+            )
+            return
+
+        failure_tracker = result[7]
+        result_queue.put(
+            {
+                "worker_id": worker_id,
+                "ok": True,
+                "parent_ids_found": list(result[0]),
+                "parent_ids_pending": list(result[1]),
+                "parent_ids_processed": list(result[2]),
+                "doc_ids_processed": list(result[3]),
+                "docs_failed": result[4],
+                "docs_indexed": result[5],
+                "files_processed": result[6],
+                "failures": [vars(f) for f in failure_tracker.failures],
+                "warnings": [vars(w) for w in failure_tracker.warnings],
+            }
+        )
+    except Exception as exc:
+        result_queue.put(
+            {
+                "worker_id": worker_id,
+                "ok": False,
+                "error": f"{type(exc).__name__}: {exc}",
+            }
+        )
+
+
+def _resolve_pending_parents(solr_url, authentication, parent_ids_pending, parent_ids_processed):
+    """Resolve any remaining pending parent IDs after all workers finish."""
+    if not parent_ids_pending:
+        return
+
+    try:
+        initSolr(
+            solr_url,
+            pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=authentication),
+            authentication,
+        )
+    except Exception as e:
+        logger.warning("Could not reinitialize Solr client for final parent pass: %s", e)
+        return
+
+    for pid in list(parent_ids_pending):
+        try:
+            parent = get_dataset(pid)
+            if parent is None or parent.get("doc") is None:
+                continue
+            if parent["doc"].get("isParent") is False:
+                solr_add([IndexMMD._solr_update_parent_doc(parent["doc"])])
+            parent_ids_processed.add(pid)
+            parent_ids_pending.discard(pid)
+        except Exception as e:
+            logger.warning("Final parent update failed for %s: %s", pid, e)
+
+
+def _run_bulkindex_multiprocess(
+    files,
+    process_count,
+    solr_url,
+    cfg,
+    workers,
+    chunksize,
+    thumbnails_enabled,
+):
+    """Run multiple BulkIndexer instances in parallel processes and merge results."""
+    shards = _split_files_for_processes(files, process_count)
+    if len(shards) <= 1:
+        return None
+
+    logger.info(
+        "Multi-process mode enabled: processes=%d shards=%d",
+        process_count,
+        len(shards),
+    )
+
+    ctx = mp.get_context("spawn")
+    result_queue = ctx.Queue()
+    processes = []
+
+    for worker_id, shard in enumerate(shards, start=1):
+        proc = ctx.Process(
+            target=_bulkindex_worker,
+            args=(
+                worker_id,
+                shard,
+                solr_url,
+                cfg,
+                workers,
+                chunksize,
+                thumbnails_enabled,
+                result_queue,
+            ),
+            name=f"BulkIndexerProcess-{worker_id}",
+        )
+        proc.start()
+        processes.append(proc)
+
+    worker_payloads = []
+    for _ in processes:
+        worker_payloads.append(result_queue.get())
+
+    for proc in processes:
+        proc.join()
+
+    merged_failure_tracker = FailureTracker()
+    parent_ids_found = set()
+    parent_ids_pending = set()
+    parent_ids_processed = set()
+    doc_ids_processed = set()
+    docs_failed = 0
+    docs_indexed = 0
+    files_processed = 0
+
+    worker_errors = []
+    for payload in worker_payloads:
+        if not payload.get("ok"):
+            worker_errors.append(
+                f"worker {payload.get('worker_id', '?')}: {payload.get('error', 'unknown error')}"
+            )
+            continue
+
+        parent_ids_found.update(payload.get("parent_ids_found", []))
+        parent_ids_pending.update(payload.get("parent_ids_pending", []))
+        parent_ids_processed.update(payload.get("parent_ids_processed", []))
+        doc_ids_processed.update(payload.get("doc_ids_processed", []))
+        docs_failed += int(payload.get("docs_failed", 0))
+        docs_indexed += int(payload.get("docs_indexed", 0))
+        files_processed += int(payload.get("files_processed", 0))
+
+        for failure in payload.get("failures", []):
+            merged_failure_tracker.add_failure(
+                filename=failure.get("filename", "unknown"),
+                error_message=failure.get("error_message", ""),
+                error_stage=failure.get("error_stage", ""),
+                metadata_identifier=failure.get("metadata_identifier"),
+            )
+
+        for warning in payload.get("warnings", []):
+            merged_failure_tracker.add_warning(
+                filename=warning.get("filename", "unknown"),
+                warning_message=warning.get("warning_message", ""),
+                warning_stage=warning.get("warning_stage", ""),
+                metadata_identifier=warning.get("metadata_identifier"),
+            )
+
+    # Pending cannot include IDs already processed by any worker.
+    parent_ids_pending -= parent_ids_processed
+
+    authentication = _resolve_authentication(cfg)
+    _resolve_pending_parents(
+        solr_url=solr_url,
+        authentication=authentication,
+        parent_ids_pending=parent_ids_pending,
+        parent_ids_processed=parent_ids_processed,
+    )
+
+    if worker_errors:
+        raise RuntimeError("Multi-process bulkindex failed: " + "; ".join(worker_errors))
+
+    return (
+        parent_ids_found,
+        parent_ids_pending,
+        parent_ids_processed,
+        doc_ids_processed,
+        docs_failed,
+        docs_indexed,
+        files_processed,
+        merged_failure_tracker,
+    )
 
 
 def _resolve_authentication(cfg):
@@ -216,30 +445,48 @@ def main():
             workers = configured_threads
             logger.debug(f"Multiple file input: using {workers} workers (concurrent processing)")
         chunksize = args.chunksize if args.chunksize is not None else int(cfg.get("batch-size", DEFAULT_CHUNKSIZE))
+        process_count = max(1, int(args.processes or 1))
+        if args.input_file and process_count > 1:
+            logger.warning("Single input file mode: forcing --processes=1")
+            process_count = 1
 
         thumbnails_enabled = _resolve_thumbnail_flags(args, cfg)
         # Thumbnail generation is handled only for NBS scope.
         thumb_class = None
 
         logger.info(
-            "Starting indexing with files=%d workers=%d chunksize=%d thumbnails=%s",
+            "Starting indexing with files=%d workers=%d chunksize=%d processes=%d thumbnails=%s",
             len(files),
             workers,
             chunksize,
+            process_count,
             thumbnails_enabled,
         )
 
-        bulk = BulkIndexer(
-            files,
-            solr_url,
-            threads=workers,
-            chunksize=chunksize,
-            auth=authentication,
-            tflg=thumbnails_enabled,
-            thumbClass=thumb_class,
-            config=cfg,
-        )
-        result = bulk.bulkindex(files)
+        result = None
+        if process_count > 1 and len(files) > 1:
+            result = _run_bulkindex_multiprocess(
+                files=files,
+                process_count=process_count,
+                solr_url=solr_url,
+                cfg=cfg,
+                workers=workers,
+                chunksize=chunksize,
+                thumbnails_enabled=thumbnails_enabled,
+            )
+
+        if result is None:
+            bulk = BulkIndexer(
+                files,
+                solr_url,
+                threads=workers,
+                chunksize=chunksize,
+                auth=authentication,
+                tflg=thumbnails_enabled,
+                thumbClass=thumb_class,
+                config=cfg,
+            )
+            result = bulk.bulkindex(files)
 
         if result and len(result) >= 8:
             docs_failed    = result[4]
