@@ -20,6 +20,7 @@ permissions and limitations under the License.
 import logging
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from solrindexer.failure_tracker import FailureTracker
 from solrindexer.indexdata import IndexMMD, MMD4SolR
@@ -437,7 +438,6 @@ class BulkIndexer:
         thread flushes that chunk to Solr, allowing the worker pool to
         continue without waiting for the HTTP round-trip.
         """
-        from concurrent.futures import ThreadPoolExecutor, as_completed
 
         chunksize = self.chunksize
         skip_feature_type = self.config.get('skip-feature-type', False)

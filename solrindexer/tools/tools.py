@@ -28,7 +28,6 @@ import sys
 from threading import Lock
 
 import dateutil.parser
-import netCDF4
 import pysolr
 import requests
 import validators
@@ -308,26 +307,26 @@ def _extract_feature_type(dapurl):
         logger.debug("xarray failed for %s: %s — falling back to netCDF4", dapurl, e)
 
     # --- netCDF4 fallback ---
-    ds = None
-    try:
-        ds = netCDF4.Dataset(dapurl, 'r')
-        return (ds.getncattr('featureType'), None)
-    except AttributeError:
-        return (None, None)
-    except Exception as e:
-        error_msg = (
-            f"Feature type extraction failed"
-            f" (xarray: {xr_error}; netCDF4: {e})"
-        )
-        logger.error(
-            "Something failed extracting featureType from %s. Reason: %s",
-            dapurl, e,
-        )
-        return (None, error_msg)
-    finally:
-        if ds is not None:
-            logger.debug("Closing netCDF file.")
-            ds.close()
+    # ds = None
+    # try:
+    #     ds = netCDF4.Dataset(dapurl, 'r')
+    #     return (ds.getncattr('featureType'), None)
+    # except AttributeError:
+    #     return (None, None)
+    # except Exception as e:
+    #     error_msg = (
+    #         f"Feature type extraction failed"
+    #         f" (xarray: {xr_error}; netCDF4: {e})"
+    #     )
+    #     logger.error(
+    #         "Something failed extracting featureType from %s. Reason: %s",
+    #         dapurl, e,
+    #     )
+    #     return (None, error_msg)
+    # finally:
+    #     if ds is not None:
+    #         logger.debug("Closing netCDF file.")
+    #         ds.close()
 
 
 def _canonical_feature_type(feature_type):
