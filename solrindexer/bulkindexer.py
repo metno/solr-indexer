@@ -76,10 +76,17 @@ class BulkIndexer:
         if self.config:
             vocabulary_backend = self.config.get("vocabulary-backend", "native")
             vocabulary_ttl_path = self.config.get("vocabulary-ttl-path")
+            vocabulary_endpoint_base_url = self.config.get(
+                "vocabulary-endpoint-base-url",
+                "https://vocab.met.no/mmd",
+            )
+            vocabulary_endpoint_timeout = float(self.config.get("vocabulary-endpoint-timeout", 20.0))
             try:
                 self.vocabulary_loader = create_vocabulary_loader(
                     ttl_path=vocabulary_ttl_path,
                     backend=vocabulary_backend,
+                    endpoint_base_url=vocabulary_endpoint_base_url,
+                    endpoint_timeout=vocabulary_endpoint_timeout,
                 )
                 if self.vocabulary_loader is not None:
                     logger.info(f"Vocabulary loader initialized with backend: {vocabulary_backend}")
@@ -409,11 +416,18 @@ class BulkIndexer:
                 logger.info("skip-feature-type is True in config. Skipping feature type..")
             else:
                 logger.info("---- Process featureType concurrently %d ----", self.threads)
-                for (doc, newdoc) in multiprocess(fn=process_feature_type,
-                                                  inputs=dap_docs,
-                                                  max_concurrency=self.threads):
+                for (doc, (newdoc, ft_error)) in multiprocess(fn=process_feature_type,
+                                                              inputs=dap_docs,
+                                                              max_concurrency=self.threads):
                     docs.remove(doc)
                     docs.append(newdoc)
+                    if ft_error is not None:
+                        self.failure_tracker.add_warning(
+                            filename=file_ids.get(doc.get('id'), 'unknown'),
+                            warning_message=ft_error,
+                            warning_stage="feature_type",
+                            metadata_identifier=doc.get('id'),
+                        )
                 """################################## THREADS FINISHED ##################"""
                 Futures.ALL_COMPLETED
             """TODO: Add wms thumbnail batch creation here."""

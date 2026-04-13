@@ -29,7 +29,9 @@ import logging
 import os
 import sys
 
+import lxml.etree as ET
 import pysolr
+import requests
 import yaml
 from dotenv import load_dotenv
 from requests.auth import HTTPBasicAuth
@@ -41,6 +43,7 @@ if os.getenv("SOLRINDEXER_LOGLEVEL", "INFO") == "DEBUG":
 
 
 SOLR_FL = "*,personnel_json:[json],data_access_json:[json],platform_json:[json],geometry_geojson:[json],related_information_json:[json],last_metadata_update_json:[json]"
+SOLR_MMD_FL = "mmd_xml_file:[xml]"
 
 
 def _print_pretty_docs(docs):
@@ -66,6 +69,31 @@ def _print_pretty_docs(docs):
     print(pretty)
 
 
+def _format_xml_for_display(xml_text):
+    """Return pretty-printed XML when parsing succeeds, otherwise the original text."""
+    if not xml_text:
+        return xml_text
+    try:
+        root = ET.fromstring(xml_text.encode("utf-8"))
+        return ET.tostring(root, pretty_print=True, encoding="unicode")
+    except Exception:
+        return xml_text
+
+
+def _print_pretty_xml(xml_text):
+    """Print XML using Rich syntax highlighting if available, otherwise plain text."""
+    formatted_xml = _format_xml_for_display(xml_text)
+    try:
+        from rich.console import Console
+        from rich.syntax import Syntax
+
+        Console().print(Syntax(formatted_xml, "xml", word_wrap=True))
+        return
+    except ImportError:
+        pass
+    print(formatted_xml)
+
+
 def parse_arguments():
     parser = argparse.ArgumentParser()
 
@@ -76,6 +104,8 @@ def parse_arguments():
     parser.add_argument('-d', '--delete', action='store_true', help="Flag to delete records")
     parser.add_argument('-a', '--always_commit', action='store_true',
                         help="Flag to commit directly")
+    parser.add_argument('--mmd', action='store_true',
+                        help="Return mmd_xml_file using Solr XML response writer and xml transformer")
 
     args = parser.parse_args()
 
@@ -84,6 +114,24 @@ def parse_arguments():
         parser.exit()
 
     return args
+
+
+def build_search_request(args):
+    """Build Solr search parameters for standard and raw MMD XML modes."""
+    q_string = str(args.string).strip()
+    if args.mmd:
+        return {
+            "q": q_string,
+            "wt": "xml",
+            "rows": 10,
+            "fl": SOLR_MMD_FL,
+        }
+    return {
+        "q": q_string,
+        "wt": "json",
+        "rows": 10,
+        "fl": SOLR_FL,
+    }
 
 
 def parse_cfg(cfgfile):
@@ -113,6 +161,8 @@ class IndexMMD:
         """
         Connect to SolR core
         """
+        self.solr_url = mysolrserver
+        self.authentication = authentication
         try:
             self.solrc = pysolr.Solr(mysolrserver, always_commit=commit, timeout=1020,
                                      auth=authentication)
@@ -154,7 +204,17 @@ class IndexMMD:
 
         try:
             logger.info("Searching with q=%s", q_string)
-            results = self.solrc.search(q_string, **{"wt": "json", "rows": 10, "fl": SOLR_FL})
+            params = build_search_request(myargs)
+            if myargs.mmd:
+                results = requests.get(
+                    self.solr_url + "/select",
+                    params=params,
+                    auth=self.authentication,
+                    timeout=1020,
+                )
+                results.raise_for_status()
+            else:
+                results = self.solrc.search(q_string, **{k: v for k, v in params.items() if k != "q"})
         except Exception as e:
             logger.info("Something failed: %s", str(e))
 
@@ -226,8 +286,17 @@ def main():
 
     # Search for records
     mysolr = IndexMMD(mySolRc, args.always_commit, authentication)
+
+    if args.mmd and args.delete:
+        logger.error("--delete cannot be used together with --mmd because XML mode returns only mmd_xml_file")
+        return 1
+
     myresults = mysolr.search(args)
     if myresults is not None:
+        if args.mmd:
+            _print_pretty_xml(myresults.text)
+            return 0
+
         logger.info('Found %d matches', myresults.hits)
         logger.info('Looping through matches:')
         i = 0

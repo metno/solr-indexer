@@ -24,6 +24,7 @@ import pytest
 from solrindexer.vocabulary import (
     VocabularyLegacy,
     VocabularyLoader,
+    VocabularyRestSkosmos,
     create_vocabulary_loader,
 )
 
@@ -164,9 +165,9 @@ class TestCreateVocabularyLoader:
         assert isinstance(loader, VocabularyLoader)
 
     def test_create_native_loader_without_path(self):
-        """Test creating native loader without path returns None."""
+        """Test native backend without TTL path falls back to REST backend."""
         loader = create_vocabulary_loader(ttl_path=None, backend="native")
-        assert loader is None
+        assert isinstance(loader, VocabularyRestSkosmos)
 
     def test_create_legacy_loader(self):
         """Test creating legacy loader."""
@@ -180,6 +181,76 @@ class TestCreateVocabularyLoader:
         """Test that ValueError is raised for invalid backend."""
         with pytest.raises(ValueError, match="Unknown vocabulary backend"):
             create_vocabulary_loader(backend="invalid-backend")
+
+    def test_create_rest_skosmos_loader(self):
+        """Test creating REST Skosmos loader."""
+        loader = create_vocabulary_loader(
+            backend="rest-skosmos",
+            endpoint_base_url="https://example.test/mmd",
+            endpoint_timeout=9.5,
+        )
+        assert isinstance(loader, VocabularyRestSkosmos)
+        assert loader.endpoint_base_url == "https://example.test/mmd"
+        assert loader.endpoint_timeout == 9.5
+
+
+class TestVocabularyRestSkosmos:
+    """Test REST/Skosmos vocabulary backend behavior."""
+
+    @staticmethod
+    def _mock_response(ttl_text: str):
+        response = MagicMock()
+        response.text = ttl_text
+        response.raise_for_status = MagicMock()
+        return response
+
+    def test_search_fetches_and_caches_vocabulary(self):
+        ttl_text = """
+        @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+        @prefix ex: <https://example.test/> .
+        ex:c1 skos:prefLabel "oceans"@en .
+        ex:c2 skos:prefLabel "climatologyMeteorologyAtmosphere"@en .
+        """
+        loader = VocabularyRestSkosmos("https://example.test/mmd", 7.0)
+
+        with patch("solrindexer.vocabulary.requests.get") as mock_get:
+            mock_get.return_value = self._mock_response(ttl_text)
+
+            vocab_uri = "https://vocab.met.no/mmd/ISO_Topic_Category"
+            assert loader.search(vocab_uri, "oceans") is True
+            assert loader.search(vocab_uri, "not-a-value") is False
+
+            # Second search should use in-memory cache and not call HTTP again.
+            assert mock_get.call_count == 1
+
+    def test_search_returns_false_on_http_error(self):
+        loader = VocabularyRestSkosmos("https://example.test/mmd", 7.0)
+        with patch("solrindexer.vocabulary.requests.get") as mock_get:
+            mock_get.side_effect = Exception("network down")
+            vocab_uri = "https://vocab.met.no/mmd/ISO_Topic_Category"
+            assert loader.search(vocab_uri, "oceans") is False
+
+    def test_timeout_and_endpoint_arguments_are_used(self):
+        ttl_text = """
+        @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+        @prefix ex: <https://example.test/> .
+        ex:c1 skos:prefLabel "In Work"@en .
+        """
+        loader = VocabularyRestSkosmos("https://example.test/mmd", 3.25)
+
+        with patch("solrindexer.vocabulary.requests.get") as mock_get:
+            mock_get.return_value = self._mock_response(ttl_text)
+            vocab_uri = "https://vocab.met.no/mmd/Dataset_Production_Status"
+            assert loader.search(vocab_uri, "In Work") is True
+
+            mock_get.assert_called_once_with(
+                "https://example.test/rest/v1/mmd/data",
+                params={
+                    "uri": "https://vocab.met.no/mmd/Dataset_Production_Status",
+                    "format": "text/turtle",
+                },
+                timeout=3.25,
+            )
 
 
 class TestMMD4SolRIntegration:

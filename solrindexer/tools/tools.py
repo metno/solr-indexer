@@ -283,16 +283,47 @@ def _fix_nersc_url(dapurl):
 
 
 def _extract_feature_type(dapurl):
-    """Open remote dataset and return extracted featureType attribute."""
+    """Open remote dataset and return (featureType, error_msg).
+
+    Tries xarray first, falls back to netCDF4.  Either value in the
+    returned tuple may be None.  error_msg is only set when an actual
+    exception prevented extraction (not when the attribute is simply absent).
+    """
+    # --- xarray attempt ---
+    xr_error = None
+    try:
+        import xarray as xr
+        ds = xr.open_dataset(dapurl, decode_times=False)
+        try:
+            ft = ds.attrs.get("featureType")
+        finally:
+            ds.close()
+        return (ft, None)
+    except ImportError:
+        xr_error = "xarray not available"
+    except AttributeError:
+        return (None, None)
+    except Exception as e:
+        xr_error = str(e)
+        logger.debug("xarray failed for %s: %s — falling back to netCDF4", dapurl, e)
+
+    # --- netCDF4 fallback ---
     ds = None
     try:
         ds = netCDF4.Dataset(dapurl, 'r')
-        return ds.getncattr('featureType')
+        return (ds.getncattr('featureType'), None)
     except AttributeError:
-        return None
+        return (None, None)
     except Exception as e:
-        logger.error("Something failed extracting featureType from %s. Reason: %s", dapurl, e)
-        return None
+        error_msg = (
+            f"Feature type extraction failed"
+            f" (xarray: {xr_error}; netCDF4: {e})"
+        )
+        logger.error(
+            "Something failed extracting featureType from %s. Reason: %s",
+            dapurl, e,
+        )
+        return (None, error_msg)
     finally:
         if ds is not None:
             logger.debug("Closing netCDF file.")
@@ -308,38 +339,45 @@ def _canonical_feature_type(feature_type):
 
 def process_feature_type(tmpdoc):
     """
-    Look for feature type and update document
+    Look for feature type and update document.
+
+    Returns a ``(tmpdoc, error_msg)`` tuple.  ``error_msg`` is ``None``
+    when processing succeeded (or when the feature type is simply not
+    present); it is a non-empty string when an unexpected error occurred
+    during extraction.
     """
     tmpdoc_ = tmpdoc
     metadata_status = str(tmpdoc.get('metadata_status', 'unknown')).lower()
     if metadata_status == 'inactive':
-        return tmpdoc
+        return (tmpdoc, None)
 
     dapurl = _check_opendap_url(tmpdoc)
     if dapurl is None:
-        return tmpdoc_
+        return (tmpdoc_, None)
 
     # Special fix for NERSC.
     dapurl = _fix_nersc_url(dapurl)
 
-    logger.debug("Trying to open netCDF file: %s", dapurl)
-    feature_type = _extract_feature_type(dapurl)
+    logger.debug("Trying to open dataset: %s", dapurl)
+    feature_type, error_msg = _extract_feature_type(dapurl)
+
+    if error_msg is not None:
+        return (tmpdoc_, error_msg)
+
     if feature_type is None:
-        return tmpdoc_
+        return (tmpdoc_, None)
 
     canonical_feature_type = _canonical_feature_type(feature_type)
     if canonical_feature_type is None:
         logger.warning("The featureType found - %s - is not valid", feature_type)
-        return tmpdoc_
+        return (tmpdoc_, None)
 
     if str(feature_type) != canonical_feature_type:
         logger.warning("Fixing featureType locally: %s -> %s", feature_type, canonical_feature_type)
 
     logger.debug('feature_type found: %s', canonical_feature_type)
     tmpdoc_.update({'feature_type': canonical_feature_type})
-    return tmpdoc_
-
-    return tmpdoc_
+    return (tmpdoc_, None)
 
 
 def add_nbs_thumbnail(doc, config):

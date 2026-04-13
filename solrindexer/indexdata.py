@@ -276,16 +276,15 @@ class MMD4SolR:
                 separators=(",", ":"),
             )
 
+        earliest = updates_sorted[0]
+        earliest_dt = self._normalize_datetime(self._first_text_for(earliest, "./mmd:datetime"))
+        if earliest_dt:
+            solr_doc["last_metadata_created_date"] = earliest_dt
+
         latest = updates_sorted[-1]
-        dt = self._normalize_datetime(self._first_text_for(latest, "./mmd:datetime"))
-        typ = self._first_text_for(latest, "./mmd:type")
-        note = self._first_text_for(latest, "./mmd:note")
-        if dt:
-            solr_doc["last_metadata_update_datetime"] = dt
-        if typ:
-            solr_doc["last_metadata_update_type"] = typ
-        if note:
-            solr_doc["last_metadata_update_note"] = note
+        latest_dt = self._normalize_datetime(self._first_text_for(latest, "./mmd:datetime"))
+        if latest_dt:
+            solr_doc["last_metadata_updated_date"] = latest_dt
 
     def _extract_alternate_identifier(self, solr_doc):
         alt_ids, types = [], []
@@ -403,29 +402,58 @@ class MMD4SolR:
             personnel_type = self._first_text_for(node, "./mmd:type")
             name = self._first_text_for(node, "./mmd:name")
             organisation = self._first_text_for(node, "./mmd:organisation")
+            email = self._first_text_for(node, "./mmd:email")
+            phone = self._first_text_for(node, "./mmd:phone")
             name_nodes = node.xpath("./mmd:name", namespaces=self.NSMAP)
             organisation_nodes = node.xpath("./mmd:organisation", namespaces=self.NSMAP)
             orcid_uri = name_nodes[0].attrib.get("uri") if name_nodes else None
             ror_uri = organisation_nodes[0].attrib.get("uri") if organisation_nodes else None
+
+            contact_address = {
+                "address": self._first_text_for(node, "./mmd:contact_address/mmd:address"),
+                "city": self._first_text_for(node, "./mmd:contact_address/mmd:city"),
+                "province_or_state": self._first_text_for(
+                    node,
+                    "./mmd:contact_address/mmd:province_or_state",
+                ),
+                "postal_code": self._first_text_for(node, "./mmd:contact_address/mmd:postal_code"),
+                "country": self._first_text_for(node, "./mmd:contact_address/mmd:country"),
+            }
+            contact_address = {k: v for k, v in contact_address.items() if v}
+
             if role:
                 roles.append(role)
             if name:
                 names.append(name)
             if organisation:
                 orgs.append(organisation)
+
             personnel_entry = {
                 "role": role,
                 "name": name,
                 "organisation": organisation,
-                "email": self._first_text_for(node, "./mmd:email"),
+                "email": email,
+                "phone": phone,
             }
+            if organisation:
+                personnel_entry['organisation'] = organisation
+            if email:
+                personnel_entry['email'] = email
+            if phone:
+                personnel_entry['phone'] = phone
+
             if personnel_type:
                 personnel_entry["type"] = personnel_type
             if orcid_uri:
-                personnel_entry["orchid_uri"] = orcid_uri
+                personnel_entry["orcid_uri"] = orcid_uri
             if ror_uri:
                 personnel_entry["ror_uri"] = ror_uri
-            personnel_json.append(personnel_entry)
+            if contact_address:
+                personnel_entry["contact_address"] = contact_address
+
+            personnel_entry = {k: v for k, v in personnel_entry.items() if v}
+            if personnel_entry:
+                personnel_json.append(personnel_entry)
 
         if roles:
             solr_doc["personnel_role"] = sorted(set(roles))
@@ -830,6 +858,19 @@ class MMD4SolR:
                 platform_json, ensure_ascii=False, separators=(",", ":")
             )
 
+    def _serialize_mmd_xml(self):
+        """Serialize MMD XML for storage after removing sensitive file locations."""
+        root_copy = ET.fromstring(ET.tostring(self.root))
+        file_location_nodes = root_copy.xpath(
+            "./mmd:storage_information/mmd:file_location",
+            namespaces=self.NSMAP,
+        )
+        for node in file_location_nodes:
+            parent = node.getparent()
+            if parent is not None:
+                parent.remove(node)
+        return html.unescape(ET.tostring(root_copy, pretty_print=True, encoding="unicode"))
+
     def tosolr(self):
         solr_doc = {}
 
@@ -907,8 +948,7 @@ class MMD4SolR:
         if metadata_source:
             solr_doc["metadata_source"] = metadata_source
 
-        xml_string = ET.tostring(self.root, pretty_print=True, encoding="unicode")
-        solr_doc["mmd_xml_file"] = html.unescape(xml_string)
+        solr_doc["mmd_xml_file"] = self._serialize_mmd_xml()
 
         solr_doc["isParent"] = False
         solr_doc["isChild"] = False

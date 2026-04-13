@@ -31,12 +31,22 @@ threads: 4
 # dataset_production_status, quality_control, metadata_source) are validated against
 # the vocabulary. Non-controlled values are logged as warnings and do not stop indexing.
 # The vocabulary is loaded once at startup and reused for all documents (efficient).
+# If omitted and vocabulary-backend is native/default, the indexer falls back to
+# REST lookup at vocabulary-endpoint-base-url.
 #vocabulary-ttl-path: /path/to/mmd/thesauri/mmd-vocabulary.ttl
 
 # Vocabulary backend to use (optional, default: native)
 #   native          - use rdflib to read the local TTL file (requires vocabulary-ttl-path)
 #   legacy-metvocab - use the old metvocab/MMDGroup package (fetches from remote URLs)
+#   rest-skosmos    - fetch vocabulary TTL from a Skosmos REST endpoint (cached in-memory)
 #vocabulary-backend: native
+
+# Skosmos REST backend settings (optional, used when vocabulary-backend=rest-skosmos)
+# Base URL can be the site root (https://vocab.met.no) or /mmd path.
+# The indexer normalizes it to /rest/v1/<vocab>/data automatically.
+# Example for https://vocab.met.no/swagger.json API:
+#vocabulary-endpoint-base-url: https://vocab.met.no/mmd
+#vocabulary-endpoint-timeout: 20.0
 
 # NBS specific thumnail configuration (optional)
 #nbs-thumbnails-base-path: <Base file path where to find NBS products and thumbnail.png>

@@ -74,8 +74,17 @@ def parse_arguments():
     )
     parser.add_argument(
         "--vocabulary-backend",
-        choices=["native", "legacy-metvocab"],
+        choices=["native", "legacy-metvocab", "rest-skosmos"],
         help="Vocabulary backend to use (overrides config)",
+    )
+    parser.add_argument(
+        "--vocabulary-endpoint-base-url",
+        help="Base URL for Skosmos endpoint (overrides config)",
+    )
+    parser.add_argument(
+        "--vocabulary-endpoint-timeout",
+        type=float,
+        help="Skosmos request timeout in seconds (overrides config)",
     )
 
     args = parser.parse_args()
@@ -170,6 +179,10 @@ def main():
             cfg["vocabulary-ttl-path"] = args.vocabulary_ttl_path
         if args.vocabulary_backend:
             cfg["vocabulary-backend"] = args.vocabulary_backend
+        if args.vocabulary_endpoint_base_url:
+            cfg["vocabulary-endpoint-base-url"] = args.vocabulary_endpoint_base_url
+        if args.vocabulary_endpoint_timeout is not None:
+            cfg["vocabulary-endpoint-timeout"] = args.vocabulary_endpoint_timeout
 
         solr_url = cfg["solrserver"] + cfg["solrcore"]
         authentication = _resolve_authentication(cfg)
@@ -227,11 +240,22 @@ def main():
             config=cfg,
         )
         result = bulk.bulkindex(files)
-        logger.info("Processed %s files.", len(files))
-        # Extract failure tracker from result tuple (8th element)
+
         if result and len(result) >= 8:
+            docs_failed    = result[4]
+            docs_indexed   = result[5]
+            files_processed = result[6]
             failure_tracker = result[7]
+
+            logger.info(
+                "Indexing summary: files_processed=%d  docs_indexed=%d  docs_skipped/failed=%d",
+                files_processed,
+                docs_indexed,
+                docs_failed,
+            )
             failure_tracker.log_summary()
+        else:
+            logger.info("Processed %s files.", len(files))
 
         if cfg.get("end-solr-commit", False):
             indexer = IndexMMD(solr_url, args.always_commit, authentication, cfg)

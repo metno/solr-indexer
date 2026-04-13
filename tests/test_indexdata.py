@@ -121,10 +121,9 @@ def test_extract_last_metadata_update_json_is_chronological():
     ]
     assert [item["note"] for item in history] == ["first", "second", "third"]
 
-    # Legacy fields should still point to the latest update entry.
-    assert solr["last_metadata_update_datetime"] == "2024-06-01T00:00:00Z"
-    assert solr["last_metadata_update_type"] == "Major modification"
-    assert solr["last_metadata_update_note"] == "third"
+    # New fields point to earliest and latest dates.
+    assert solr["last_metadata_created_date"] == "2022-01-15T00:00:00Z"
+    assert solr["last_metadata_updated_date"] == "2024-06-01T00:00:00Z"
 
 
 @pytest.mark.indexdata
@@ -150,6 +149,24 @@ def test_extract_last_metadata_update_json_omits_empty_values():
 
 
 @pytest.mark.indexdata
+def test_extract_last_metadata_update_single_entry_created_and_updated_same():
+    root = _make_mmd_with_last_metadata_update(
+        """<update>
+      <datetime>2022-01-15</datetime>
+      <type>Created</type>
+      <note>initial</note>
+    </update>"""
+    )
+    doc = MMD4SolR(mydoc=root)
+    solr = {}
+    doc._extract_last_metadata_update(solr)
+
+    assert solr["last_metadata_created_date"] == "2022-01-15T00:00:00Z"
+    assert solr["last_metadata_updated_date"] == "2022-01-15T00:00:00Z"
+    assert solr["last_metadata_created_date"] == solr["last_metadata_updated_date"]
+
+
+@pytest.mark.indexdata
 def test_extract_personnel_json_includes_type_and_uris():
   root = _make_mmd_with_personnel(
     """<personnel>
@@ -158,6 +175,14 @@ def test_extract_personnel_json_includes_type_and_uris():
       <name uri="https://orcid.org/0000-1111-2222-3333">Ole Dole</name>
       <organisation uri="https://ror.org/001n36p86">Norwegian Meteorological Institute</organisation>
       <email>ole.dole@example.com</email>
+      <phone>004711111111</phone>
+      <contact_address>
+        <address>Meteorologisk institutt, Henrik Mohnsplass 1</address>
+        <city>Oslo</city>
+        <province_or_state>Oslo</province_or_state>
+        <postal_code>0000</postal_code>
+        <country>Norway</country>
+      </contact_address>
     </personnel>"""
   )
   doc = MMD4SolR(mydoc=root)
@@ -174,6 +199,14 @@ def test_extract_personnel_json_includes_type_and_uris():
       "organisation": "Norwegian Meteorological Institute",
       "ror_uri": "https://ror.org/001n36p86",
       "email": "ole.dole@example.com",
+      "phone": "004711111111",
+      "contact_address": {
+        "address": "Meteorologisk institutt, Henrik Mohnsplass 1",
+        "city": "Oslo",
+        "province_or_state": "Oslo",
+        "postal_code": "0000",
+        "country": "Norway",
+      },
     }
   ]
 
@@ -186,6 +219,9 @@ def test_extract_personnel_json_omits_missing_type_and_uris():
       <name>Jane Doe</name>
       <organisation>MET Norway</organisation>
       <email>jane.doe@example.com</email>
+      <contact_address>
+        <country>NORWAY</country>
+      </contact_address>
     </personnel>"""
   )
   doc = MMD4SolR(mydoc=root)
@@ -199,6 +235,38 @@ def test_extract_personnel_json_omits_missing_type_and_uris():
       "name": "Jane Doe",
       "organisation": "MET Norway",
       "email": "jane.doe@example.com",
+      "contact_address": {
+        "country": "NORWAY",
+      },
+    }
+  ]
+
+
+@pytest.mark.indexdata
+def test_extract_personnel_json_omits_empty_values_in_entry_and_contact_address():
+  root = _make_mmd_with_personnel(
+    """<personnel>
+      <role>Technical contact</role>
+      <name>Jane Doe</name>
+      <email></email>
+      <contact_address>
+        <city></city>
+        <country>Norway</country>
+      </contact_address>
+    </personnel>"""
+  )
+  doc = MMD4SolR(mydoc=root)
+  solr = {}
+  doc._extract_personnel(solr)
+
+  personnel_json = json.loads(solr["personnel_json"])
+  assert personnel_json == [
+    {
+      "role": "Technical contact",
+      "name": "Jane Doe",
+      "contact_address": {
+        "country": "Norway",
+      },
     }
   ]
 
@@ -454,6 +522,24 @@ def test_extract_storage_information_partial():
     assert "storage_information_file_size_unit" not in solr
     assert "storage_information_file_checksum" not in solr
     assert "storage_information_file_storage_expiry_date" not in solr
+
+
+@pytest.mark.indexdata
+def test_tosolr_removes_file_location_from_mmd_xml_file_only():
+    root = _make_mmd_with_storage_information(
+        """<storage_information>
+        <file_name>example.nc</file_name>
+        <file_location>/sensitive/path/example.nc</file_location>
+        <file_format>NetCDF-CF</file_format>
+      </storage_information>"""
+    )
+    doc = MMD4SolR(mydoc=root)
+
+    solr = doc.tosolr()
+
+    assert solr["storage_information_file_location"] == "/sensitive/path/example.nc"
+    assert "<mmd:file_location>" not in solr["mmd_xml_file"]
+    assert "/sensitive/path/example.nc" not in solr["mmd_xml_file"]
 
 
 @pytest.mark.indexdata
