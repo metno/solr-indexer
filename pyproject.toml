@@ -30,6 +30,7 @@ dependencies = [
     "Shapely",
     "lxml",
     "xarray",
+    "netCDF4",
     "pysolr",
     "PyYAML",
     "requests",
