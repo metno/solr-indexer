@@ -35,12 +35,12 @@ def load_file(filename):
     try:
         file = Path(filename)
     except Exception as e:
-        logger.error("Not a valid filepath %s error was %s" % (filename, e))
+        logger.error("Not a valid filepath %s error was %s", filename, e)
         return None
     try:
         return parse_xml_file(str(file))
     except Exception as e:
-        logger.error("Could not parse the xmlfile: %s  with error %s" % (filename, e))
+        logger.error("Could not parse the xmlfile: %s with error %s", filename, e)
         return None
 
 

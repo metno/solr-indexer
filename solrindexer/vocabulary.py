@@ -105,18 +105,18 @@ class VocabularyLoader(VocabularyBackend):
         if not ttl_path_obj.exists():
             raise FileNotFoundError(f"TTL vocabulary file not found: {ttl_path}")
 
-        logger.debug(f"Loading TTL vocabulary from {ttl_path}")
+        logger.debug("Loading TTL vocabulary from %s", ttl_path)
         self.graph = rdflib.Graph()
         try:
             self.graph.parse(str(ttl_path), format="turtle")
         except Exception as e:
-            logger.error(f"Failed to parse TTL file {ttl_path}: {e}")
+            logger.error("Failed to parse TTL file %s: %s", ttl_path, e)
             raise
 
         # Build cache: vocab_uri -> set of preferred labels
         self._cache: dict[str, set[str]] = {}
         self._build_cache()
-        logger.info(f"Loaded {len(self._cache)} vocabulary collections")
+        logger.info("Loaded %d vocabulary collections", len(self._cache))
 
     def _build_cache(self) -> None:
         """Build vocabulary cache from RDF graph.
@@ -150,7 +150,7 @@ class VocabularyLoader(VocabularyBackend):
                 # logger.debug(f"Added label '{label_plain}' to {collection_uri}")
 
         except Exception as e:
-            logger.warning(f"Failed to query RDF graph: {e}")
+            logger.warning("Failed to query RDF graph: %s", e)
 
     def search(self, vocab_uri: str, value: str) -> bool:
         """
@@ -164,7 +164,7 @@ class VocabularyLoader(VocabularyBackend):
             True if value is found in the vocabulary, False otherwise
         """
         if vocab_uri not in self._cache:
-            logger.warning(f"Vocabulary URI not found: {vocab_uri}")
+            logger.warning("Vocabulary URI not found: %s", vocab_uri)
             return False
 
         return value in self._cache[vocab_uri]
@@ -232,7 +232,12 @@ class VocabularyLegacy(VocabularyBackend):
             group = self._groups_cache[vocab_uri]
             return bool(group.search(value))
         except Exception as e:
-            logger.warning(f"metvocab search failed for {vocab_uri} with value '{value}': {e}")
+            logger.warning(
+                "metvocab search failed for %s with value '%s': %s",
+                vocab_uri,
+                value,
+                e,
+            )
             return False
 
     def get_concepts(self, vocab_uri: str) -> set[str]:
@@ -481,7 +486,7 @@ def create_vocabulary_loader(
                 cache_dir=cache_dir,
             )
 
-        logger.info(f"Creating native TTL vocabulary backend from {ttl_path}")
+        logger.info("Creating native TTL vocabulary backend from %s", ttl_path)
         return VocabularyLoader(ttl_path)
 
     if backend == "rest-skosmos":

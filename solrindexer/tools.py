@@ -46,7 +46,7 @@ validfeaturetypes = {
 }
 
 
-def get_dataset(id, *, solr_client):
+def get_dataset(dataset_id, *, solr_client):
     """
     Fetch dataset by id using Solr realtime get when possible.
 
@@ -57,7 +57,7 @@ def get_dataset(id, *, solr_client):
         payload = solr_client._send_request(
             "get",
             "get",
-            params={"wt": "json", "id": id},
+            params={"wt": "json", "id": dataset_id},
         )
         if isinstance(payload, str):
             payload = json.loads(payload)
@@ -68,15 +68,17 @@ def get_dataset(id, *, solr_client):
             return {"doc": docs[0] if docs else None}
     except Exception as exc:
         logger.warning(
-            "Realtime get failed for id=%s. Falling back to search. Reason: %s", id, exc
+            "Realtime get failed for id=%s. Falling back to search. Reason: %s",
+            dataset_id,
+            exc,
         )
 
     try:
-        result = solr_client.search(f'id:"{id}"', rows=1)
+        result = solr_client.search(f'id:"{dataset_id}"', rows=1)
         docs = list(result)
         return {"doc": docs[0] if docs else None}
     except Exception as exc:
-        logger.error("Could not fetch dataset id=%s from Solr: %s", id, exc)
+        logger.error("Could not fetch dataset id=%s from Solr: %s", dataset_id, exc)
         return None
 
 
@@ -98,11 +100,11 @@ def set_parent_flag(parent_id, *, solr_client):
     )
 
 
-def to_solr_id(id):
+def to_solr_id(metadata_id):
     """Function that translate from metadata_identifier
     to solr compatilbe id field syntax
     """
-    solr_id = str(id)
+    solr_id = str(metadata_id)
     for e in IDREPLS:
         solr_id = solr_id.replace(e, "-")
 
@@ -118,7 +120,7 @@ def parse_date(_date):
     test = checkDateFormat(date)
     if test:
         return date
-    elif not test:
+    if not test:
         logger.debug("Parsing date format %s to Solr date format", date)
         try:
             parsed_date = dateutil.parser.parse(date)
@@ -132,21 +134,19 @@ def parse_date(_date):
         if test:
             logger.debug("Parsed Solr date: %s", date)
             return date
-        else:
-            logger.debug("Date util failed to parse date %s. fixing...", date)
-            if re.search(r"\+\d\d:\d\dZ$", date) is not None:
-                date = re.sub(r"\+\d\d:\d\d", "", date)
-                try:
-                    newdate = dateutil.parser.parse(date)
-                    date = newdate.strftime("%Y-%m-%dT%H:%M:%SZ")
-                    logger.debug("parsed solr date: %s", date)
-                except Exception as e:
-                    logger.error("Could not parse date: %s, reason: %s", date, e)
-                    return None
+        logger.debug("Date util failed to parse date %s. fixing...", date)
+        if re.search(r"\+\d\d:\d\dZ$", date) is not None:
+            date = re.sub(r"\+\d\d:\d\d", "", date)
+            try:
+                newdate = dateutil.parser.parse(date)
+                date = newdate.strftime("%Y-%m-%dT%H:%M:%SZ")
+                logger.debug("parsed solr date: %s", date)
+            except Exception as e:
+                logger.error("Could not parse date: %s, reason: %s", date, e)
+                return None
 
-                return date
-    else:
-        return None
+            return date
+    return None
 
 
 def checkDateFormat(date):

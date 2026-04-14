@@ -34,14 +34,12 @@ try:
 except PackageNotFoundError:
     __version__ = "0.0.0.dev0"
 
-__package__ = "solrindexer"
-__date__ = "2025-12-04"
 __all__ = ["IndexMMD", "MMD4SolR", "BulkIndexer"]
 
 
 class InfoFilter(logging.Filter):
-    def filter(self, rec: logging.LogRecord) -> bool:
-        return rec.levelno == logging.INFO
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.levelno == logging.INFO
 
 
 def _init_logging(log_obj: logging.Logger) -> None:

@@ -1021,7 +1021,7 @@ class IndexMMD:
             sys.exit(1)
 
         logger.info("Creating an instance of IndexMMD")
-        logger.info(f"Always commit is: {always_commit}")
+        logger.info("Always commit is: %s", always_commit)
 
         # level variables
 
@@ -1058,7 +1058,7 @@ class IndexMMD:
             logger.info("Connection established to: %s", str(mysolrserver))
         except Exception as e:
             logger.error("Something failed in SolR init: %s", str(e))
-            raise e
+            raise
         try:
             pong = self.solrc.ping()
             status = json.loads(pong)["status"]
@@ -1069,7 +1069,7 @@ class IndexMMD:
                 sys.exit(1)
 
         except pysolr.SolrError as e:
-            logger.error(f"Could not contact solr server: {e}")
+            logger.error("Could not contact solr server: %s", e)
             sys.exit(1)
 
     # Function for sending explicit commit to solr
@@ -1087,6 +1087,7 @@ class IndexMMD:
             res = requests.get(
                 base_url + "/admin/cores?wt=json&action=STATUS&core=" + core,
                 auth=self.authentication,
+                timeout=20
             )
             res.raise_for_status()
         except requests.exceptions.HTTPError as errh:
@@ -1100,9 +1101,8 @@ class IndexMMD:
 
         if res is None:
             return None
-        else:
-            status = res.json()
-            return status["status"][core]["index"]
+        status = res.json()
+        return status["status"][core]["index"]
 
     def index_record(self, records2ingest, addThumbnail, level=None, thumbClass=None):
         # FIXME, update the text below Øystein Godøy, METNO/FOU, 2023-03-19
@@ -1121,7 +1121,7 @@ class IndexMMD:
         if not isinstance(records2ingest, list):
             records2ingest = [records2ingest]
 
-        """Handle thumbnail generator"""
+        # Handle thumbnail generator.
         self.thumbClass = thumbClass
         if thumbClass is None:
             addThumbnail = False
@@ -1143,16 +1143,14 @@ class IndexMMD:
                 logger.warning("This record will be set inactive...")
                 # return False
 
-            """ Handle explicit dataset level parent/children relations"""
+            # Handle explicit dataset level parent/children relations.
             if level == 1:
                 input_record.update({"dataset_type": "Level-1"})
             if level == 2:
                 input_record.update({"dataset_type": "Level-2"})
                 input_record.update({"isChild": True})
 
-            """
-            If OGC WMS is available, no point in looking for featureType in OPeNDAP.
-            """
+            # If OGC WMS is available, no point in looking for featureType in OPeNDAP.
 
             if "data_access_url_ogc_wms" in input_record and addThumbnail:
                 if self.config.get("scope", "") == "NBS":
@@ -1178,9 +1176,7 @@ class IndexMMD:
             logger.info("Adding records to list...")
             mmd_records.append(input_record)
 
-        """
-        Send information to SolR
-        """
+        # Send information to SolR.
         logger.info("Adding records to SolR core.")
         res = None
         try:
@@ -1235,7 +1231,6 @@ class IndexMMD:
 
     def delete_level1(self, datasetid):
         """Require ID as input"""
-        """ Rewrite to take full metadata record as input """
         logger.info("Deleting %s from level 1.", datasetid)
         try:
             self.solrc.delete(id=datasetid)
@@ -1247,7 +1242,6 @@ class IndexMMD:
 
     def delete_thumbnail(self, datasetid):
         """Require ID as input"""
-        """ Rewrite to take full metadata record as input """
         logger.info("Deleting %s from thumbnail core.", datasetid)
         try:
             self.solrc.delete(id=datasetid)
@@ -1283,29 +1277,29 @@ class IndexMMD:
 
         return mylinks
 
-    def delete(self, id, commit=False):
+    def delete(self, metadata_id, commit=False):
         """Delete document with given metadata identifier"""
-        solr_id = to_solr_id(id)
+        solr_id = to_solr_id(metadata_id)
         doc_exsists = self.get_dataset(solr_id)
         if doc_exsists["doc"] is None:
-            return False, "Document %s not found in index." % id
+            return False, "Document %s not found in index." % metadata_id
         try:
             self.solrc.delete(id=solr_id)
         except Exception as e:
-            logger.error("Something went wrong deleting doucument with id: %s", id)
+            logger.error("Something went wrong deleting doucument with id: %s", metadata_id)
             return False, e
-        logger.info("Sucessfully deleted document with id: %s", id)
+        logger.info("Sucessfully deleted document with id: %s", metadata_id)
         if commit:
             logger.info("Commiting deletion")
             self.commit()
-        return True, "Document %s sucessfully deleted" % id
+        return True, "Document %s sucessfully deleted" % metadata_id
 
-    def get_dataset(self, id):
+    def get_dataset(self, metadata_id):
         """
         Use real-time get to fetch latest dataset
         based on id.
         """
-        return get_dataset(id, solr_client=self.solrc)
+        return get_dataset(metadata_id, solr_client=self.solrc)
 
     def update_parent(self, parentid, fail_on_missing=False, handle_missing_status=True):
         """Search index for parent and update parent flag.
@@ -1322,28 +1316,25 @@ class IndexMMD:
 
         if myparent is None:
             return False, "No parent found in index."
-        else:
-            if myparent["doc"] is None:
-                if fail_on_missing is True:
-                    return False, "Parent %s is not in the index. Index parent first." % parentid
-                else:
-                    logger.warn(
-                        "Parent %s is not in the index. Make sure to index parent first.", parentid
-                    )
-                    msg = "WARNING! Parent is not in the index. "
-                    msg += "Make sure to index parent and then the children "
-                    msg += "for relation to be updated."
-                    return (handle_missing_status, msg)
+        if myparent["doc"] is None:
+            if fail_on_missing is True:
+                return False, "Parent %s is not in the index. Index parent first." % parentid
+            logger.warning(
+                "Parent %s is not in the index. Make sure to index parent first.", parentid
+            )
+            msg = "WARNING! Parent is not in the index. "
+            msg += "Make sure to index parent and then the children "
+            msg += "for relation to be updated."
+            return (handle_missing_status, msg)
 
-            logger.info("Got parent: %s", myparent["doc"]["metadata_identifier"])
-            if bool(myparent["doc"]["isParent"]):
-                logger.info("Dataset already marked as parent.")
-                return True, "Already updated."
-            else:
-                try:
-                    set_parent_flag(parentid, solr_client=self.solrc)
-                except Exception as e:
-                    logger.error("Atomic update failed on parent %s. Error is: ", (parentid, e))
-                    return False, e
-                logger.info("Parent sucessfully updated in SolR.")
-                return True, "Parent updated."
+        logger.info("Got parent: %s", myparent["doc"]["metadata_identifier"])
+        if bool(myparent["doc"]["isParent"]):
+            logger.info("Dataset already marked as parent.")
+            return True, "Already updated."
+        try:
+            set_parent_flag(parentid, solr_client=self.solrc)
+        except Exception as e:
+            logger.error("Atomic update failed on parent %s. Error is: %s", parentid, e)
+            return False, e
+        logger.info("Parent sucessfully updated in SolR.")
+        return True, "Parent updated."

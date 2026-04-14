@@ -34,13 +34,15 @@ def handle_solr_spatial(solr_doc, north, east, south, west, gml=None, srs=None):
     # Add bbox field
     logger.debug("Adding solr spatial fields and geometries")
     logger.debug(
-        f"Got geographic rectangle north: {north}, east: {east}, south: {south}, west: {west}"
+        "Got geographic rectangle north: %s, east: %s, south: %s, west: %s",
+        north,
+        east,
+        south,
+        west,
     )
     solr_doc["bbox"] = generate_solr_envelope(north, east, south, west)
     if gml is not None:
-        """
-        Use the provided GML Geometry for indexing.
-        """
+        # Use the provided GML geometry for indexing.
         logger.debug("Got GML Geometry, parsing and processing")
         geom_wkt = parse_gml_to_wkt(gml)
         geom_wkt = validate_fix_geometry(geom_wkt)
@@ -50,7 +52,7 @@ def handle_solr_spatial(solr_doc, north, east, south, west, gml=None, srs=None):
         return solr_doc
 
     if gml is None:
-        geom_solr_wkt, center = create_polygon_wkt_from_bbox(north, east, south, west)
+        geom_solr_wkt, _center = create_polygon_wkt_from_bbox(north, east, south, west)
         if geom_solr_wkt.startswith("POINT"):
             solr_doc["geospatial_bounds3d"] = geom_solr_wkt
         else:
@@ -63,7 +65,7 @@ def handle_solr_spatial(solr_doc, north, east, south, west, gml=None, srs=None):
         # Handle denormalizing when crossing dateline for openlayers to understand
         if east < west:
             east += 360
-        geom_wkt_string, center = create_polygon_wkt_from_bbox(north, east, south, west)
+        geom_wkt_string, _center = create_polygon_wkt_from_bbox(north, east, south, west)
         solr_doc["geometry_wkt"] = wkt_rect_to_segmetized_geom(geom_wkt_string, output="WKT")
         solr_doc["geometry_geojson"] = wkt_rect_to_segmetized_geom(
             geom_wkt_string, output="GeoJSON"
@@ -129,25 +131,14 @@ def create_polygon_wkt_from_bbox(north, east, south, west):
     if south > north:
         raise ValueError(f"South latitude {south} cannot be greater than North latitude {north}.")
 
-    """
-    Handle Point Geometry
-    """
+    # Handle point geometry.
     if north == south and east == west:
         point = Point(east, north)
         centroid = point.centroid
         return point.wkt, centroid.wkt
 
-    """
-    Crossing the International Dateline (IDL):
-
-    When creating a rectangular polyogn, we need to denormalize the
-    coordinates to explicitt cross the IDL so that Openlayers and Leaflet will draw the geometry correctly.
-
-    We know we cross the IDL if west > east from the MMD. Thus we add 360 degrees to the east coordinate.
-    This will make Openlayers understand to cross the IDL geometry feature from east to west into the "next world
-    spanning more than 180 degrees. This will make Openlayers render the rectangular geometry figure correctly.
-
-    """
+    # Crossing the International Dateline (IDL):
+    # denormalize east coordinate so renderers draw the shape in the expected world.
     crossing = False  # IDL crossing information
 
     if east < west:
@@ -156,12 +147,7 @@ def create_polygon_wkt_from_bbox(north, east, south, west):
     # Create a bounding box (minx, miny, maxx, maxy) which is (west, south, east, north)
     bbox = box(east, south, west, north) if crossing else box(west, south, east, north)
 
-    """
-    Solr handles datelinecrossing the following way for the SpatialRecursivePrefrixTree field:
-
-    No IDL crossing: Shapes are oriented in a CCW fashoin.
-    When crossing the dateline: Shapes are oriented in a CW fashion.
-    """
+    # Solr expects CCW for non-crossing polygons and CW when crossing IDL.
     polygon = orient(bbox, sign=-1.0) if crossing else orient(bbox, sign=1.0)
 
     # Extract the centeroid
@@ -223,7 +209,7 @@ def wkt_rect_to_segmetized_geom(wkt, segments=3, output="WKT"):
         geom.minimum_rotated_rectangle.area, geom.area
     ):
         segmitize = True
-    if geom.geom_type == "LineString" or geom.geom_type == "MultiLineString":
+    if geom.geom_type in ("LineString", "MultiLineString"):
         segmitize = True
 
     if segmitize is True:
@@ -232,14 +218,10 @@ def wkt_rect_to_segmetized_geom(wkt, segments=3, output="WKT"):
     if segmitize is True:
         if output == "GeoJSON":
             return to_geojson(segmetized_geom)
-        else:
-            return to_wkt(segmetized_geom)
-    else:
-        if output == "GeoJSON":
-            return to_geojson(geom)
-
-        return to_wkt(geom)
-    return wkt
+        return to_wkt(segmetized_geom)
+    if output == "GeoJSON":
+        return to_geojson(geom)
+    return to_wkt(geom)
 
 
 def wkt_to_geojson(wkt):
@@ -265,23 +247,18 @@ def validate_fix_geometry(geom_wkt):
     geom = loads(geom_wkt)
     if not geom.is_valid:
         explain = explain_validity(geom)
-        logger.warning(
-            f"Invalid geometry..trying to repair and simplify: {explain}"
-        )  # Explain the issue
+        logger.warning("Invalid geometry..trying to repair and simplify: %s", explain)
         try:
             # Apply buffer(0) trick to fix the geometry
             fixed_geom = unary_union(geom.buffer(0).simplify(1))
             if fixed_geom.is_valid:
                 logger.info("Geometry fixed successfully.")
                 return to_wkt(fixed_geom)
-            else:
-                logger.error("Failed to fix Geometry")
+            logger.error("Failed to fix Geometry")
         except GEOSException as e:
-            logger.error(f"Failed to fix geometry: {e}")
+            logger.error("Failed to fix geometry: %s", e)
             return geom_wkt
         except Exception as e:
-            logger.error(f"Failed to fix geometry: {e}")
+            logger.error("Failed to fix geometry: %s", e)
             return geom_wkt
-    else:
-        return geom_wkt
     return geom_wkt

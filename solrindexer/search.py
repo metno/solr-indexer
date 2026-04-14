@@ -144,7 +144,7 @@ def parse_cfg(cfgfile: str) -> dict[str, Any]:
     """Parse configuration file. Raises FileNotFoundError with helpful message if config file does not exist."""
     logger.info("Reading configuration: %s", cfgfile)
     try:
-        with open(cfgfile) as ymlfile:
+        with open(cfgfile, encoding="utf-8") as ymlfile:
             cfgstr = yaml.full_load(ymlfile)
     except FileNotFoundError as e:
         raise FileNotFoundError(
@@ -182,8 +182,8 @@ class SearchMMD:
                 mysolrserver, always_commit=commit, timeout=1020, auth=authentication
             )
         except Exception as e:
-            logger.info("Something failed in SolR init", str(e))
-        logger.info("Connection established to: " + str(mysolrserver))
+            raise RuntimeError("Failed to initialize Solr client") from e
+        logger.info("Connection established to: %s", mysolrserver)
 
         try:
             pong = self.solrc.ping()
@@ -195,17 +195,16 @@ class SearchMMD:
                 sys.exit(1)
 
         except pysolr.SolrError as e:
-            logger.error(f"Could not contact solr server: {e}")
+            logger.error("Could not contact solr server: %s", e)
             sys.exit(1)
 
-    def delete_item(self, datasetid: str, commit: Optional[bool]) -> None:
+    def delete_item(self, datasetid: str) -> None:
         """Require ID as input"""
-        """ Rewrite to take full metadata record as input """
-        logger.info("Deleting ", datasetid, " from Level 1")
+        logger.info("Deleting %s from Level 1", datasetid)
         try:
             self.solrc.delete(id=datasetid)
         except Exception as e:
-            logger.info("Something failed in SolR delete %s", str(e))
+            logger.info("Something failed in SolR delete %s", e)
 
         logger.info("Record successfully deleted from core")
 
@@ -254,22 +253,21 @@ def main() -> int:
         logger.error("%s", str(e))
         return 1
 
-    SolrServer = cfg["solrserver"]
-    myCore = cfg["solrcore"]
+    solr_server = cfg["solrserver"]
+    my_core = cfg["solrcore"]
 
-    mySolRc = SolrServer + myCore
+    my_solr_core = solr_server + my_core
     # Enable basic authentication if configured.
     if "auth-basic-username" in cfg and "auth-basic-password" in cfg:
         username = cfg["auth-basic-username"]
         password = cfg["auth-basic-password"]
         logger.info("Setting up basic authentication from config")
         if username == "" or password == "":
-            raise Exception(
+            raise ValueError(
                 "Authentication username and/or password are configured,but have blank strings"
             )
-        else:
-            logger.info("Got username and password. Creating HTTPBasicAuth object")
-            authentication = HTTPBasicAuth(username, password)
+        logger.info("Got username and password. Creating HTTPBasicAuth object")
+        authentication = HTTPBasicAuth(username, password)
     elif "dotenv_path" in cfg:
         dotenv_path = cfg["dotenv_path"]
         if not os.path.exists(dotenv_path):
@@ -278,22 +276,21 @@ def main() -> int:
         try:
             load_dotenv(dotenv_path)
         except Exception as e:
-            raise Exception(f"Failed to load dotenv {dotenv_path}, Reason {e}")
+            raise RuntimeError(f"Failed to load dotenv {dotenv_path}. Reason: {e}") from e
         username = os.getenv("SOLR_USERNAME", default="")
         password = os.getenv("SOLR_PASSWORD", default="")
         if username == "" or password == "":
-            raise Exception(
+            raise ValueError(
                 "Authentication username and/or password are configured,but have blank strings"
             )
-        else:
-            logger.info("Got username and password. Creating HTTPBasicAuth object")
-            authentication = HTTPBasicAuth(username, password)
+        logger.info("Got username and password. Creating HTTPBasicAuth object")
+        authentication = HTTPBasicAuth(username, password)
     else:
         logger.info("Setting up basic authentication from dotenv")
         try:
             load_dotenv()
         except Exception as e:
-            raise Exception(f"Failed to load dotenv {dotenv_path}, Reason {e}")
+            raise RuntimeError(f"Failed to load dotenv from environment. Reason: {e}") from e
         username = os.getenv("SOLR_USERNAME", default="")
         password = os.getenv("SOLR_PASSWORD", default="")
         if username == "" and password == "":
@@ -304,7 +301,7 @@ def main() -> int:
             authentication = HTTPBasicAuth(username, password)
 
     # Search for records
-    mysolr = SearchMMD(mySolRc, args.always_commit, authentication)
+    mysolr = SearchMMD(my_solr_core, args.always_commit, authentication)
 
     if args.mmd and args.delete:
         logger.error(
@@ -327,7 +324,7 @@ def main() -> int:
             docs.append(doc)
             deleteid = doc["id"]
             if args.delete:
-                mysolr.delete_item(deleteid, commit=None)
+                mysolr.delete_item(deleteid)
             i += 1
         _print_pretty_docs(docs)
         logger.info("Found %d matches", myresults.hits)

@@ -104,10 +104,11 @@ class BulkIndexer:
                 )
                 if self.vocabulary_loader is not None:
                     logger.info(
-                        f"Vocabulary loader initialized with backend: {vocabulary_backend}"
+                        "Vocabulary loader initialized with backend: %s",
+                        vocabulary_backend,
                     )
             except Exception as e:
-                logger.error(f"Failed to initialize vocabulary loader: {e}")
+                logger.error("Failed to initialize vocabulary loader: %s", e)
                 logger.warning("Continuing without vocabulary validation")
 
         self.tflg = tflg
@@ -121,7 +122,7 @@ class BulkIndexer:
         """
 
         if mmd is None:
-            logger.warning(f"File {file} was not parsed")
+            logger.warning("File %s was not parsed", file)
             self.failure_tracker.add_failure(
                 filename=file,
                 error_message="File was not parsed (XML parsing failed)",
@@ -164,7 +165,7 @@ class BulkIndexer:
             vocabulary_loader=self.vocabulary_loader,
         )
         if not mydoc.check_mmd():
-            logger.error(f"File {file} did not pass the mmd check, cannot index.")
+            logger.error("File %s did not pass the mmd check, cannot index.", file)
             # Try to extract metadata_identifier even if validation failed
             metadata_id = mydoc.get_metadata_identifier()
 
@@ -201,7 +202,7 @@ class BulkIndexer:
         try:
             tmpdoc = mydoc.tosolr()
         except Exception as e:
-            logger.error(f"File {file} could not be converted to solr document. Reason: {e}")
+            logger.error("File %s could not be converted to solr document. Reason: %s", file, e)
             metadata_id = mydoc.get_metadata_identifier()
             self.failure_tracker.add_failure(
                 filename=file,
@@ -211,9 +212,9 @@ class BulkIndexer:
             )
             return (None, status)
 
-        """ Do some sanity checking of the documents and skip docs with problems"""
+        # Do some sanity checking of the documents and skip docs with problems.
         if tmpdoc is None:
-            logger.warning(f"Solr document for file {file} was empty")
+            logger.warning("Solr document for file %s was empty", file)
             self.failure_tracker.add_failure(
                 filename=file,
                 error_message="Generated Solr document was empty",
@@ -222,7 +223,7 @@ class BulkIndexer:
             return (None, status)
 
         if "id" not in tmpdoc:
-            logger.warning("File %s have no id. Missing metadata_identifier?" % file)
+            logger.warning("File %s have no id. Missing metadata_identifier?", file)
             self.failure_tracker.add_failure(
                 filename=file,
                 error_message="Missing 'id' field in Solr document (missing metadata_identifier)",
@@ -232,7 +233,8 @@ class BulkIndexer:
 
         if tmpdoc["id"] is None or tmpdoc["id"] == "Unknown":
             logger.warning(
-                "Skipping process file %s. Metadata identifier: Unknown, or missing" % file
+                "Skipping process file %s. Metadata identifier: Unknown, or missing",
+                file,
             )
             self.failure_tracker.add_failure(
                 filename=file,
@@ -243,7 +245,7 @@ class BulkIndexer:
             return (None, status)
 
         if "temporal_extent_start_date" not in tmpdoc:
-            logger.error("Could not find start date in  %s." % file)
+            logger.error("Could not find start date in %s.", file)
             self.failure_tracker.add_failure(
                 filename=file,
                 error_message="Missing temporal_extent_start_date field",
@@ -313,7 +315,7 @@ class BulkIndexer:
             Dict mapping document IDs to originating filenames, for failure tracking
         """
 
-        """ Start timer"""
+        # Start timer.
         st = time.perf_counter()
         pst = time.process_time()
         file_ids = file_ids or {}

@@ -18,8 +18,8 @@ def concurrently(fn, inputs, *, max_concurrency=5):
 
     with ThreadPoolExecutor() as executor:
         futures = {
-            executor.submit(fn, input): input
-            for input in itertools.islice(fn_inputs, max_concurrency)
+            executor.submit(fn, item): item
+            for item in itertools.islice(fn_inputs, max_concurrency)
         }
 
         while futures:
@@ -29,9 +29,9 @@ def concurrently(fn, inputs, *, max_concurrency=5):
                 original_input = futures.pop(fut)
                 yield original_input, fut.result()
 
-            for input in itertools.islice(fn_inputs, len(done)):
-                fut = executor.submit(fn, input)
-                futures[fut] = input
+            for item in itertools.islice(fn_inputs, len(done)):
+                fut = executor.submit(fn, item)
+                futures[fut] = item
 
 
 def multiprocess(fn, inputs, *, max_concurrency=5):
@@ -49,8 +49,8 @@ def multiprocess(fn, inputs, *, max_concurrency=5):
 
     with ProcessPoolExecutor() as executor:
         futures = {
-            executor.submit(fn, input): input
-            for input in itertools.islice(fn_inputs, max_concurrency)
+            executor.submit(fn, item): item
+            for item in itertools.islice(fn_inputs, max_concurrency)
         }
 
         while futures:
@@ -60,6 +60,6 @@ def multiprocess(fn, inputs, *, max_concurrency=5):
                 original_input = futures.pop(fut)
                 yield original_input, fut.result()
 
-            for input in itertools.islice(fn_inputs, len(done)):
-                fut = executor.submit(fn, input)
-                futures[fut] = input
+            for item in itertools.islice(fn_inputs, len(done)):
+                fut = executor.submit(fn, item)
+                futures[fut] = item

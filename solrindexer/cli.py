@@ -409,7 +409,10 @@ def main():
             logger.debug("Single file input: using 1 worker (sequential processing)")
         else:
             workers = configured_threads
-            logger.debug(f"Multiple file input: using {workers} workers (concurrent processing)")
+            logger.debug(
+                "Multiple file input: using %d workers (concurrent processing)",
+                workers,
+            )
         chunksize = (
             args.chunksize
             if args.chunksize is not None
