@@ -19,12 +19,17 @@ permissions and limitations under the License.
 
 # from .bulkindexer import BulkIndexer
 from .io import load_file, load_files
-from .threads import concurrently
-from .threads import multiprocess
-
+from .threads import concurrently, multiprocess
 
 __package__ = "multithread"
-__version__ = "2.0.2"
+try:
+    from importlib.metadata import PackageNotFoundError, version
+except ImportError:
+    from importlib_metadata import PackageNotFoundError, version  # type: ignore
+
+try:
+    __version__ = version("solrindexer")
+except PackageNotFoundError:
+    __version__ = "0.0.0.dev0"
 __date__ = "2024-01-23"
-__all__ = ["load_file", "load_files",
-           "concurrently", "multiprocess"]
+__all__ = ["load_file", "load_files", "concurrently", "multiprocess"]

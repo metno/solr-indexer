@@ -33,8 +33,10 @@ def handle_solr_spatial(solr_doc, north, east, south, west, gml=None, srs=None):
     """
     # Add bbox field
     logger.debug("Adding solr spatial fields and geometries")
-    logger.debug(f"Got geographic rectangle north: {north}, east: {east}, south: {south}, west: {west}")
-    solr_doc['bbox'] = generate_solr_envelope(north, east, south, west)
+    logger.debug(
+        f"Got geographic rectangle north: {north}, east: {east}, south: {south}, west: {west}"
+    )
+    solr_doc["bbox"] = generate_solr_envelope(north, east, south, west)
     if gml is not None:
         """
         Use the provided GML Geometry for indexing.
@@ -43,16 +45,16 @@ def handle_solr_spatial(solr_doc, north, east, south, west, gml=None, srs=None):
         geom_wkt = parse_gml_to_wkt(gml)
         geom_wkt = validate_fix_geometry(geom_wkt)
         solr_doc["geospatial_bounds3d"] = geom_wkt
-        solr_doc['geometry_wkt'] = geom_wkt
+        solr_doc["geometry_wkt"] = geom_wkt
         solr_doc["geometry_geojson"] = wkt_to_geojson(geom_wkt)
         return solr_doc
 
     if gml is None:
         geom_solr_wkt, center = create_polygon_wkt_from_bbox(north, east, south, west)
-        if geom_solr_wkt.startswith('POINT'):
+        if geom_solr_wkt.startswith("POINT"):
             solr_doc["geospatial_bounds3d"] = geom_solr_wkt
         else:
-            solr_doc["geospatial_bounds3d"] = solr_doc['bbox']
+            solr_doc["geospatial_bounds3d"] = solr_doc["bbox"]
 
         if west == -180 and east == 180:
             logger.debug("Spanning whole longitude using ENVELOPE syntax to avoid coplanar error")
@@ -62,12 +64,12 @@ def handle_solr_spatial(solr_doc, north, east, south, west, gml=None, srs=None):
         if east < west:
             east += 360
         geom_wkt_string, center = create_polygon_wkt_from_bbox(north, east, south, west)
-        solr_doc['geometry_wkt'] = wkt_rect_to_segmetized_geom(geom_wkt_string, output="WKT")
-        solr_doc["geometry_geojson"] = wkt_rect_to_segmetized_geom(geom_wkt_string, output="GeoJSON")
-
+        solr_doc["geometry_wkt"] = wkt_rect_to_segmetized_geom(geom_wkt_string, output="WKT")
+        solr_doc["geometry_geojson"] = wkt_rect_to_segmetized_geom(
+            geom_wkt_string, output="GeoJSON"
+        )
 
     return solr_doc
-
 
 
 def parse_gml_to_wkt(gml):
@@ -181,7 +183,9 @@ def parse_envelope_to_bbox(envelope_wkt):
     """
     # Check if the input is in ENVELOPE format
     if not envelope_wkt.startswith("ENVELOPE(") or not envelope_wkt.endswith(")"):
-        raise ValueError("Invalid ENVELOPE syntax. Expected format: ENVELOPE(minX, maxX, maxY, minY)")
+        raise ValueError(
+            "Invalid ENVELOPE syntax. Expected format: ENVELOPE(minX, maxX, maxY, minY)"
+        )
 
     # Extract the coordinates
     coords = envelope_wkt.replace("ENVELOPE(", "").replace(")", "").split(",")
@@ -192,7 +196,9 @@ def parse_envelope_to_bbox(envelope_wkt):
     try:
         minX, maxX, maxY, minY = map(float, coords)
     except ValueError:
-        raise ValueError("Invalid coordinates in ENVELOPE syntax. Ensure they are numeric.") from ValueError
+        raise ValueError(
+            "Invalid coordinates in ENVELOPE syntax. Ensure they are numeric."
+        ) from ValueError
 
     # Validate coordinates
     if not (-90 <= minY <= 90 and -90 <= maxY <= 90):
@@ -213,7 +219,9 @@ def wkt_rect_to_segmetized_geom(wkt, segments=3, output="WKT"):
     """
     geom = loads(wkt)
     segmitize = False
-    if geom.geom_type == "Polygon" and math.isclose(geom.minimum_rotated_rectangle.area, geom.area):
+    if geom.geom_type == "Polygon" and math.isclose(
+        geom.minimum_rotated_rectangle.area, geom.area
+    ):
         segmitize = True
     if geom.geom_type == "LineString" or geom.geom_type == "MultiLineString":
         segmitize = True
@@ -232,6 +240,7 @@ def wkt_rect_to_segmetized_geom(wkt, segments=3, output="WKT"):
 
         return to_wkt(geom)
     return wkt
+
 
 def wkt_to_geojson(wkt):
     """Reads a WKT Geometry and return the GeoJSON equivalent"""
@@ -256,7 +265,9 @@ def validate_fix_geometry(geom_wkt):
     geom = loads(geom_wkt)
     if not geom.is_valid:
         explain = explain_validity(geom)
-        logger.warning(f"Invalid geometry..trying to repair and simplify: {explain}")   # Explain the issue
+        logger.warning(
+            f"Invalid geometry..trying to repair and simplify: {explain}"
+        )  # Explain the issue
         try:
             # Apply buffer(0) trick to fix the geometry
             fixed_geom = unary_union(geom.buffer(0).simplify(1))

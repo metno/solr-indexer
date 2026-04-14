@@ -17,10 +17,13 @@ implied. See the License for the specific language governing
 permissions and limitations under the License.
 """
 
+import pickle
+import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from solrindexer.vocabulary import (
     VocabularyLegacy,
     VocabularyLoader,
@@ -172,7 +175,10 @@ class TestCreateVocabularyLoader:
     def test_create_legacy_loader(self):
         """Test creating legacy loader."""
         mock_mmdgroup_class = MagicMock()
-        with patch("solrindexer.vocabulary.VocabularyLegacy._import_mmdgroup", return_value=mock_mmdgroup_class):
+        with patch(
+            "solrindexer.vocabulary.VocabularyLegacy._import_mmdgroup",
+            return_value=mock_mmdgroup_class,
+        ):
             loader = create_vocabulary_loader(backend="legacy-metvocab")
             assert loader is not None
             assert isinstance(loader, VocabularyLegacy)
@@ -204,14 +210,14 @@ class TestVocabularyRestSkosmos:
         response.raise_for_status = MagicMock()
         return response
 
-    def test_search_fetches_and_caches_vocabulary(self):
+    def test_search_fetches_and_caches_vocabulary(self, tmp_path):
         ttl_text = """
         @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
         @prefix ex: <https://example.test/> .
         ex:c1 skos:prefLabel "oceans"@en .
         ex:c2 skos:prefLabel "climatologyMeteorologyAtmosphere"@en .
         """
-        loader = VocabularyRestSkosmos("https://example.test/mmd", 7.0)
+        loader = VocabularyRestSkosmos("https://example.test/mmd", 7.0, cache_dir=str(tmp_path))
 
         with patch("solrindexer.vocabulary.requests.get") as mock_get:
             mock_get.return_value = self._mock_response(ttl_text)
@@ -223,20 +229,20 @@ class TestVocabularyRestSkosmos:
             # Second search should use in-memory cache and not call HTTP again.
             assert mock_get.call_count == 1
 
-    def test_search_returns_false_on_http_error(self):
-        loader = VocabularyRestSkosmos("https://example.test/mmd", 7.0)
+    def test_search_returns_false_on_http_error(self, tmp_path):
+        loader = VocabularyRestSkosmos("https://example.test/mmd", 7.0, cache_dir=str(tmp_path))
         with patch("solrindexer.vocabulary.requests.get") as mock_get:
             mock_get.side_effect = Exception("network down")
             vocab_uri = "https://vocab.met.no/mmd/ISO_Topic_Category"
             assert loader.search(vocab_uri, "oceans") is False
 
-    def test_timeout_and_endpoint_arguments_are_used(self):
+    def test_timeout_and_endpoint_arguments_are_used(self, tmp_path):
         ttl_text = """
         @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
         @prefix ex: <https://example.test/> .
         ex:c1 skos:prefLabel "In Work"@en .
         """
-        loader = VocabularyRestSkosmos("https://example.test/mmd", 3.25)
+        loader = VocabularyRestSkosmos("https://example.test/mmd", 3.25, cache_dir=str(tmp_path))
 
         with patch("solrindexer.vocabulary.requests.get") as mock_get:
             mock_get.return_value = self._mock_response(ttl_text)
@@ -251,6 +257,99 @@ class TestVocabularyRestSkosmos:
                 },
                 timeout=3.25,
             )
+
+    def test_disk_cache_is_written_after_fetch(self, tmp_path):
+        ttl_text = """
+        @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+        @prefix ex: <https://example.test/> .
+        ex:c1 skos:prefLabel "oceans"@en .
+        """
+        loader = VocabularyRestSkosmos("https://example.test/mmd", 7.0, cache_dir=str(tmp_path))
+        vocab_uri = "https://vocab.met.no/mmd/ISO_Topic_Category"
+
+        with patch("solrindexer.vocabulary.requests.get") as mock_get:
+            mock_get.return_value = self._mock_response(ttl_text)
+            loader.search(vocab_uri, "oceans")
+
+        cache_files = list(tmp_path.glob("*.pkl"))
+        assert len(cache_files) == 1
+        entry = pickle.loads(cache_files[0].read_bytes())
+        assert "oceans" in entry["labels"]
+        assert entry["fetched_at"] <= time.time()
+
+    def test_disk_cache_is_used_on_second_instance(self, tmp_path):
+        ttl_text = """
+        @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+        @prefix ex: <https://example.test/> .
+        ex:c1 skos:prefLabel "oceans"@en .
+        """
+        vocab_uri = "https://vocab.met.no/mmd/ISO_Topic_Category"
+
+        # First loader fetches from REST and writes to disk.
+        loader1 = VocabularyRestSkosmos("https://example.test/mmd", 7.0, cache_dir=str(tmp_path))
+        with patch("solrindexer.vocabulary.requests.get") as mock_get:
+            mock_get.return_value = self._mock_response(ttl_text)
+            loader1.search(vocab_uri, "oceans")
+            assert mock_get.call_count == 1
+
+        # Second loader (fresh instance, same cache_dir) should hit disk — no HTTP.
+        loader2 = VocabularyRestSkosmos("https://example.test/mmd", 7.0, cache_dir=str(tmp_path))
+        with patch("solrindexer.vocabulary.requests.get") as mock_get2:
+            result = loader2.search(vocab_uri, "oceans")
+            assert result is True
+            mock_get2.assert_not_called()
+
+    def test_expired_disk_cache_triggers_refetch(self, tmp_path):
+        ttl_text = """
+        @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+        @prefix ex: <https://example.test/> .
+        ex:c1 skos:prefLabel "oceans"@en .
+        """
+        vocab_uri = "https://vocab.met.no/mmd/ISO_Topic_Category"
+        loader = VocabularyRestSkosmos(
+            "https://example.test/mmd", 7.0, cache_ttl=60.0, cache_dir=str(tmp_path)
+        )
+        path = loader._cache_path(vocab_uri)
+
+        # Write a cache entry that is already 2 hours old.
+        stale_entry = {
+            "version": loader._CACHE_VERSION,
+            "fetched_at": time.time() - 7200,
+            "labels": {"oceans"},
+        }
+        path.write_bytes(pickle.dumps(stale_entry, protocol=pickle.HIGHEST_PROTOCOL))
+
+        with patch("solrindexer.vocabulary.requests.get") as mock_get:
+            mock_get.return_value = self._mock_response(ttl_text)
+            loader.search(vocab_uri, "oceans")
+            mock_get.assert_called_once()
+
+    def test_corrupt_disk_cache_triggers_refetch(self, tmp_path):
+        vocab_uri = "https://vocab.met.no/mmd/ISO_Topic_Category"
+        loader = VocabularyRestSkosmos("https://example.test/mmd", 7.0, cache_dir=str(tmp_path))
+        path = loader._cache_path(vocab_uri)
+        path.write_bytes(b"not valid pickle data !!!")
+
+        ttl_text = """
+        @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+        @prefix ex: <https://example.test/> .
+        ex:c1 skos:prefLabel "oceans"@en .
+        """
+        with patch("solrindexer.vocabulary.requests.get") as mock_get:
+            mock_get.return_value = self._mock_response(ttl_text)
+            result = loader.search(vocab_uri, "oceans")
+            assert result is True
+            mock_get.assert_called_once()
+
+    def test_failed_fetch_does_not_write_disk_cache(self, tmp_path):
+        vocab_uri = "https://vocab.met.no/mmd/ISO_Topic_Category"
+        loader = VocabularyRestSkosmos("https://example.test/mmd", 7.0, cache_dir=str(tmp_path))
+
+        with patch("solrindexer.vocabulary.requests.get") as mock_get:
+            mock_get.side_effect = Exception("timeout")
+            loader.search(vocab_uri, "oceans")
+
+        assert list(tmp_path.glob("*.pkl")) == []
 
 
 class TestMMD4SolRIntegration:
@@ -395,7 +494,7 @@ class TestMMD4SolRIntegration:
         mock_loader.search.return_value = True
 
         doc = MMD4SolR(mydoc=root, vocabulary_loader=mock_loader)
-        result = doc.check_mmd()
+        doc.check_mmd()
 
         # Vocabulary search should be called for controlled elements
         assert mock_loader.search.called

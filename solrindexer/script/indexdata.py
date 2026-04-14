@@ -13,6 +13,7 @@ from pathlib import Path
 import pysolr
 from dotenv import load_dotenv
 from requests.auth import HTTPBasicAuth
+
 from solrindexer.bulkindexer import BulkIndexer
 from solrindexer.failure_tracker import FailureTracker
 from solrindexer.indexdata import IndexMMD
@@ -52,9 +53,10 @@ def parse_arguments():
     parser.add_argument("-l", "--list_file", help="File containing xml file paths to ingest")
     parser.add_argument("-d", "--directory", help="Directory with xml files to ingest")
     parser.add_argument(
-        "-r", "--recursive",
+        "-r",
+        "--recursive",
         action="store_true",
-        help="Recursively search for XML files in directory and subdirectories (requires -d)"
+        help="Recursively search for XML files in directory and subdirectories (requires -d)",
     )
     parser.add_argument(
         "-parent",
@@ -73,27 +75,10 @@ def parse_arguments():
     parser.add_argument("--chunksize", type=int, default=None, help="Batch size for bulk indexing")
 
     parser.add_argument("-t", "--thumbnail", action="store_true", help="Enable thumbnail indexing")
-    parser.add_argument("-n", "--no_thumbnail", action="store_true", help="Disable thumbnail indexing")
+    parser.add_argument(
+        "-n", "--no_thumbnail", action="store_true", help="Disable thumbnail indexing"
+    )
     parser.add_argument("-nbs", "--nbs", action="store_true", help="Enable NBS thumbnail mode")
-
-    parser.add_argument(
-        "--vocabulary-ttl-path",
-        help="Path to TTL vocabulary file (overrides config)",
-    )
-    parser.add_argument(
-        "--vocabulary-backend",
-        choices=["native", "legacy-metvocab", "rest-skosmos"],
-        help="Vocabulary backend to use (overrides config)",
-    )
-    parser.add_argument(
-        "--vocabulary-endpoint-base-url",
-        help="Base URL for Skosmos endpoint (overrides config)",
-    )
-    parser.add_argument(
-        "--vocabulary-endpoint-timeout",
-        type=float,
-        help="Skosmos request timeout in seconds (overrides config)",
-    )
 
     args = parser.parse_args()
     if not args.input_file and not args.list_file and not args.directory and not args.mark_parent:
@@ -403,16 +388,6 @@ def main():
         else:
             cfg["scope"] = cfg.get("scope")
 
-        # Apply CLI overrides for vocabulary settings
-        if args.vocabulary_ttl_path:
-            cfg["vocabulary-ttl-path"] = args.vocabulary_ttl_path
-        if args.vocabulary_backend:
-            cfg["vocabulary-backend"] = args.vocabulary_backend
-        if args.vocabulary_endpoint_base_url:
-            cfg["vocabulary-endpoint-base-url"] = args.vocabulary_endpoint_base_url
-        if args.vocabulary_endpoint_timeout is not None:
-            cfg["vocabulary-endpoint-timeout"] = args.vocabulary_endpoint_timeout
-
         solr_url = cfg["solrserver"] + cfg["solrcore"]
         authentication = _resolve_authentication(cfg)
 
@@ -436,7 +411,9 @@ def main():
         if not files:
             raise ValueError("No input files found")
 
-        configured_threads = args.threads if args.threads is not None else int(cfg.get("threads", DEFAULT_THREADS))
+        configured_threads = (
+            args.threads if args.threads is not None else int(cfg.get("threads", DEFAULT_THREADS))
+        )
         # Use single worker for single file input, multiple workers for batch inputs
         if args.input_file:
             workers = 1
@@ -444,7 +421,11 @@ def main():
         else:
             workers = configured_threads
             logger.debug(f"Multiple file input: using {workers} workers (concurrent processing)")
-        chunksize = args.chunksize if args.chunksize is not None else int(cfg.get("batch-size", DEFAULT_CHUNKSIZE))
+        chunksize = (
+            args.chunksize
+            if args.chunksize is not None
+            else int(cfg.get("batch-size", DEFAULT_CHUNKSIZE))
+        )
         process_count = max(1, int(args.processes or 1))
         if args.input_file and process_count > 1:
             logger.warning("Single input file mode: forcing --processes=1")
@@ -489,8 +470,8 @@ def main():
             result = bulk.bulkindex(files)
 
         if result and len(result) >= 8:
-            docs_failed    = result[4]
-            docs_indexed   = result[5]
+            docs_failed = result[4]
+            docs_indexed = result[5]
             files_processed = result[6]
             failure_tracker = result[7]
 
@@ -537,7 +518,7 @@ def main():
     except Exception as exc:
         # args may not always be defined if exception occurs during arg parsing
         # but it should be defined for most cases since parse_arguments is first
-        error_msg = _format_error_message(exc, args if 'args' in locals() else None)
+        error_msg = _format_error_message(exc, args if "args" in locals() else None)
         logger.error("%s", error_msg)
         sys.exit(1)
 

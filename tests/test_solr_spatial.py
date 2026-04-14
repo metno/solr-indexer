@@ -1,6 +1,7 @@
 # solrindexer/tools/test_mmd_solr_spatial.py
 
 import pytest
+
 from solrindexer.tools.mmd_solr_spatial import (
     create_polygon_wkt_from_bbox,
     generate_solr_envelope,

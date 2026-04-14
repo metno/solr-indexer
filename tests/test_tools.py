@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from solrindexer.tools import checkDateFormat, getZones, parse_date, to_solr_id
 from solrindexer.tools.tools import (
     _extract_feature_type,
@@ -15,8 +16,8 @@ def testGetZones():
 
 @pytest.mark.indexdata
 def testToSolrId():
-    metadata_identifier = 'no.met:b7cb7934-77ca-4439-812e-f560df3fe7eb'
-    solr_id = 'no-met-b7cb7934-77ca-4439-812e-f560df3fe7eb'
+    metadata_identifier = "no.met:b7cb7934-77ca-4439-812e-f560df3fe7eb"
+    solr_id = "no-met-b7cb7934-77ca-4439-812e-f560df3fe7eb"
     assert to_solr_id(metadata_identifier) == solr_id
 
 
@@ -48,6 +49,7 @@ def testDateFormatInValid():
 # ---------------------------------------------------------------------------
 # _extract_feature_type
 # ---------------------------------------------------------------------------
+
 
 class TestExtractFeatureType:
     """Tests for _extract_feature_type (xarray only, thread-safe)."""
@@ -101,6 +103,7 @@ class TestExtractFeatureType:
 # ---------------------------------------------------------------------------
 # process_feature_type
 # ---------------------------------------------------------------------------
+
 
 class TestProcessFeatureType:
     """Tests for process_feature_type return-tuple contract."""

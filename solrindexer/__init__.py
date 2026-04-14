@@ -24,8 +24,17 @@ import sys
 from .bulkindexer import BulkIndexer
 from .indexdata import IndexMMD, MMD4SolR
 
+try:
+    from importlib.metadata import PackageNotFoundError, version
+except ImportError:
+    from importlib_metadata import PackageNotFoundError, version  # type: ignore
+
+try:
+    __version__ = version("solrindexer")
+except PackageNotFoundError:
+    __version__ = "0.0.0.dev0"
+
 __package__ = "solrindexer"
-__version__ = "2.2.3"
 __date__ = "2025-12-04"
 __all__ = ["IndexMMD", "MMD4SolR", "BulkIndexer"]
 
@@ -57,7 +66,9 @@ def _init_logging(log_obj):
 
     debug_fmt = "[{asctime:}]  [{processName:s}] [{threadName:s}] [{levelname:7s}] {name}:{lineno:<4d} : {message:}"
     info_fmt = "[{asctime:}] {levelname:8s}: {message:}"
-    plain_format = logging.Formatter(fmt=debug_fmt if log_level == logging.DEBUG else info_fmt, style="{")
+    plain_format = logging.Formatter(
+        fmt=debug_fmt if log_level == logging.DEBUG else info_fmt, style="{"
+    )
 
     # Make init idempotent (important for tests/import cycles)
     log_obj.handlers.clear()
@@ -67,6 +78,7 @@ def _init_logging(log_obj):
     try:
         from rich.console import Console
         from rich.logging import RichHandler
+
         show_path = log_level == logging.DEBUG
 
         # DEBUG/INFO → stdout

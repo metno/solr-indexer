@@ -1,6 +1,7 @@
 """Tests for the failure tracking system."""
 
 import pytest
+
 from solrindexer.failure_tracker import FailureRecord, FailureTracker
 
 
@@ -18,7 +19,7 @@ def test_add_single_failure():
         filename="test_file.xml",
         error_message="Test error message",
         error_stage="parsing",
-        metadata_identifier="test_id_001"
+        metadata_identifier="test_id_001",
     )
 
     assert len(tracker.failures) == 1
@@ -73,7 +74,7 @@ def test_get_failures_by_stage():
             filename=f"file{i}.xml",
             error_message=f"Error {i}",
             error_stage=stage,
-            metadata_identifier=f"id_{i:03d}"
+            metadata_identifier=f"id_{i:03d}",
         )
 
     parsing_failures = tracker.get_failures_by_stage("parsing")
@@ -115,19 +116,19 @@ def test_get_summary_with_failures():
         filename="file1.xml",
         error_message="XSD validation failed",
         error_stage="validation",
-        metadata_identifier="noa_met_004_ppi_0-25km"
+        metadata_identifier="noa_met_004_ppi_0-25km",
     )
     tracker.add_failure(
         filename="file2.xml",
         error_message="Missing temporal_extent_start_date",
         error_stage="conversion",
-        metadata_identifier=None
+        metadata_identifier=None,
     )
     tracker.add_failure(
         filename="file3.xml",
         error_message="Solr indexing failed: connection timeout",
         error_stage="indexing",
-        metadata_identifier="noa_met_004_ppi_0-50km"
+        metadata_identifier="noa_met_004_ppi_0-50km",
     )
 
     summary = tracker.get_summary()
@@ -148,19 +149,13 @@ def test_summary_grouping_by_filename():
 
     # Add single file with multiple stage failures
     tracker.add_failure(
-        filename="multi_stage_file.xml",
-        error_message="Parse error",
-        error_stage="parsing"
+        filename="multi_stage_file.xml", error_message="Parse error", error_stage="parsing"
     )
     tracker.add_failure(
-        filename="multi_stage_file.xml",
-        error_message="Validation error",
-        error_stage="validation"
+        filename="multi_stage_file.xml", error_message="Validation error", error_stage="validation"
     )
     tracker.add_failure(
-        filename="multi_stage_file.xml",
-        error_message="Conversion error",
-        error_stage="conversion"
+        filename="multi_stage_file.xml", error_message="Conversion error", error_stage="conversion"
     )
 
     summary = tracker.get_summary()

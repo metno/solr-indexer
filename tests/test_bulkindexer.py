@@ -1,4 +1,5 @@
 import pytest
+
 from solrindexer.bulkindexer import BulkIndexer
 
 

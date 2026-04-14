@@ -34,8 +34,9 @@ Migration:
 All arguments are compatible with the new command.
 """
 
-import sys
 import logging
+import sys
+
 from solrindexer.script import indexdata
 
 logger = logging.getLogger(__name__)
@@ -44,7 +45,7 @@ logger = logging.getLogger(__name__)
 def main():
     """
     Deprecation wrapper that delegates all arguments to the new unified indexdata command.
-    
+
     This function prints a deprecation warning and then forwards all command-line arguments
     to the new indexdata.main() function. All functionality is preserved; users should
     simply switch to using the indexdata command directly.

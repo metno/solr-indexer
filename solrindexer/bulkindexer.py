@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 
 class BulkIndexer:
-    """ Do multithreaded bulkindexing given a list of file names.
+    """Do multithreaded bulkindexing given a list of file names.
     ...
 
     Attributes
@@ -57,9 +57,19 @@ class BulkIndexer:
         valid authentication object for SolR
     """
 
-    def __init__(self, inputList, solr_url, threads=20, chunksize=2500, auth=None,
-                 tflg=False, thumbClass=None, config=None, failure_tracker=None):
-        """ Initialize BulkIndexer"""
+    def __init__(
+        self,
+        inputList,
+        solr_url,
+        threads=20,
+        chunksize=2500,
+        auth=None,
+        tflg=False,
+        thumbClass=None,
+        config=None,
+        failure_tracker=None,
+    ):
+        """Initialize BulkIndexer"""
         logger.debug("Initializing BulkIndexer.")
         self.inputList = inputList
         self.threads = threads
@@ -79,7 +89,9 @@ class BulkIndexer:
                 "vocabulary-endpoint-base-url",
                 "https://vocab.met.no/mmd",
             )
-            vocabulary_endpoint_timeout = float(self.config.get("vocabulary-endpoint-timeout", 20.0))
+            vocabulary_endpoint_timeout = float(
+                self.config.get("vocabulary-endpoint-timeout", 20.0)
+            )
             try:
                 self.vocabulary_loader = create_vocabulary_loader(
                     ttl_path=vocabulary_ttl_path,
@@ -88,7 +100,9 @@ class BulkIndexer:
                     endpoint_timeout=vocabulary_endpoint_timeout,
                 )
                 if self.vocabulary_loader is not None:
-                    logger.info(f"Vocabulary loader initialized with backend: {vocabulary_backend}")
+                    logger.info(
+                        f"Vocabulary loader initialized with backend: {vocabulary_backend}"
+                    )
             except Exception as e:
                 logger.error(f"Failed to initialize vocabulary loader: {e}")
                 logger.warning("Continuing without vocabulary validation")
@@ -114,12 +128,12 @@ class BulkIndexer:
             self.failure_tracker.add_failure(
                 filename=file,
                 error_message="File was not parsed (XML parsing failed)",
-                error_stage="parsing"
+                error_stage="parsing",
             )
             return (None, status)
-        if file is not None and file.endswith('\n'):
+        if file is not None and file.endswith("\n"):
             file = file[:-1]
-        xsd_path = self.config.get('mmd-xsd-path') if self.config else None
+        xsd_path = self.config.get("mmd-xsd-path") if self.config else None
         metadata_id = None
         validation_messages = []
 
@@ -153,8 +167,7 @@ class BulkIndexer:
             vocabulary_loader=self.vocabulary_loader,
         )
         if not mydoc.check_mmd():
-            logger.error(
-                f"File {file} did not pass the mmd check, cannot index.")
+            logger.error(f"File {file} did not pass the mmd check, cannot index.")
             # Try to extract metadata_identifier even if validation failed
             metadata_id = mydoc.get_metadata_identifier()
 
@@ -183,7 +196,7 @@ class BulkIndexer:
                 filename=file,
                 error_message=failure_message,
                 error_stage="validation",
-                metadata_identifier=metadata_id
+                metadata_identifier=metadata_id,
             )
             return (None, status)
 
@@ -191,14 +204,13 @@ class BulkIndexer:
         try:
             tmpdoc = mydoc.tosolr()
         except Exception as e:
-            logger.error(
-                f"File {file} could not be converted to solr document. Reason: {e}")
+            logger.error(f"File {file} could not be converted to solr document. Reason: {e}")
             metadata_id = mydoc.get_metadata_identifier()
             self.failure_tracker.add_failure(
                 filename=file,
                 error_message=f"Solr document conversion failed: {str(e)}",
                 error_stage="conversion",
-                metadata_identifier=metadata_id
+                metadata_identifier=metadata_id,
             )
             return (None, status)
 
@@ -208,72 +220,75 @@ class BulkIndexer:
             self.failure_tracker.add_failure(
                 filename=file,
                 error_message="Generated Solr document was empty",
-                error_stage="conversion"
+                error_stage="conversion",
             )
             return (None, status)
 
-        if 'id' not in tmpdoc:
+        if "id" not in tmpdoc:
             logger.warning("File %s have no id. Missing metadata_identifier?" % file)
             self.failure_tracker.add_failure(
                 filename=file,
                 error_message="Missing 'id' field in Solr document (missing metadata_identifier)",
-                error_stage="conversion"
+                error_stage="conversion",
             )
             return (None, status)
 
-        if tmpdoc['id'] is None or tmpdoc['id'] == 'Unknown':
+        if tmpdoc["id"] is None or tmpdoc["id"] == "Unknown":
             logger.warning(
-                "Skipping process file %s. Metadata identifier: Unknown, or missing" % file)
+                "Skipping process file %s. Metadata identifier: Unknown, or missing" % file
+            )
             self.failure_tracker.add_failure(
                 filename=file,
                 error_message="Metadata identifier is None or 'Unknown'",
                 error_stage="conversion",
-                metadata_identifier=tmpdoc['id']
+                metadata_identifier=tmpdoc["id"],
             )
             return (None, status)
 
-        if 'temporal_extent_start_date' not in tmpdoc:
+        if "temporal_extent_start_date" not in tmpdoc:
             logger.error("Could not find start date in  %s." % file)
             self.failure_tracker.add_failure(
                 filename=file,
                 error_message="Missing temporal_extent_start_date field",
                 error_stage="conversion",
-                metadata_identifier=tmpdoc.get('id')
+                metadata_identifier=tmpdoc.get("id"),
             )
             return (None, status)
 
-        if 'related_dataset' in tmpdoc:
+        if "related_dataset" in tmpdoc:
             logger.debug("got related dataset")
-            if isinstance(tmpdoc['related_dataset'], str):
+            if isinstance(tmpdoc["related_dataset"], str):
                 logger.debug("processing child")
                 # Manipulate the related_dataset id to solr id
                 # Special fix for NPI
-                tmpdoc['related_dataset'] = tmpdoc['related_dataset'].replace(
-                    'https://data.npolar.no/dataset/', '')
-                tmpdoc['related_dataset'] = tmpdoc['related_dataset'].replace(
-                    'http://data.npolar.no/dataset/', '')
-                tmpdoc['related_dataset'] = tmpdoc['related_dataset'].replace(
-                    'http://api.npolar.no/dataset/', '')
-                tmpdoc['related_dataset'] = tmpdoc['related_dataset'].replace(
-                    '.xml', '')
+                tmpdoc["related_dataset"] = tmpdoc["related_dataset"].replace(
+                    "https://data.npolar.no/dataset/", ""
+                )
+                tmpdoc["related_dataset"] = tmpdoc["related_dataset"].replace(
+                    "http://data.npolar.no/dataset/", ""
+                )
+                tmpdoc["related_dataset"] = tmpdoc["related_dataset"].replace(
+                    "http://api.npolar.no/dataset/", ""
+                )
+                tmpdoc["related_dataset"] = tmpdoc["related_dataset"].replace(".xml", "")
                 # Skip if DOI is used to refer to parent, that isn't consistent.
-                if 'doi.org' not in tmpdoc['related_dataset']:
+                if "doi.org" not in tmpdoc["related_dataset"]:
                     # Update document with child specific fields
-                    tmpdoc.update({'dataset_type': 'Level-2'})
-                    tmpdoc.update({'isChild': True})
+                    tmpdoc.update({"dataset_type": "Level-2"})
+                    tmpdoc.update({"isChild": True})
                     # tmpdoc.update({'isParent': False})
 
                     # Fix special characters that SolR doesn't like
-                    myparentid = tmpdoc['related_dataset']
-                    tmpdoc.update({'related_dataset': myparentid.strip()})
+                    myparentid = tmpdoc["related_dataset"]
+                    tmpdoc.update({"related_dataset": myparentid.strip()})
                     mysolrparentid = to_solr_id(myparentid)
-                    tmpdoc.update({'related_dataset_id': mysolrparentid})
+                    tmpdoc.update({"related_dataset_id": mysolrparentid})
                     status = mysolrparentid
 
         else:
             # Assume we have level-1 doc that are not parent
-            tmpdoc.update({'dataset_type': 'Level-1'})
-            tmpdoc.update({'isParent': False})
+            tmpdoc.update({"dataset_type": "Level-1"})
+            tmpdoc.update({"isParent": False})
 
         return (tmpdoc, status)
 
@@ -291,7 +306,7 @@ class BulkIndexer:
             return solr_docs, status
 
     def add2solr(self, docs, file_ids=None):
-        """ Add documents to SolR
+        """Add documents to SolR
 
         Parameters
         ----------
@@ -317,12 +332,12 @@ class BulkIndexer:
             logger.error(error_msg)
             # Track each document that failed to index
             for doc in docs:
-                filename = file_ids.get(doc.get('id'), 'unknown')
+                filename = file_ids.get(doc.get("id"), "unknown")
                 self.failure_tracker.add_failure(
                     filename=filename,
                     error_message=f"Solr indexing failed: {str(e)}",
                     error_stage="indexing",
-                    metadata_identifier=doc.get('id')
+                    metadata_identifier=doc.get("id"),
                 )
 
         # If success
@@ -332,8 +347,12 @@ class BulkIndexer:
         pelt = pet - pst
         etime = time.strftime("%H:%M:%S", time.gmtime(elapsed_time))
         ctime = time.strftime("%H:%M:%S", time.gmtime(pelt))
-        logger.info("-- Indexed %d documents to SolR. Elapsed time: %s, CPU time: %s",
-                    len(docs), etime, ctime)
+        logger.info(
+            "-- Indexed %d documents to SolR. Elapsed time: %s, CPU time: %s",
+            len(docs),
+            etime,
+            ctime,
+        )
 
     def msg_callback(self, msg):
         """Message logging callback function"""
@@ -362,10 +381,16 @@ class BulkIndexer:
             else:
                 logger.info("✅ all parents resolved.")
 
-    def _resolve_parent_child(self, docs, file_ids,
-                              parent_ids_pending, parent_ids_processed,
-                              parent_ids_found, doc_ids_processed,
-                              statuses):
+    def _resolve_parent_child(
+        self,
+        docs,
+        file_ids,
+        parent_ids_pending,
+        parent_ids_processed,
+        parent_ids_found,
+        doc_ids_processed,
+        statuses,
+    ):
         """Resolve parent/child relationships for a completed chunk.
 
         Updates ``docs`` in-place (marks parents as isParent=True), and
@@ -403,23 +428,26 @@ class BulkIndexer:
         parentids -= parent_ids_processed
         parentids -= parent_ids_found - parentids  # keep only truly new ones
         # Re-derive: keep pids that are still pending (not yet processed)
-        parentids = {pid for pid in {s for s in statuses if s is not None}
-                     if pid not in parent_ids_processed}
+        parentids = {
+            pid
+            for pid in {s for s in statuses if s is not None}
+            if pid not in parent_ids_processed
+        }
 
         for pid in parentids:
             parent_found = False
             logger.debug("checking parent: %s", pid)
-            parent = [el for el in docs if el['id'] == pid]
+            parent = [el for el in docs if el["id"] == pid]
             logger.debug("parents found in this chunk: %s", parent)
 
             if parent:
                 myparent = parent.pop()
-                logger.debug("parent found in current chunk: %s", myparent['id'])
+                logger.debug("parent found in current chunk: %s", myparent["id"])
                 parent_found = True
-                if myparent['isParent'] is False:
+                if myparent["isParent"] is False:
                     logger.debug("found pending parent %s in this job — updating", pid)
                     docs.remove(myparent)
-                    myparent.update({'isParent': True})
+                    myparent.update({"isParent": True})
                     docs.append(myparent)
                     parent_ids_pending.discard(pid)
                     parent_ids_processed.add(pid)
@@ -427,14 +455,14 @@ class BulkIndexer:
             if pid in doc_ids_processed and not parent_found:
                 myparent = get_dataset(pid)
                 if myparent is not None:
-                    if myparent['doc'] is None:
+                    if myparent["doc"] is None:
                         if pid not in parent_ids_pending:
                             logger.debug("parent %s not found in index, storing for later", pid)
                             parent_ids_pending.add(pid)
-                    elif myparent['doc']['isParent'] is False:
+                    elif myparent["doc"]["isParent"] is False:
                         logger.debug("Update on indexed parent %s, isParent: True", pid)
                         try:
-                            solr_add([IndexMMD._solr_update_parent_doc(myparent['doc'])])
+                            solr_add([IndexMMD._solr_update_parent_doc(myparent["doc"])])
                         except Exception as e:
                             logger.error("Could not update parent in index. reason: %s", e)
                         parent_ids_processed.add(pid)
@@ -446,28 +474,31 @@ class BulkIndexer:
             logger.info(" --- Checking parent/child integrity --- ")
             for pid in ppending:
                 parent_found = False
-                parent = [el for el in docs if el['id'] == pid]
+                parent = [el for el in docs if el["id"] == pid]
                 if parent:
                     myparent = parent.pop()
-                    logger.debug("pending parent found in current chunk: %s", myparent['id'])
+                    logger.debug("pending parent found in current chunk: %s", myparent["id"])
                     parent_found = True
-                    if myparent['isParent'] is False:
+                    if myparent["isParent"] is False:
                         logger.debug("found unprocessed pending parent %s — updating", pid)
                         docs.remove(myparent)
-                        myparent.update({'isParent': True})
+                        myparent.update({"isParent": True})
                         docs.append(myparent)
                         parent_ids_pending.discard(pid)
                         parent_ids_processed.add(pid)
 
                 if pid in doc_ids_processed and not parent_found:
                     myparent = get_dataset(pid)
-                    if myparent is not None and myparent['doc'] is not None:
-                        logger.debug("pending parent found in index: %s, isParent: %s",
-                                     myparent['doc']['id'], myparent['doc']['isParent'])
-                        if myparent['doc']['isParent'] is False:
+                    if myparent is not None and myparent["doc"] is not None:
+                        logger.debug(
+                            "pending parent found in index: %s, isParent: %s",
+                            myparent["doc"]["id"],
+                            myparent["doc"]["isParent"],
+                        )
+                        if myparent["doc"]["isParent"] is False:
                             logger.debug("Update on indexed parent %s, isParent: True", pid)
                             try:
-                                solr_add([IndexMMD._solr_update_parent_doc(myparent['doc'])])
+                                solr_add([IndexMMD._solr_update_parent_doc(myparent["doc"])])
                             except Exception as e:
                                 logger.error("Could not update parent. reason: %s", e)
                             parent_ids_processed.add(pid)
@@ -483,8 +514,8 @@ class BulkIndexer:
         """
 
         chunksize = self.chunksize
-        skip_feature_type = self.config.get('skip-feature-type', False)
-        nbs_scope = self.config.get('scope', '') == 'NBS'
+        skip_feature_type = self.config.get("skip-feature-type", False)
+        nbs_scope = self.config.get("scope", "") == "NBS"
 
         logger.debug("-- Got %d input file(s)", len(filelist))
 
@@ -555,7 +586,7 @@ class BulkIndexer:
                 else:
                     docs.append(doc)
                     statuses.append(status)
-                    file_ids[doc['id']] = file_path
+                    file_ids[doc["id"]] = file_path
 
                 if completed % chunksize == 0 or completed == total:
                     logger.info("Progress: completed %d / %d files", completed, total)
@@ -570,17 +601,17 @@ class BulkIndexer:
 
         # Build parent-tracking state once for the full document set.
         t_parent_prepare_start = time.perf_counter()
-        doc_ids_processed.update(d['id'] for d in docs)
+        doc_ids_processed.update(d["id"] for d in docs)
         parentids = {s for s in statuses if s is not None}
         parent_ids_found.update(parentids)
         for pid in parentids:
             if pid in doc_ids_processed:
                 # Parent present in this run: mark directly before indexing.
-                parent_docs = [el for el in docs if el['id'] == pid]
+                parent_docs = [el for el in docs if el["id"] == pid]
                 if parent_docs:
                     parent_doc = parent_docs[0]
-                    if parent_doc.get('isParent') is False:
-                        parent_doc.update({'isParent': True})
+                    if parent_doc.get("isParent") is False:
+                        parent_doc.update({"isParent": True})
                     parent_ids_processed.add(pid)
                 else:
                     parent_ids_pending.add(pid)
@@ -602,22 +633,21 @@ class BulkIndexer:
             logger.info("skip-feature-type is True in config. Skipping feature type..")
 
         for i in range(0, len(docs), chunksize):
-            chunk_docs = list(docs[i:i + chunksize])
+            chunk_docs = list(docs[i : i + chunksize])
             if not chunk_docs:
                 continue
 
-            chunk_file_ids = {
-                doc['id']: file_ids.get(doc['id'], 'unknown')
-                for doc in chunk_docs
-            }
+            chunk_file_ids = {doc["id"]: file_ids.get(doc["id"], "unknown") for doc in chunk_docs}
 
             if skip_feature_type is not True:
-                dap_docs = [doc for doc in chunk_docs if 'data_access_url_opendap' in doc]
+                dap_docs = [doc for doc in chunk_docs if "data_access_url_opendap" in doc]
                 if dap_docs:
                     t_feature_chunk_start = time.perf_counter()
                     if self._should_use_process_pool(len(dap_docs)):
-                        logger.info("---- Process featureType with processes %d ----", self.threads)
-                        for (doc, (newdoc, ft_error)) in multiprocess(
+                        logger.info(
+                            "---- Process featureType with processes %d ----", self.threads
+                        )
+                        for doc, (newdoc, ft_error) in multiprocess(
                             fn=process_feature_type,
                             inputs=dap_docs,
                             max_concurrency=self.threads,
@@ -626,23 +656,26 @@ class BulkIndexer:
                             chunk_docs.append(newdoc)
                             if ft_error is not None:
                                 self.failure_tracker.add_warning(
-                                    filename=chunk_file_ids.get(doc.get('id'), 'unknown'),
+                                    filename=chunk_file_ids.get(doc.get("id"), "unknown"),
                                     warning_message=ft_error,
                                     warning_stage="feature_type",
-                                    metadata_identifier=doc.get('id'),
+                                    metadata_identifier=doc.get("id"),
                                 )
                     else:
-                        logger.info("---- Process featureType inline for small batch (%d docs) ----", len(dap_docs))
+                        logger.info(
+                            "---- Process featureType inline for small batch (%d docs) ----",
+                            len(dap_docs),
+                        )
                         for doc in dap_docs:
                             newdoc, ft_error = process_feature_type(doc)
                             chunk_docs.remove(doc)
                             chunk_docs.append(newdoc)
                             if ft_error is not None:
                                 self.failure_tracker.add_warning(
-                                    filename=chunk_file_ids.get(doc.get('id'), 'unknown'),
+                                    filename=chunk_file_ids.get(doc.get("id"), "unknown"),
                                     warning_message=ft_error,
                                     warning_stage="feature_type",
-                                    metadata_identifier=doc.get('id'),
+                                    metadata_identifier=doc.get("id"),
                                 )
                     t_feature_chunk = time.perf_counter() - t_feature_chunk_start
                     t_feature_type += t_feature_chunk
@@ -654,12 +687,12 @@ class BulkIndexer:
                     )
 
             if self.tflg is True:
-                thumb_docs = [doc for doc in chunk_docs if 'data_access_url_ogc_wms' in doc]
+                thumb_docs = [doc for doc in chunk_docs if "data_access_url_ogc_wms" in doc]
                 if thumb_docs and nbs_scope:
                     t_thumb_chunk_start = time.perf_counter()
                     if self._should_use_process_pool(len(thumb_docs)):
                         logger.info("---- Creating thumbnails concurrently %d ----", self.threads)
-                        for (doc, newdoc) in multiprocess(
+                        for doc, newdoc in multiprocess(
                             fn=add_nbs_thumbnail_bulk,
                             inputs=thumb_docs,
                             max_concurrency=self.threads,
@@ -667,7 +700,10 @@ class BulkIndexer:
                             chunk_docs.remove(doc)
                             chunk_docs.append(newdoc)
                     else:
-                        logger.info("---- Creating thumbnails inline for small batch (%d docs) ----", len(thumb_docs))
+                        logger.info(
+                            "---- Creating thumbnails inline for small batch (%d docs) ----",
+                            len(thumb_docs),
+                        )
                         for doc in thumb_docs:
                             newdoc = add_nbs_thumbnail_bulk(doc)
                             chunk_docs.remove(doc)
@@ -696,7 +732,7 @@ class BulkIndexer:
             indexthread.start()
             self.indexthreads.append(indexthread)
             logger.debug("Started %s", indexthread.name)
-            t_index_dispatch += (time.perf_counter() - t_index_dispatch_start)
+            t_index_dispatch += time.perf_counter() - t_index_dispatch_start
 
         # Resolve any parents that remained pending until the very end
         ppending = set(parent_ids_pending)
@@ -706,13 +742,16 @@ class BulkIndexer:
             logger.debug("Checking %d unresolved parent IDs", len(ppending))
             for pid in ppending:
                 myparent = get_dataset(pid)
-                if myparent is not None and myparent.get('doc') is not None:
-                    logger.debug("pending parent found in index: %s, isParent: %s",
-                                 myparent['doc']['id'], myparent['doc']['isParent'])
-                    if myparent['doc']['isParent'] is False:
+                if myparent is not None and myparent.get("doc") is not None:
+                    logger.debug(
+                        "pending parent found in index: %s, isParent: %s",
+                        myparent["doc"]["id"],
+                        myparent["doc"]["isParent"],
+                    )
+                    if myparent["doc"]["isParent"] is False:
                         logger.debug("Update on indexed parent %s, isParent: True", pid)
                         try:
-                            solr_add([IndexMMD._solr_update_parent_doc(myparent['doc'])])
+                            solr_add([IndexMMD._solr_update_parent_doc(myparent["doc"])])
                         except Exception as e:
                             logger.error("Could not update parent. reason: %s", e)
                         parent_ids_processed.add(pid)
@@ -750,8 +789,8 @@ class BulkIndexer:
             parent_ids_pending.copy(),
             parent_ids_processed.copy(),
             doc_ids_processed.copy(),
-            docs_skipped,       # position 4: docs_failed
-            docs_indexed,       # position 5: docs_indexed
-            files_processed,    # position 6: files_processed
+            docs_skipped,  # position 4: docs_failed
+            docs_indexed,  # position 5: docs_indexed
+            files_processed,  # position 6: files_processed
             self.failure_tracker,  # position 7
         )

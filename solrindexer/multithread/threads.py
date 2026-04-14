@@ -1,9 +1,6 @@
-
 import itertools
-
-from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import ProcessPoolExecutor
 from concurrent import futures as Futures
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 
 def concurrently(fn, inputs, *, max_concurrency=5):
@@ -26,9 +23,7 @@ def concurrently(fn, inputs, *, max_concurrency=5):
         }
 
         while futures:
-            done, _ = Futures.wait(
-                futures, return_when=Futures.FIRST_COMPLETED, timeout=None
-            )
+            done, _ = Futures.wait(futures, return_when=Futures.FIRST_COMPLETED, timeout=None)
 
             for fut in done:
                 original_input = futures.pop(fut)
@@ -59,9 +54,7 @@ def multiprocess(fn, inputs, *, max_concurrency=5):
         }
 
         while futures:
-            done, _ = Futures.wait(
-                futures, return_when=Futures.FIRST_COMPLETED, timeout=None
-            )
+            done, _ = Futures.wait(futures, return_when=Futures.FIRST_COMPLETED, timeout=None)
 
             for fut in done:
                 original_input = futures.pop(fut)

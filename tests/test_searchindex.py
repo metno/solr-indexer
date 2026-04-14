@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
+
 from solrindexer.script.searchindex import _format_xml_for_display, build_search_request, parse_cfg
 
 
@@ -37,7 +38,9 @@ def test_build_search_request_mmd_mode():
 
 @pytest.mark.searchindex
 def test_format_xml_for_display_pretty_prints_xml():
-    xml_text = "<response><result><doc><str name='mmd_xml_file'>value</str></doc></result></response>"
+    xml_text = (
+        "<response><result><doc><str name='mmd_xml_file'>value</str></doc></result></response>"
+    )
 
     formatted = _format_xml_for_display(xml_text)
 

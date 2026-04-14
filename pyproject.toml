@@ -1,4 +1,108 @@
-# Minimal PEP 518 pyproject file
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "solrindexer"
+version = "4.0.0"
+description = "Tools and wrappers used for indexing MMD in SolR"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "GPL-3.0"}
+authors = [
+    {name = "MET Norway", email = "csw-services@met.no"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License version 3 (GPLv3)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+]
+dependencies = [
+    "Shapely",
+    "lxml",
+    "xarray",
+    "pysolr",
+    "PyYAML",
+    "requests",
+    "validators",
+    "python-dateutil",
+    "python-dotenv",
+    "pygml",
+    "pygeoif",
+]
+
+[project.optional-dependencies]
+metvocab = ["metvocab @ git+https://github.com/metno/met-vocab-tools@v1.2.0"]
+rdflib = ["rdflib"]
+rich = ["rich"]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "tox",
+    "ruff",
+    "mypy",
+    "bandit[toml]",
+    "prospector[with_everything]",
+]
+
+[project.urls]
+Homepage = "https://github.com/metno/solrindexing"
+"Source Code" = "https://github.com/metno/solrindexing"
+"Bug Tracker" = "https://github.com/metno/solrindexing/issues"
+
+[project.scripts]
+indexdata = "solrindexer.script.indexdata:_main"
+bulkindexer = "solrindexer.script.bulkindexer:_main"
+searchindex = "solrindexer.script.searchindex:_main"
+
+[tool.setuptools]
+include-package-data = true
+packages = ["solrindexer", "solrindexer.script", "solrindexer.thumb", "solrindexer.tools", "solrindexer.multithread"]
+
+[tool.setuptools.package-data]
+solrindexer = ["py.typed"]
+
+[tool.ruff]
+line-length = 99
+target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["solrindexer"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+markers = [
+    "indexdata: Tests indexing of data",
+    "searchindex: Tests searching of the index",
+]
+
+[tool.bandit]
+exclude_dirs = ["tests", "venv", ".venv"]
+skips = ["B101"]  # assert statements are fine in tests
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+disallow_incomplete_defs = true
+disallow_untyped_calls = true
+ignore_missing_imports = true

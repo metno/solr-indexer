@@ -54,8 +54,9 @@ def _print_pretty_docs(docs):
     fields_to_remove = {"_version_", "_root_", "mmd_xml_file"}
     filtered_docs = []
     for doc in docs:
-        filtered_doc = {k: v for k, v in doc.items()
-                        if k not in fields_to_remove and not k.endswith("_facet")}
+        filtered_doc = {
+            k: v for k, v in doc.items() if k not in fields_to_remove and not k.endswith("_facet")
+        }
         filtered_docs.append(filtered_doc)
 
     pretty = json.dumps(filtered_docs, ensure_ascii=False, indent=2)
@@ -97,15 +98,19 @@ def _print_pretty_xml(xml_text):
 def parse_arguments():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("-c", "--cfg", dest="cfgfile",
-                        help="Configuration file", required=True)
-    parser.add_argument("-s", "--searchstringst", dest="string",
-                        help="String to search for", required=True)
-    parser.add_argument('-d', '--delete', action='store_true', help="Flag to delete records")
-    parser.add_argument('-a', '--always_commit', action='store_true',
-                        help="Flag to commit directly")
-    parser.add_argument('--mmd', action='store_true',
-                        help="Return mmd_xml_file using Solr XML response writer and xml transformer")
+    parser.add_argument("-c", "--cfg", dest="cfgfile", help="Configuration file", required=True)
+    parser.add_argument(
+        "-s", "--searchstringst", dest="string", help="String to search for", required=True
+    )
+    parser.add_argument("-d", "--delete", action="store_true", help="Flag to delete records")
+    parser.add_argument(
+        "-a", "--always_commit", action="store_true", help="Flag to commit directly"
+    )
+    parser.add_argument(
+        "--mmd",
+        action="store_true",
+        help="Return mmd_xml_file using Solr XML response writer and xml transformer",
+    )
 
     args = parser.parse_args()
 
@@ -155,7 +160,7 @@ def parse_cfg(cfgfile):
 
 
 class IndexMMD:
-    """ requires a list of dictionaries representing MMD as input """
+    """requires a list of dictionaries representing MMD as input"""
 
     def __init__(self, mysolrserver, commit, authentication):
         """
@@ -164,19 +169,20 @@ class IndexMMD:
         self.solr_url = mysolrserver
         self.authentication = authentication
         try:
-            self.solrc = pysolr.Solr(mysolrserver, always_commit=commit, timeout=1020,
-                                     auth=authentication)
+            self.solrc = pysolr.Solr(
+                mysolrserver, always_commit=commit, timeout=1020, auth=authentication
+            )
         except Exception as e:
             logger.info("Something failed in SolR init", str(e))
         logger.info("Connection established to: " + str(mysolrserver))
 
         try:
             pong = self.solrc.ping()
-            status = json.loads(pong)['status']
-            if status == 'OK':
-                logger.info('Solr ping with status %s', status)
+            status = json.loads(pong)["status"]
+            if status == "OK":
+                logger.info("Solr ping with status %s", status)
             else:
-                logger.error('Error! Solr ping with status %s', status)
+                logger.error("Error! Solr ping with status %s", status)
                 sys.exit(1)
 
         except pysolr.SolrError as e:
@@ -184,7 +190,7 @@ class IndexMMD:
             sys.exit(1)
 
     def delete_item(self, datasetid, commit):
-        """ Require ID as input """
+        """Require ID as input"""
         """ Rewrite to take full metadata record as input """
         logger.info("Deleting ", datasetid, " from Level 1")
         try:
@@ -195,7 +201,7 @@ class IndexMMD:
         logger.info("Record successfully deleted from core")
 
     def search(self, myargs):
-        """ Require Id as input """
+        """Require Id as input"""
         results = None
         q_string = str(myargs.string).strip()
         if not q_string:
@@ -214,7 +220,9 @@ class IndexMMD:
                 )
                 results.raise_for_status()
             else:
-                results = self.solrc.search(q_string, **{k: v for k, v in params.items() if k != "q"})
+                results = self.solrc.search(
+                    q_string, **{k: v for k, v in params.items() if k != "q"}
+                )
         except Exception as e:
             logger.info("Something failed: %s", str(e))
 
@@ -237,23 +245,24 @@ def main():
         logger.error("%s", str(e))
         return 1
 
-    SolrServer = cfg['solrserver']
-    myCore = cfg['solrcore']
+    SolrServer = cfg["solrserver"]
+    myCore = cfg["solrcore"]
 
-    mySolRc = SolrServer+myCore
+    mySolRc = SolrServer + myCore
     # Enable basic authentication if configured.
-    if 'auth-basic-username' in cfg and 'auth-basic-password' in cfg:
-        username = cfg['auth-basic-username']
-        password = cfg['auth-basic-password']
+    if "auth-basic-username" in cfg and "auth-basic-password" in cfg:
+        username = cfg["auth-basic-username"]
+        password = cfg["auth-basic-password"]
         logger.info("Setting up basic authentication from config")
-        if username == '' or password == '':
-            raise Exception('Authentication username and/or password are configured,'
-                            'but have blank strings')
+        if username == "" or password == "":
+            raise Exception(
+                "Authentication username and/or password are configured,but have blank strings"
+            )
         else:
             logger.info("Got username and password. Creating HTTPBasicAuth object")
             authentication = HTTPBasicAuth(username, password)
-    elif 'dotenv_path' in cfg:
-        dotenv_path = cfg['dotenv_path']
+    elif "dotenv_path" in cfg:
+        dotenv_path = cfg["dotenv_path"]
         if not os.path.exists(dotenv_path):
             raise FileNotFoundError(f"The file {dotenv_path} does not exist.")
         logger.info("Setting up basic authentication from dotenv_path")
@@ -261,11 +270,12 @@ def main():
             load_dotenv(dotenv_path)
         except Exception as e:
             raise Exception(f"Failed to load dotenv {dotenv_path}, Reason {e}")
-        username = os.getenv('SOLR_USERNAME', default='')
-        password = os.getenv('SOLR_PASSWORD', default='')
-        if username == '' or password == '':
-            raise Exception('Authentication username and/or password are configured,'
-                            'but have blank strings')
+        username = os.getenv("SOLR_USERNAME", default="")
+        password = os.getenv("SOLR_PASSWORD", default="")
+        if username == "" or password == "":
+            raise Exception(
+                "Authentication username and/or password are configured,but have blank strings"
+            )
         else:
             logger.info("Got username and password. Creating HTTPBasicAuth object")
             authentication = HTTPBasicAuth(username, password)
@@ -275,9 +285,9 @@ def main():
             load_dotenv()
         except Exception as e:
             raise Exception(f"Failed to load dotenv {dotenv_path}, Reason {e}")
-        username = os.getenv('SOLR_USERNAME', default='')
-        password = os.getenv('SOLR_PASSWORD', default='')
-        if username == '' and password == '':
+        username = os.getenv("SOLR_USERNAME", default="")
+        password = os.getenv("SOLR_PASSWORD", default="")
+        if username == "" and password == "":
             authentication = None
             logger.info("Authentication disabled")
         else:
@@ -288,7 +298,9 @@ def main():
     mysolr = IndexMMD(mySolRc, args.always_commit, authentication)
 
     if args.mmd and args.delete:
-        logger.error("--delete cannot be used together with --mmd because XML mode returns only mmd_xml_file")
+        logger.error(
+            "--delete cannot be used together with --mmd because XML mode returns only mmd_xml_file"
+        )
         return 1
 
     myresults = mysolr.search(args)
@@ -297,19 +309,19 @@ def main():
             _print_pretty_xml(myresults.text)
             return 0
 
-        logger.info('Found %d matches', myresults.hits)
-        logger.info('Looping through matches:')
+        logger.info("Found %d matches", myresults.hits)
+        logger.info("Looping through matches:")
         i = 0
         docs = []
         for doc in myresults:
-            logger.info('%d : %s', i, doc['id'])
+            logger.info("%d : %s", i, doc["id"])
             docs.append(doc)
-            deleteid = doc['id']
+            deleteid = doc["id"]
             if args.delete:
                 mysolr.delete_item(deleteid, commit=None)
             i += 1
         _print_pretty_docs(docs)
-        logger.info('Found %d matches',  myresults.hits)
+        logger.info("Found %d matches", myresults.hits)
     else:
         logger.info("Search contained no results")
 

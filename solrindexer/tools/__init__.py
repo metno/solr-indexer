@@ -19,34 +19,57 @@ permissions and limitations under the License.
 
 from .mmd_solr_spatial import handle_solr_spatial
 from .tools import (
-           add_nbs_thumbnail,
-           add_nbs_thumbnail_bulk,
-           checkDateFormat,
-           find_xml_files,
-           flatten,
-           flip,
-           get_dataset,
-           getListOfFiles,
-           getZones,
-           initSolr,
-           initThumb,
-           parse_date,
-           process_feature_type,
-           rewrap,
-           rewrap_to_360,
-           solr_add,
-           solr_commit,
-           solr_ping,
-           to_solr_id,
+    add_nbs_thumbnail,
+    add_nbs_thumbnail_bulk,
+    checkDateFormat,
+    find_xml_files,
+    flatten,
+    flip,
+    get_dataset,
+    getListOfFiles,
+    getZones,
+    initSolr,
+    initThumb,
+    parse_date,
+    process_feature_type,
+    rewrap,
+    rewrap_to_360,
+    solr_add,
+    solr_commit,
+    solr_ping,
+    to_solr_id,
 )
 
 __package__ = "tools"
-__version__ = "2.0.2"
+try:
+    from importlib.metadata import PackageNotFoundError, version
+except ImportError:
+    from importlib_metadata import PackageNotFoundError, version  # type: ignore
+
+try:
+    __version__ = version("solrindexer")
+except PackageNotFoundError:
+    __version__ = "0.0.0.dev0"
 __date__ = "2024-01-23"
-__all__ = ["flip", "rewrap", "rewrap_to_360", "to_solr_id",
-           "parse_date", "getZones", "checkDateFormat",
-           "getListOfFiles", "flatten", "process_feature_type",
-           "initThumb", "initSolr",
-           "get_dataset", "solr_add", "solr_commit", "handle_solr_spatial",
-           "find_xml_files",
-           "solr_ping", "add_nbs_thumbnail", "add_nbs_thumbnail_bulk"]
+__all__ = [
+    "flip",
+    "rewrap",
+    "rewrap_to_360",
+    "to_solr_id",
+    "parse_date",
+    "getZones",
+    "checkDateFormat",
+    "getListOfFiles",
+    "flatten",
+    "process_feature_type",
+    "initThumb",
+    "initSolr",
+    "get_dataset",
+    "solr_add",
+    "solr_commit",
+    "handle_solr_spatial",
+    "find_xml_files",
+    "solr_ping",
+    "add_nbs_thumbnail",
+    "add_nbs_thumbnail_bulk",
+]

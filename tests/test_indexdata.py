@@ -2,6 +2,7 @@ import json
 
 import lxml.etree as ET
 import pytest
+
 from solrindexer.indexdata import MMD4SolR
 from solrindexer.script.indexdata import _split_files_for_processes
 
@@ -80,13 +81,13 @@ def _make_mmd_with_storage_information(storage_information_xml=""):
 
 
 def _make_mmd_with_personnel(*personnel_fragments):
-  """Build a minimal MMD root element with the given mmd:personnel snippets."""
-  personnel_xml = "\n".join(personnel_fragments)
-  xml = f"""<mmd xmlns="http://www.met.no/schema/mmd">
+    """Build a minimal MMD root element with the given mmd:personnel snippets."""
+    personnel_xml = "\n".join(personnel_fragments)
+    xml = f"""<mmd xmlns="http://www.met.no/schema/mmd">
   <metadata_identifier>test-id</metadata_identifier>
   {personnel_xml}
 </mmd>"""
-  return ET.fromstring(xml.encode())
+    return ET.fromstring(xml.encode())
 
 
 def _make_mmd_with_last_metadata_update(*update_fragments):
@@ -179,8 +180,8 @@ def test_extract_last_metadata_update_single_entry_created_and_updated_same():
 
 @pytest.mark.indexdata
 def test_extract_personnel_json_includes_type_and_uris():
-  root = _make_mmd_with_personnel(
-    """<personnel>
+    root = _make_mmd_with_personnel(
+        """<personnel>
       <role>Technical contact</role>
       <type>Person</type>
       <name uri="https://orcid.org/0000-1111-2222-3333">Ole Dole</name>
@@ -195,37 +196,37 @@ def test_extract_personnel_json_includes_type_and_uris():
         <country>Norway</country>
       </contact_address>
     </personnel>"""
-  )
-  doc = MMD4SolR(mydoc=root)
-  solr = {}
-  doc._extract_personnel(solr)
+    )
+    doc = MMD4SolR(mydoc=root)
+    solr = {}
+    doc._extract_personnel(solr)
 
-  personnel_json = json.loads(solr["personnel_json"])
-  assert personnel_json == [
-    {
-      "role": "Technical contact",
-      "type": "Person",
-      "name": "Ole Dole",
-      "orcid_uri": "https://orcid.org/0000-1111-2222-3333",
-      "organisation": "Norwegian Meteorological Institute",
-      "ror_uri": "https://ror.org/001n36p86",
-      "email": "ole.dole@example.com",
-      "phone": "004711111111",
-      "contact_address": {
-        "address": "Meteorologisk institutt, Henrik Mohnsplass 1",
-        "city": "Oslo",
-        "province_or_state": "Oslo",
-        "postal_code": "0000",
-        "country": "Norway",
-      },
-    }
-  ]
+    personnel_json = json.loads(solr["personnel_json"])
+    assert personnel_json == [
+        {
+            "role": "Technical contact",
+            "type": "Person",
+            "name": "Ole Dole",
+            "orcid_uri": "https://orcid.org/0000-1111-2222-3333",
+            "organisation": "Norwegian Meteorological Institute",
+            "ror_uri": "https://ror.org/001n36p86",
+            "email": "ole.dole@example.com",
+            "phone": "004711111111",
+            "contact_address": {
+                "address": "Meteorologisk institutt, Henrik Mohnsplass 1",
+                "city": "Oslo",
+                "province_or_state": "Oslo",
+                "postal_code": "0000",
+                "country": "Norway",
+            },
+        }
+    ]
 
 
 @pytest.mark.indexdata
 def test_extract_personnel_json_omits_missing_type_and_uris():
-  root = _make_mmd_with_personnel(
-    """<personnel>
+    root = _make_mmd_with_personnel(
+        """<personnel>
       <role>Investigator</role>
       <name>Jane Doe</name>
       <organisation>MET Norway</organisation>
@@ -234,29 +235,29 @@ def test_extract_personnel_json_omits_missing_type_and_uris():
         <country>NORWAY</country>
       </contact_address>
     </personnel>"""
-  )
-  doc = MMD4SolR(mydoc=root)
-  solr = {}
-  doc._extract_personnel(solr)
+    )
+    doc = MMD4SolR(mydoc=root)
+    solr = {}
+    doc._extract_personnel(solr)
 
-  personnel_json = json.loads(solr["personnel_json"])
-  assert personnel_json == [
-    {
-      "role": "Investigator",
-      "name": "Jane Doe",
-      "organisation": "MET Norway",
-      "email": "jane.doe@example.com",
-      "contact_address": {
-        "country": "NORWAY",
-      },
-    }
-  ]
+    personnel_json = json.loads(solr["personnel_json"])
+    assert personnel_json == [
+        {
+            "role": "Investigator",
+            "name": "Jane Doe",
+            "organisation": "MET Norway",
+            "email": "jane.doe@example.com",
+            "contact_address": {
+                "country": "NORWAY",
+            },
+        }
+    ]
 
 
 @pytest.mark.indexdata
 def test_extract_personnel_json_omits_empty_values_in_entry_and_contact_address():
-  root = _make_mmd_with_personnel(
-    """<personnel>
+    root = _make_mmd_with_personnel(
+        """<personnel>
       <role>Technical contact</role>
       <name>Jane Doe</name>
       <email></email>
@@ -265,21 +266,21 @@ def test_extract_personnel_json_omits_empty_values_in_entry_and_contact_address(
         <country>Norway</country>
       </contact_address>
     </personnel>"""
-  )
-  doc = MMD4SolR(mydoc=root)
-  solr = {}
-  doc._extract_personnel(solr)
+    )
+    doc = MMD4SolR(mydoc=root)
+    solr = {}
+    doc._extract_personnel(solr)
 
-  personnel_json = json.loads(solr["personnel_json"])
-  assert personnel_json == [
-    {
-      "role": "Technical contact",
-      "name": "Jane Doe",
-      "contact_address": {
-        "country": "Norway",
-      },
-    }
-  ]
+    personnel_json = json.loads(solr["personnel_json"])
+    assert personnel_json == [
+        {
+            "role": "Technical contact",
+            "name": "Jane Doe",
+            "contact_address": {
+                "country": "Norway",
+            },
+        }
+    ]
 
 
 @pytest.mark.indexdata
@@ -577,7 +578,10 @@ def test_extract_storage_information_full():
     solr = {}
     doc._extract_storage_information(solr)
 
-    assert solr["storage_information_file_name"] == "osisaf_radiative_flux_24h_hl_polstere-050_multi_202003051200.nc"
+    assert (
+        solr["storage_information_file_name"]
+        == "osisaf_radiative_flux_24h_hl_polstere-050_multi_202003051200.nc"
+    )
     assert solr["storage_information_file_location"] == "/home/steingod/Desktop"
     assert solr["storage_information_file_format"] == "NetCDF-CF"
     assert solr["storage_information_file_size"] == "0.12"
@@ -638,6 +642,7 @@ def test_extract_storage_information_missing():
 # Related Information extraction tests
 # ---------------------------------------------------------------------------
 
+
 def _make_mmd_with_related_information(*related_information_fragments):
     """Build a minimal MMD root element with the given mmd:related_information snippets."""
     related_info_xml = "\n".join(related_information_fragments)
@@ -693,7 +698,7 @@ def test_extract_related_information_multiple_mixed_types():
         <type>Users guide</type>
         <description>User documentation</description>
         <resource>https://example.com/docs/guide.pdf</resource>
-      </related_information>"""
+      </related_information>""",
     )
     doc = MMD4SolR(mydoc=root)
     solr = {}
@@ -724,12 +729,20 @@ def test_extract_related_information_all_types():
         ("Project home page", "related_url_home_page", "https://project.example.com"),
         ("Observation facility", "related_url_obs_facility", "https://facility.example.com"),
         ("Extended metadata", "related_url_ext_metadata", "https://metadata.example.com"),
-        ("Scientific publication", "related_url_scientific_publication", "https://publication.example.com"),
+        (
+            "Scientific publication",
+            "related_url_scientific_publication",
+            "https://publication.example.com",
+        ),
         ("Data paper", "related_url_data_paper", "https://paper.example.com"),
         ("Data management plan", "related_url_data_management_plan", "https://dmp.example.com"),
         ("Other documentation", "related_url_other_documentation", "https://docs.example.com"),
         ("Software", "related_url_software", "https://software.example.com"),
-        ("Data server landing page", "related_url_data_server_landing_page", "https://server.example.com"),
+        (
+            "Data server landing page",
+            "related_url_data_server_landing_page",
+            "https://server.example.com",
+        ),
     ]
 
     fragments = [
@@ -768,15 +781,21 @@ def test_extract_related_information_duplicate_types():
         <type>Scientific publication</type>
         <description>Second publication</description>
         <resource>https://example.com/pub2</resource>
-      </related_information>"""
+      </related_information>""",
     )
     doc = MMD4SolR(mydoc=root)
     solr = {}
     doc._extract_related_information(solr)
 
     assert solr["related_information_type"] == ["Scientific publication", "Scientific publication"]
-    assert solr["related_url_scientific_publication"] == ["https://example.com/pub1", "https://example.com/pub2"]
-    assert solr["related_url_scientific_publication_desc"] == ["First publication", "Second publication"]
+    assert solr["related_url_scientific_publication"] == [
+        "https://example.com/pub1",
+        "https://example.com/pub2",
+    ]
+    assert solr["related_url_scientific_publication_desc"] == [
+        "First publication",
+        "Second publication",
+    ]
 
 
 @pytest.mark.indexdata

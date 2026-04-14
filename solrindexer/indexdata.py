@@ -67,7 +67,15 @@ class MMD4SolR:
         "metadata_source": "https://vocab.met.no/mmd/Metadata_Source",
     }
 
-    def __init__(self, filename=None, mydoc=None, bulkFile=None, xsd_path=None, warning_callback=None, vocabulary_loader=None):
+    def __init__(
+        self,
+        filename=None,
+        mydoc=None,
+        bulkFile=None,
+        xsd_path=None,
+        warning_callback=None,
+        vocabulary_loader=None,
+    ):
         logger.debug("Creating an instance of MMD4SolR")
         self.filename = filename if filename is not None else bulkFile
         self.xsd_path = xsd_path
@@ -172,7 +180,9 @@ class MMD4SolR:
         except Exception as exc:
             self._record_warning(
                 "%s Could not load XSD from %s: %s",
-                self._icon("warn"), self.xsd_path, exc,
+                self._icon("warn"),
+                self.xsd_path,
+                exc,
             )
             return True  # config error — do not block indexing
 
@@ -183,7 +193,9 @@ class MMD4SolR:
         errors = schema.error_log
         self._record_warning(
             "%s XSD validation failed for %s — %d error(s):",
-            self._icon("warn"), self.filename, len(errors),
+            self._icon("warn"),
+            self.filename,
+            len(errors),
         )
         for err in errors:
             self._record_warning("line %d: %s", err.line, err.message)
@@ -206,7 +218,9 @@ class MMD4SolR:
                 logger.debug("%s check_mmd mmd:%s", self._icon("ok"), tag)
             else:
                 status_ok = False
-                self._record_warning("%s check_mmd missing required mmd:%s", self._icon("fail"), tag)
+                self._record_warning(
+                    "%s check_mmd missing required mmd:%s", self._icon("fail"), tag
+                )
 
         for tag, vocab_url in self.CONTROLLED_ELEMENTS.items():
             values = self._all_text(f"./mmd:{tag}")
@@ -229,7 +243,10 @@ class MMD4SolR:
             vocabulary = (keywords.attrib.get("vocabulary") or "").upper()
             if vocabulary == "GCMDSK":
                 gcmd_values.extend(
-                    [self._text(node) for node in keywords.xpath("./mmd:keyword", namespaces=self.NSMAP)]
+                    [
+                        self._text(node)
+                        for node in keywords.xpath("./mmd:keyword", namespaces=self.NSMAP)
+                    ]
                 )
         if not gcmd_values:
             self._record_warning("%s Keywords in GCMD are not available", self._icon("warn"))
@@ -259,13 +276,17 @@ class MMD4SolR:
             return
         updates_sorted = sorted(
             updates,
-            key=lambda node: self._normalize_datetime(self._first_text_for(node, "./mmd:datetime")) or "",
+            key=lambda node: (
+                self._normalize_datetime(self._first_text_for(node, "./mmd:datetime")) or ""
+            ),
         )
         updates_json = []
         for update in updates_sorted:
             entry = {
                 "type": self._first_text_for(update, "./mmd:type"),
-                "datetime": self._normalize_datetime(self._first_text_for(update, "./mmd:datetime")),
+                "datetime": self._normalize_datetime(
+                    self._first_text_for(update, "./mmd:datetime")
+                ),
                 "note": self._first_text_for(update, "./mmd:note"),
             }
             # Keep only non-empty values in each history entry.
@@ -291,14 +312,14 @@ class MMD4SolR:
     def _extract_alternate_identifier(self, solr_doc):
         alt_ids, types = [], []
         for node in self._nodes("./mmd:alternate_identifier"):
-            alt_type = (node.attrib.get("type") or "")
+            alt_type = node.attrib.get("type") or ""
             value = self._text(node)
             if not value:
                 continue
             alt_ids.append(value)
             types.append(alt_type)
-        solr_doc['alternate_identifier'] = alt_ids
-        solr_doc['alternate_identifier_type'] = types
+        solr_doc["alternate_identifier"] = alt_ids
+        solr_doc["alternate_identifier_type"] = types
 
     def _extract_temporal_extent(self, solr_doc):
         starts = []
@@ -360,17 +381,21 @@ class MMD4SolR:
         vocab_all = []
         keyword_targets = {
             "GCMDSK": "keywords_gcmd",
-            "WIGOS": "keywords_wigos",
+            "GCMDPLT": "keywords_gcmdplt",
+            "GCMDINST": "keywords_gcmdinst",
             "GCMDLOC": "keywords_gcmdloc",
             "GCMDPROV": "keywords_gcmdprov",
             "CFSTDN": "keywords_cfstdn",
             "GEMET": "keywords_gemet",
             "NORTHEMES": "keywords_northemes",
+            "EXV": "keywords_exv",
         }
 
         for keywords in self._nodes("./mmd:keywords"):
             vocab = (keywords.attrib.get("vocabulary") or "none").upper()
-            items = [self._text(node) for node in keywords.xpath("./mmd:keyword", namespaces=self.NSMAP)]
+            items = [
+                self._text(node) for node in keywords.xpath("./mmd:keyword", namespaces=self.NSMAP)
+            ]
             items = [item for item in items if item]
             if not items:
                 continue
@@ -438,11 +463,11 @@ class MMD4SolR:
                 "phone": phone,
             }
             if organisation:
-                personnel_entry['organisation'] = organisation
+                personnel_entry["organisation"] = organisation
             if email:
-                personnel_entry['email'] = email
+                personnel_entry["email"] = email
             if phone:
-                personnel_entry['phone'] = phone
+                personnel_entry["phone"] = phone
 
             if personnel_type:
                 personnel_entry["type"] = personnel_type
@@ -468,7 +493,9 @@ class MMD4SolR:
             solr_doc["personnel_organisation"] = dedup_orgs
             solr_doc["personnel_organisation_facet"] = dedup_orgs
         if personnel_json:
-            solr_doc["personnel_json"] = json.dumps(personnel_json, ensure_ascii=False, separators=(",", ":"))
+            solr_doc["personnel_json"] = json.dumps(
+                personnel_json, ensure_ascii=False, separators=(",", ":")
+            )
 
     def _extract_data_access(self, solr_doc):
         urls_by_field = {
@@ -818,14 +845,18 @@ class MMD4SolR:
                 if inst_prod:
                     acc["platform_instrument_product_type"].append(inst_prod)
 
-                inst_entry = {k: v for k, v in {
-                    "short_name": inst_short,
-                    "long_name": inst_long,
-                    "resource": inst_resource,
-                    "mode": inst_mode,
-                    "polarisation": inst_pol,
-                    "product_type": inst_prod,
-                }.items() if v}
+                inst_entry = {
+                    k: v
+                    for k, v in {
+                        "short_name": inst_short,
+                        "long_name": inst_long,
+                        "resource": inst_resource,
+                        "mode": inst_mode,
+                        "polarisation": inst_pol,
+                        "product_type": inst_prod,
+                    }.items()
+                    if v
+                }
                 if inst_entry:
                     platform_entry["instrument"] = inst_entry
 
@@ -845,11 +876,15 @@ class MMD4SolR:
                 if timeliness:
                     acc["platform_ancillary_timeliness"].append(timeliness)
 
-                anc_entry = {k: v for k, v in {
-                    "cloud_coverage": cloud_raw,
-                    "scene_coverage": scene_raw,
-                    "timeliness": timeliness,
-                }.items() if v}
+                anc_entry = {
+                    k: v
+                    for k, v in {
+                        "cloud_coverage": cloud_raw,
+                        "scene_coverage": scene_raw,
+                        "timeliness": timeliness,
+                    }.items()
+                    if v
+                }
                 if anc_entry:
                     platform_entry["ancillary"] = anc_entry
 
@@ -888,7 +923,9 @@ class MMD4SolR:
         self._extract_alternate_identifier(solr_doc)
 
         solr_doc["metadata_status"] = self._first_text("./mmd:metadata_status") or "Unknown"
-        solr_doc["dataset_production_status"] = self._first_text("./mmd:dataset_production_status") or "Unknown"
+        solr_doc["dataset_production_status"] = (
+            self._first_text("./mmd:dataset_production_status") or "Unknown"
+        )
 
         collections = self._all_text("./mmd:collection")
         if collections:
@@ -920,12 +957,16 @@ class MMD4SolR:
         use_constraint = self._nodes("./mmd:use_constraint")
         if use_constraint:
             node = use_constraint[0]
-            solr_doc["use_constraint_identifier"] = self._first_text_for(node, "./mmd:identifier") or "Not provided"
-            solr_doc["use_constraint_resource"] = self._first_text_for(node, "./mmd:resource") or "Not provided"
+            solr_doc["use_constraint_identifier"] = (
+                self._first_text_for(node, "./mmd:identifier") or "Not provided"
+            )
+            solr_doc["use_constraint_resource"] = (
+                self._first_text_for(node, "./mmd:resource") or "Not provided"
+            )
             license_text = self._first_text_for(node, "./mmd:license_text")
             if license_text:
                 solr_doc["use_constraint_license_text"] = license_text
-        spatial_rep= self._first_text("./mmd:spatial_representation")
+        spatial_rep = self._first_text("./mmd:spatial_representation")
         if spatial_rep:
             solr_doc["spatial_representation"] = spatial_rep
 
@@ -964,6 +1005,7 @@ class MMD4SolR:
         solr_doc["isChild"] = False
 
         return solr_doc
+
 
 class IndexMMD:
     """Class for indexing SolR representation of MMD to SolR server. Requires
@@ -1040,7 +1082,10 @@ class IndexMMD:
         logger.debug("Getting status with url %s and core %s", base_url, core)
         res = None
         try:
-            res = requests.get(base_url + "/admin/cores?wt=json&action=STATUS&core=" + core, auth=self.authentication)
+            res = requests.get(
+                base_url + "/admin/cores?wt=json&action=STATUS&core=" + core,
+                auth=self.authentication,
+            )
             res.raise_for_status()
         except requests.exceptions.HTTPError as errh:
             logger.error("Http Error: %s", errh)
@@ -1323,7 +1368,9 @@ class IndexMMD:
                 if fail_on_missing is True:
                     return False, "Parent %s is not in the index. Index parent first." % parentid
                 else:
-                    logger.warn("Parent %s is not in the index. Make sure to index parent first.", parentid)
+                    logger.warn(
+                        "Parent %s is not in the index. Make sure to index parent first.", parentid
+                    )
                     msg = "WARNING! Parent is not in the index. "
                     msg += "Make sure to index parent and then the children "
                     msg += "for relation to be updated."
@@ -1335,11 +1382,11 @@ class IndexMMD:
                 return True, "Already updated."
             else:
                 # doc = {'id': parentid, 'isParent': True}
-                doc = self._solr_update_parent_doc(myparent['doc'])
-                #doc = myparent["doc"]
+                doc = self._solr_update_parent_doc(myparent["doc"])
+                # doc = myparent["doc"]
                 doc["isParent"] = True
                 try:
-                    #self.solrc.add([doc], fieldUpdates={"isParent": "set"})
+                    # self.solrc.add([doc], fieldUpdates={"isParent": "set"})
                     self.solrc.add([doc])
                 except Exception as e:
                     logger.error("Atomic update failed on parent %s. Error is: ", (parentid, e))

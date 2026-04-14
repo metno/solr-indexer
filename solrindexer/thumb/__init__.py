@@ -18,6 +18,14 @@ permissions and limitations under the License.
 """
 
 __package__ = "thumbnail"
-__version__ = "2.0.2"
+try:
+    from importlib.metadata import PackageNotFoundError, version
+except ImportError:
+    from importlib_metadata import PackageNotFoundError, version  # type: ignore
+
+try:
+    __version__ = version("solrindexer")
+except PackageNotFoundError:
+    __version__ = "0.0.0.dev0"
 __date__ = "2024-01-23"
 __all__ = []

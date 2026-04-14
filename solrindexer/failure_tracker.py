@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class FailureRecord:
     """Record of a single document processing failure."""
+
     filename: str
     metadata_identifier: str = None
     error_message: str = ""
@@ -36,6 +37,7 @@ class FailureRecord:
 @dataclass
 class WarningRecord:
     """Record of a single document processing warning."""
+
     filename: str
     metadata_identifier: str = None
     warning_message: str = ""
@@ -45,6 +47,7 @@ class WarningRecord:
 @dataclass
 class FailureTracker:
     """Centralized tracker for all document processing failures."""
+
     failures: list[FailureRecord] = field(default_factory=list)
     warnings: list[WarningRecord] = field(default_factory=list)
 
@@ -56,8 +59,13 @@ class FailureTracker:
             return {"ok": "[OK]", "warn": "[WARN]", "fail": "[FAIL]"}[kind]
         return {"ok": "✅", "warn": "⚠️ ", "fail": "❌"}[kind]
 
-    def add_failure(self, filename: str, error_message: str, error_stage: str = "",
-                    metadata_identifier: str = None) -> None:
+    def add_failure(
+        self,
+        filename: str,
+        error_message: str,
+        error_stage: str = "",
+        metadata_identifier: str = None,
+    ) -> None:
         """
         Record a processing failure.
 
@@ -76,12 +84,17 @@ class FailureTracker:
             filename=filename,
             metadata_identifier=metadata_identifier,
             error_message=error_message,
-            error_stage=error_stage
+            error_stage=error_stage,
         )
         self.failures.append(record)
 
-    def add_warning(self, filename: str, warning_message: str, warning_stage: str = "",
-                    metadata_identifier: str = None) -> None:
+    def add_warning(
+        self,
+        filename: str,
+        warning_message: str,
+        warning_stage: str = "",
+        metadata_identifier: str = None,
+    ) -> None:
         """Record a processing warning."""
         record = WarningRecord(
             filename=filename,

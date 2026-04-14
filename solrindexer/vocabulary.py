@@ -22,7 +22,12 @@ implied. See the License for the specific language governing
 permissions and limitations under the License.
 """
 
+import hashlib
 import logging
+import os
+import pickle
+import tempfile
+import time
 from abc import ABC, abstractmethod
 from pathlib import Path
 from urllib.parse import urlparse
@@ -31,7 +36,8 @@ import requests
 
 try:
     import rdflib
-    from rdflib.namespace import RDF, RDFS, SKOS
+    from rdflib.namespace import SKOS
+
     RDFLIB_AVAILABLE = True
 except ImportError:
     RDFLIB_AVAILABLE = False
@@ -185,6 +191,7 @@ class VocabularyLegacy(VocabularyBackend):
     def _import_mmdgroup():
         """Helper method to import MMDGroup. Can be mocked in tests."""
         from metvocab.mmdgroup import MMDGroup
+
         return MMDGroup
 
     def __init__(self):
@@ -247,10 +254,21 @@ class VocabularyLegacy(VocabularyBackend):
 class VocabularyRestSkosmos(VocabularyBackend):
     """Skosmos REST-backed vocabulary loader.
 
-    Fetches Turtle for each vocabulary URI on first use and caches labels in memory.
+    Fetches Turtle for each vocabulary URI on first use, persists it as a
+    pickle file in the system temp directory, and refreshes only when the
+    cache entry is older than ``cache_ttl`` seconds (default: 86400 = 24 h).
     """
 
-    def __init__(self, endpoint_base_url: str, endpoint_timeout: float = 20.0):
+    _CACHE_DIR_NAME = "solrindexer_vocab"
+    _CACHE_VERSION = 1  # bump to invalidate all on-disk entries after schema changes
+
+    def __init__(
+        self,
+        endpoint_base_url: str,
+        endpoint_timeout: float = 20.0,
+        cache_ttl: float = 86400.0,
+        cache_dir: str | None = None,
+    ):
         if not RDFLIB_AVAILABLE:
             raise ValueError(
                 "rdflib is required for REST Skosmos vocabulary loading. "
@@ -259,14 +277,32 @@ class VocabularyRestSkosmos(VocabularyBackend):
 
         self.endpoint_base_url = endpoint_base_url.rstrip("/")
         self.endpoint_timeout = endpoint_timeout
-        self._cache: dict[str, set[str]] = {}
+        self.cache_ttl = cache_ttl
+        self._mem_cache: dict[str, set[str]] = {}
+
+        # Resolve persistent cache directory.
+        base = cache_dir or os.path.join(tempfile.gettempdir(), self._CACHE_DIR_NAME)
+        self._cache_dir = Path(base)
+        try:
+            self._cache_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            logger.warning(
+                "Could not create vocab cache dir %s: %s — disk cache disabled", base, exc
+            )
+            self._cache_dir = None  # type: ignore[assignment]
 
         parsed = urlparse(self.endpoint_base_url)
-        root = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else self.endpoint_base_url
+        root = (
+            f"{parsed.scheme}://{parsed.netloc}"
+            if parsed.scheme and parsed.netloc
+            else self.endpoint_base_url
+        )
         logger.debug(
-            "REST Skosmos backend active; normalized request pattern: %s/rest/v1/<vocab>/data?uri=<vocab_uri>&format=text/turtle (timeout=%ss)",
+            "REST Skosmos backend active; endpoint=%s/rest/v1/<vocab>/data timeout=%ss cache_ttl=%ss cache_dir=%s",
             root,
             self.endpoint_timeout,
+            self.cache_ttl,
+            self._cache_dir,
         )
 
     @staticmethod
@@ -300,7 +336,59 @@ class VocabularyRestSkosmos(VocabularyBackend):
         root = f"{parsed.scheme}://{parsed.netloc}"
         return f"{root}/rest/v1/{vocab_name}"
 
-    def _load_vocab(self, vocab_uri: str) -> set[str]:
+    def _cache_path(self, vocab_uri: str) -> Path | None:
+        """Return the pickle file path for *vocab_uri*, or None if caching is disabled."""
+        if self._cache_dir is None:
+            return None
+        digest = hashlib.sha256(vocab_uri.encode()).hexdigest()[:24]
+        return self._cache_dir / f"v{self._CACHE_VERSION}_{digest}.pkl"
+
+    def _read_disk_cache(self, vocab_uri: str) -> set[str] | None:
+        """Return cached labels from disk if still fresh, else None."""
+        path = self._cache_path(vocab_uri)
+        if path is None or not path.exists():
+            return None
+        try:
+            with path.open("rb") as fh:
+                entry = pickle.load(fh)
+            if entry.get("version") != self._CACHE_VERSION:
+                return None
+            age = time.time() - entry["fetched_at"]
+            if age >= self.cache_ttl:
+                logger.debug(
+                    "Disk cache stale (%.0fs old, ttl=%.0fs): %s", age, self.cache_ttl, vocab_uri
+                )
+                return None
+            labels: set[str] = entry["labels"]
+            logger.debug(
+                "Disk cache hit (%.0fs old): %d labels for %s", age, len(labels), vocab_uri
+            )
+            return labels
+        except Exception as exc:
+            logger.warning("Corrupt vocab cache file %s (%s) — will refetch", path, exc)
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            return None
+
+    def _write_disk_cache(self, vocab_uri: str, labels: set[str]) -> None:
+        """Persist *labels* to disk as a versioned pickle entry."""
+        path = self._cache_path(vocab_uri)
+        if path is None:
+            return
+        entry = {"version": self._CACHE_VERSION, "fetched_at": time.time(), "labels": labels}
+        try:
+            tmp = path.with_suffix(".tmp")
+            with tmp.open("wb") as fh:
+                pickle.dump(entry, fh, protocol=pickle.HIGHEST_PROTOCOL)
+            tmp.replace(path)
+            logger.debug("Vocab cache written: %s (%d labels)", path.name, len(labels))
+        except Exception as exc:
+            logger.warning("Could not write vocab cache %s: %s", path, exc)
+
+    def _fetch_from_rest(self, vocab_uri: str) -> set[str]:
+        """Fetch vocabulary labels from the Skosmos REST endpoint."""
         vocab_name = self._vocab_name_from_uri(vocab_uri)
         api_base = self._api_base_for_vocab(vocab_name)
         endpoint = f"{api_base}/data"
@@ -317,13 +405,9 @@ class VocabularyRestSkosmos(VocabularyBackend):
         graph.parse(data=response.text, format="turtle")
 
         labels = {
-            str(label)
-            for _, _, label in graph.triples((None, SKOS.prefLabel, None))
-            if str(label)
+            str(label) for _, _, label in graph.triples((None, SKOS.prefLabel, None)) if str(label)
         }
-
-        self._cache[vocab_uri] = labels
-        logger.debug("Loaded %d labels for vocabulary %s", len(labels), vocab_uri)
+        logger.debug("Fetched %d labels for vocabulary %s", len(labels), vocab_uri)
         return labels
 
     def search(self, vocab_uri: str, value: str) -> bool:
@@ -331,15 +415,27 @@ class VocabularyRestSkosmos(VocabularyBackend):
         return value in concepts
 
     def get_concepts(self, vocab_uri: str) -> set[str]:
-        if vocab_uri in self._cache:
-            return self._cache[vocab_uri]
+        # 1. In-memory cache (fastest).
+        if vocab_uri in self._mem_cache:
+            return self._mem_cache[vocab_uri]
 
+        # 2. Disk cache (warm start across processes/restarts).
+        cached = self._read_disk_cache(vocab_uri)
+        if cached is not None:
+            self._mem_cache[vocab_uri] = cached
+            return cached
+
+        # 3. Fetch from REST endpoint.
         try:
-            return self._load_vocab(vocab_uri)
+            labels = self._fetch_from_rest(vocab_uri)
         except Exception as e:
             logger.warning("REST vocabulary lookup failed for %s: %s", vocab_uri, e)
-            self._cache[vocab_uri] = set()
-            return self._cache[vocab_uri]
+            labels = set()
+
+        self._mem_cache[vocab_uri] = labels
+        if labels:  # don't cache failed/empty results to disk
+            self._write_disk_cache(vocab_uri, labels)
+        return labels
 
 
 def create_vocabulary_loader(
@@ -347,6 +443,8 @@ def create_vocabulary_loader(
     backend: str = "native",
     endpoint_base_url: str = "https://vocab.met.no/mmd",
     endpoint_timeout: float = 20.0,
+    cache_ttl: float = 86400.0,
+    cache_dir: str | None = None,
 ) -> VocabularyBackend | None:
     """
     Factory function to create appropriate vocabulary backend.
@@ -356,6 +454,8 @@ def create_vocabulary_loader(
         backend: Backend to use ("native", "legacy-metvocab", or "rest-skosmos")
         endpoint_base_url: Base URL for Skosmos endpoint (used by rest-skosmos)
         endpoint_timeout: HTTP timeout (seconds) for Skosmos requests
+        cache_ttl: Seconds before on-disk cache entry expires (default 86400 = 24 h)
+        cache_dir: Override the temp directory used for disk caching (default: system temp)
 
     Returns:
         VocabularyBackend instance, or None if TTL not configured and backend is native
@@ -376,6 +476,8 @@ def create_vocabulary_loader(
             return VocabularyRestSkosmos(
                 endpoint_base_url=endpoint_base_url,
                 endpoint_timeout=endpoint_timeout,
+                cache_ttl=cache_ttl,
+                cache_dir=cache_dir,
             )
 
         logger.info(f"Creating native TTL vocabulary backend from {ttl_path}")
@@ -386,6 +488,8 @@ def create_vocabulary_loader(
         return VocabularyRestSkosmos(
             endpoint_base_url=endpoint_base_url,
             endpoint_timeout=endpoint_timeout,
+            cache_ttl=cache_ttl,
+            cache_dir=cache_dir,
         )
 
     raise ValueError(
