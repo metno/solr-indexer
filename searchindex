@@ -1,0 +1,4 @@
+#!/bin/bash
+# Wrapper script for searchindex command
+# Allows execution without package installation: ./searchindex -c config.yml [options]
+exec python -m solrindexer.search "$@"

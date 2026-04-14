@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from solrindexer.script.searchindex import _format_xml_for_display, build_search_request, parse_cfg
+from solrindexer.search import _format_xml_for_display, build_search_request, parse_cfg
 
 
 @pytest.mark.searchindex

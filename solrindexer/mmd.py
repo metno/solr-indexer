@@ -29,10 +29,10 @@ import netCDF4
 import pysolr
 import requests
 
+from solrindexer.spatial import handle_solr_spatial
 from solrindexer.tools import (
     add_nbs_thumbnail,
     get_dataset,
-    handle_solr_spatial,
     parse_date,
     process_feature_type,
     set_parent_flag,

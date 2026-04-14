@@ -2,16 +2,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from solrindexer.tools import checkDateFormat, getZones, parse_date, to_solr_id
-from solrindexer.tools.tools import (
+from solrindexer.tools import (
     _extract_feature_type,
+    checkDateFormat,
+    parse_date,
     process_feature_type,
+    to_solr_id,
 )
-
-
-@pytest.mark.indexdata
-def testGetZones():
-    assert getZones(3, 73) == 31
 
 
 @pytest.mark.indexdata

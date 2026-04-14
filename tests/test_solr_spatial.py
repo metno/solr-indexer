@@ -2,7 +2,7 @@
 
 import pytest
 
-from solrindexer.tools.mmd_solr_spatial import (
+from solrindexer.spatial import (
     create_polygon_wkt_from_bbox,
     generate_solr_envelope,
     parse_envelope_to_bbox,

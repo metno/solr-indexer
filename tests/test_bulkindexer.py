@@ -1,6 +1,6 @@
 import pytest
 
-from solrindexer.bulkindexer import BulkIndexer
+from solrindexer.indexer import BulkIndexer
 
 
 @pytest.mark.indexdata

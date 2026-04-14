@@ -3,8 +3,8 @@ import json
 import lxml.etree as ET
 import pytest
 
-from solrindexer.indexdata import MMD4SolR
-from solrindexer.script.indexdata import _split_files_for_processes
+from solrindexer.cli import _split_files_for_processes
+from solrindexer.mmd import MMD4SolR
 
 """ Global test variables"""
 infile = "./tests/data/reference_nc.xml"

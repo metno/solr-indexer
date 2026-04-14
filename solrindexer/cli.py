@@ -14,10 +14,10 @@ import pysolr
 from dotenv import load_dotenv
 from requests.auth import HTTPBasicAuth
 
-from solrindexer.bulkindexer import BulkIndexer
 from solrindexer.failure_tracker import FailureTracker
-from solrindexer.indexdata import IndexMMD
-from solrindexer.script.searchindex import parse_cfg
+from solrindexer.indexer import BulkIndexer
+from solrindexer.mmd import IndexMMD
+from solrindexer.search import parse_cfg
 from solrindexer.tools import get_dataset, set_parent_flag, to_solr_id
 
 logger = logging.getLogger(__name__)

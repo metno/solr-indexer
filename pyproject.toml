@@ -61,13 +61,12 @@ Homepage = "https://github.com/metno/solrindexing"
 "Bug Tracker" = "https://github.com/metno/solrindexing/issues"
 
 [project.scripts]
-indexdata = "solrindexer.script.indexdata:_main"
-bulkindexer = "solrindexer.script.bulkindexer:_main"
-searchindex = "solrindexer.script.searchindex:_main"
+indexdata = "solrindexer.cli:_main"
+searchindex = "solrindexer.search:_main"
 
 [tool.setuptools]
 include-package-data = true
-packages = ["solrindexer", "solrindexer.script", "solrindexer.thumb", "solrindexer.tools", "solrindexer.multithread"]
+packages = ["solrindexer"]
 
 [tool.setuptools.package-data]
 solrindexer = ["py.typed"]

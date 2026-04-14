@@ -17,10 +17,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import fnmatch
 import json
 import logging
-import math
 import os
 import re
 import subprocess
@@ -100,21 +98,6 @@ def set_parent_flag(parent_id, *, solr_client):
     )
 
 
-def flip(x, y):
-    """Flips the x and y coordinate values"""
-    return y, x
-
-
-def rewrap(x):
-    """Rewrap coordinates from 0-360 to -180-180"""
-    return (x + 180.0) % 360.0 - 180.0
-
-
-def rewrap_to_360(x):
-    """Rewrap coordinates from -180-180 to 0-360"""
-    return (x + 360) % 360
-
-
 def to_solr_id(id):
     """Function that translate from metadata_identifier
     to solr compatilbe id field syntax
@@ -166,44 +149,12 @@ def parse_date(_date):
         return None
 
 
-def getZones(lon, lat):
-    "get UTM zone number from latitude and longitude"
-    if lat >= 72.0 and lat < 84.0:
-        if lon >= 0.0 and lon < 9.0:
-            return 31
-        if lon >= 9.0 and lon < 21.0:
-            return 33
-        if lon >= 21.0 and lon < 33.0:
-            return 35
-        if lon >= 33.0 and lon < 42.0:
-            return 37
-    if lat >= 56 and lat < 64.0 and lon >= 3 and lon <= 12:
-        return 32
-    return math.floor((lon + 180) / 6) + 1
-
-
 def checkDateFormat(date):
     """Function that use regex on the provided
     datestring and return True if in solr format.
     Return False otherwise
     """
     return bool(re.match(DATETIME_REGEX, date))
-
-
-def getListOfFiles(dirName):
-    """
-    create a list of file and sub directories
-    names in the given directory
-    """
-    logger.debug("Creating list of files traversing %s", dirName)
-    listOfFiles = list()
-    for dirpath, dirnames, filenames in os.walk(dirName):
-        for filename in fnmatch.filter(filenames, "*.xml"):
-            listOfFiles.append(os.path.join(dirpath, filename))
-    logger.debug("Found %d files.", len(listOfFiles))
-    if len(listOfFiles) == 0:
-        return None
-    return listOfFiles
 
 
 def find_xml_files(directory):
@@ -216,11 +167,6 @@ def find_xml_files(directory):
     except subprocess.CalledProcessError as e:
         print(f"Error occurred while finding XML files: {str(e)}")
         return []
-
-
-def flatten(mylist):
-    """Flatten a multi-dementional list"""
-    return [item for sublist in mylist for item in sublist]
 
 
 def _check_opendap_url(tmpdoc):

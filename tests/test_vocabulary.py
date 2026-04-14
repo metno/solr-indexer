@@ -24,6 +24,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from solrindexer.mmd import MMD4SolR
 from solrindexer.vocabulary import (
     VocabularyLegacy,
     VocabularyLoader,
@@ -32,7 +33,7 @@ from solrindexer.vocabulary import (
 )
 
 # Path to the TTL vocabulary file in the metsis repository
-VOCABULARY_TTL = Path("/home/magnarem/git/metsis/mmd/thesauri/mmd-vocabulary.ttl")
+VOCABULARY_TTL = Path("../mmd/thesauri/mmd-vocabulary.ttl")
 
 
 class TestVocabularyLoaderBasics:
@@ -357,11 +358,7 @@ class TestMMD4SolRIntegration:
 
     def test_mmd4solr_with_vocabulary_loader(self):
         """Test that MMD4SolR accepts vocabulary_loader parameter."""
-        from solrindexer.indexdata import MMD4SolR
-
-        # Create a simple test XML string
-        test_mmd_xml = """<?xml version="1.0" encoding="UTF-8"?>
-        <mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd">
+        test_mmd_xml = """<mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd">
             <mmd:metadata_identifier>test-id</mmd:metadata_identifier>
             <mmd:title>Test Title</mmd:title>
             <mmd:abstract>Test Abstract</mmd:abstract>
@@ -398,7 +395,7 @@ class TestMMD4SolRIntegration:
 
     def test_mmd4solr_without_vocabulary_loader(self):
         """Test that MMD4SolR works without vocabulary_loader."""
-        from solrindexer.indexdata import MMD4SolR
+        from solrindexer.mmd import MMD4SolR
 
         test_mmd_xml = """<?xml version="1.0" encoding="UTF-8"?>
         <mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd">
@@ -430,7 +427,7 @@ class TestMMD4SolRIntegration:
 
     def test_check_mmd_skips_vocabulary_validation_without_loader(self):
         """Test that check_mmd skips vocabulary validation if loader is None."""
-        from solrindexer.indexdata import MMD4SolR
+        from solrindexer.mmd import MMD4SolR
 
         test_mmd_xml = """<?xml version="1.0" encoding="UTF-8"?>
         <mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd">
@@ -463,7 +460,7 @@ class TestMMD4SolRIntegration:
 
     def test_check_mmd_validates_with_loader(self):
         """Test that check_mmd validates vocabulary when loader is provided."""
-        from solrindexer.indexdata import MMD4SolR
+        from solrindexer.mmd import MMD4SolR
 
         test_mmd_xml = """<?xml version="1.0" encoding="UTF-8"?>
         <mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd">

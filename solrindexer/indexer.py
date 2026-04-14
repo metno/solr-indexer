@@ -24,9 +24,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from solrindexer.failure_tracker import FailureTracker
-from solrindexer.indexdata import MMD4SolR
-from solrindexer.multithread.io import load_file
-from solrindexer.multithread.threads import multiprocess
+from solrindexer.io import load_file
+from solrindexer.mmd import MMD4SolR
+from solrindexer.threads import multiprocess
 from solrindexer.tools import (
     add_nbs_thumbnail_bulk,
     get_dataset,

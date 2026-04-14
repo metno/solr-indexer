@@ -1,0 +1,4 @@
+#!/bin/bash
+# Wrapper script for indexdata command
+# Allows execution without package installation: ./indexdata -c config.yml [options]
+exec python -m solrindexer.cli "$@"

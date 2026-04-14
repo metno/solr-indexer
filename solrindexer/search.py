@@ -159,8 +159,8 @@ def parse_cfg(cfgfile):
     return cfgstr
 
 
-class IndexMMD:
-    """requires a list of dictionaries representing MMD as input"""
+class SearchMMD:
+    """Solr search and delete client for MMD documents."""
 
     def __init__(self, mysolrserver, commit, authentication):
         """
@@ -295,7 +295,7 @@ def main() -> int:
             authentication = HTTPBasicAuth(username, password)
 
     # Search for records
-    mysolr = IndexMMD(mySolRc, args.always_commit, authentication)
+    mysolr = SearchMMD(mySolRc, args.always_commit, authentication)
 
     if args.mmd and args.delete:
         logger.error(

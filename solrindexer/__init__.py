@@ -21,8 +21,8 @@ import logging
 import os
 import sys
 
-from .bulkindexer import BulkIndexer
-from .indexdata import IndexMMD, MMD4SolR
+from .indexer import BulkIndexer
+from .mmd import IndexMMD, MMD4SolR
 
 try:
     from importlib.metadata import PackageNotFoundError, version
