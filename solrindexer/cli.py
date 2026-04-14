@@ -542,7 +542,7 @@ def _format_error_message(exc, args):
 def _main() -> None:  # pragma: no cover
     """Compatibility entry point used by console_scripts in setup.cfg."""
     try:
-        main()
+        main()  # type: ignore[no-untyped-call]
     except ValueError as exc:
         print(exc)
     except AttributeError as exc:

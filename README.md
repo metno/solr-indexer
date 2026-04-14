@@ -1,273 +1,364 @@
-# solrindexing
+# solrindexer
 
-Useful tools and wrappers used for indexing MMD in SolR. This software is
-developed for use in the context of Arctic Data Centre, supported through
-projects SIOS KC and Norwegian Scientific Data Network.
+Tools and wrappers for indexing [MMD](https://github.com/metno/mmd) metadata into Apache Solr.
+Developed in the context of the Arctic Data Centre, supported through the SIOS-KC and Norwegian
+Scientific Data Network projects.
 
-## Usage indexdata
+## Table of Contents
 
-```text
-usage: indexdata [-h] [-a] -c CFGFILE [-i INPUT_FILE] [-l LIST_FILE] [-d DIRECTORY] [-parent MARK_PARENT]
-    [-t] [-n] [-m MAP_PROJECTION] [-t_layer THUMBNAIL_LAYER] [-t_style THUMBNAIL_STYLE]
-    [-t_zl THUMBNAIL_ZOOM_LEVEL] [-ac [ADD_COASTLINES]] [-t_extent THUMBNAIL_EXTENT [THUMBNAIL_EXTENT ...]]
+- [Installation](#installation)
+- [Configuration](#configuration)
+  - [SKOS vocabulary validation](#skos-vocabulary-validation)
+- [Commands](#commands)
+  - [indexdata](#indexdata)
+  - [searchindex](#searchindex)
+- [Logging](#logging)
+- [Development](#development)
 
-options:
-  -h, --help            show this help message and exit
-  -a, --always_commit   Specification of whether always commit or not to SolR
-  -c CFGFILE, --cfg CFGFILE
-                        Configuration file
-  -i INPUT_FILE, --input_file INPUT_FILE
-                        Individual file to be ingested.
-  -l LIST_FILE, --list_file LIST_FILE
-                        File with datasets to be ingested specified.
-  -d DIRECTORY, --directory DIRECTORY
-                        Directory to ingest
-  -parent MARK_PARENT, --mark_parent MARK_PARENT
-                        Enter metadata id of existing solr document to mark as parent
-  -t, --thumbnail       Create and index thumbnail, do not update the main content.
-  -n, --no_thumbnail    Do not index thumbnails (done automatically if WMS available).
-  -m MAP_PROJECTION, --map_projection MAP_PROJECTION
-                        Specify map projection for thumbnail (e.g. Mercator, PlateCarree, PolarStereographic).
-  -t_layer THUMBNAIL_LAYER, --thumbnail_layer THUMBNAIL_LAYER
-                        Specify wms_layer for thumbnail.
-  -t_style THUMBNAIL_STYLE, --thumbnail_style THUMBNAIL_STYLE
-                        Specify the style (colorscheme) for the thumbnail.
-  -t_zl THUMBNAIL_ZOOM_LEVEL, --thumbnail_zoom_level THUMBNAIL_ZOOM_LEVEL
-                        Specify the zoom level for the thumbnail.
-  -ac [ADD_COASTLINES], --add_coastlines [ADD_COASTLINES]
-                        Add coastlines too the thumbnail (True/False). Default True
-  -t_extent THUMBNAIL_EXTENT [THUMBNAIL_EXTENT ...], --thumbnail_extent THUMBNAIL_EXTENT [THUMBNAIL_EXTENT ...]
-                        Spatial extent of thumbnail in lat/lon degrees like "x0 x1 y0 y1"
-```
-
-### Example usage indexdata
-
-```bash
-indexdata -c etc/config.yml -d tests/data -n
-```
-
-will index all files in `tests/data`non-recursive
-
-```bash
-indexdata -c etc/config.yml -parent "c5ccf1dc-b223-4f44-984b-7edf95ba6012"
-```
-
-will mark the the dataseet with id `c5ccf1dc-b223-4f44-984b-7edf95ba6012`as a parent dataset.
-
-## Usage bulkindexer
-
-```text
-usage: bulkindexer [-h] [-a] -c CFGFILE [-l LIST_FILE] [-d DIRECTORY] [-t] [-n] [-m MAP_PROJECTION]
-    [-t_layer THUMBNAIL_LAYER] [-t_style THUMBNAIL_STYLE] [-t_zl THUMBNAIL_ZOOM_LEVEL]
-    [-ac [ADD_COASTLINES]] [-t_extent THUMBNAIL_EXTENT [THUMBNAIL_EXTENT ...]]
-
-options:
-  -h, --help            show this help message and exit
-  -a, --always_commit   Specification of whether always commit or not to SolR
-  -c CFGFILE, --cfg CFGFILE
-                        Configuration file
-  -l LIST_FILE, --list_file LIST_FILE
-                        File with datasets to be ingested specified.
-  -d DIRECTORY, --directory DIRECTORY
-                        Directory to ingest recursivly
-  -t, --thumbnail       Create and index thumbnail, do not update the main content.
-  -n, --no_thumbnail    Do not index thumbnails (done automatically if WMS available).
-  -m MAP_PROJECTION, --map_projection MAP_PROJECTION
-                        Specify map projection for thumbnail (e.g. Mercator, PlateCarree, PolarStereographic).
-  -t_layer THUMBNAIL_LAYER, --thumbnail_layer THUMBNAIL_LAYER
-                        Specify wms_layer for thumbnail.
-  -t_style THUMBNAIL_STYLE, --thumbnail_style THUMBNAIL_STYLE
-                        Specify the style (colorscheme) for the thumbnail.
-  -t_zl THUMBNAIL_ZOOM_LEVEL, --thumbnail_zoom_level THUMBNAIL_ZOOM_LEVEL
-                        Specify the zoom level for the thumbnail.
-  -ac [ADD_COASTLINES], --add_coastlines [ADD_COASTLINES]
-                        Add coastlines too the thumbnail (True/False). Default True
-  -t_extent THUMBNAIL_EXTENT [THUMBNAIL_EXTENT ...], --thumbnail_extent THUMBNAIL_EXTENT [THUMBNAIL_EXTENT ...]
-                        Spatial extent of thumbnail in lat/lon degrees like "x0 x1 y0 y1"
-```
-
-### Example usage bulkindexer with directory and no thumbnails
-
-```bash
-bulkindexer -c etc/config.yml -d tests/data -n
-```
-
-will index all MMD files in `tests/data` recursivly.
-
-## Usage searchindex
-
-```text
-usage: searchindex [-h] -c CFGFILE -s STRING [-d] [-a]
-```
-
-### Example usage searchindex
-
-```bash
-searchindex -c etc/config.yml -s "<search_field>:<search_string>"
-```
-
-```bash
-searchindex -c etc/config.yml -s "metadata_identifier:c5ccf1dc-b223-4f44-984b-7edf95ba6012"
-```
-
-```bash
-searchindex -c etc/config.yml -s "sea -ice"
-```
-
-*If `<search_field>`is omitted, then `full_text` is the default search field.*
-
-## Logging
-
-* `SOLRINDEXER_LOGFILE` can be set to enable logging to file.
-* `SOLRINDEXER_LOGLEVEL` can be set to change log level. See the Debugging section below.
-
-```bash
-indexdata -c etc/config.yml -i tests/data/mmdfile.xml 2> err.log
-```
-
-the above commoand will print info log to console and all other errors to `err.log`.
-
-## Configuration file
-
-The config file uses a toml/yaml syntax and should look like this:
-
-```yaml
-solrserver: http[s]://<solr_server_url>:<solr_port>/solr/
-solrcore: <core_name/collection_name>
-wms-thumbnail-projection: Mercator
-wms-timeout: 480
-
-# For solr basic authentication
-auth-basic-username: <solr_auth_username>
-auth-basic-password: <solr_password_username>
-# If we do not want to expose solr credentials in this config file,
-# we can use a .env file instead.
-dotenv_path: <absolute_path_to_dotenv_file>
-
-#For bulkindexer
-batch-size: 250
-workers: 2
-threads: 2
-
-#Commit to solr at end of execution True/False
-#end-solr-commit: True
-
-#Skip netCDF fe ature_type extraction if not set this is considered False
-#skip-feature-type: True
-#Override feature type (This will also skip the feature type)
-#Can be used if we know the feature_type of all datasets indexed in this execution (list,dir)
-#override-feature-type: profile
-
-```
-
-The `auth-basic-username` and `auth-basic-password`, can also be read from a `.env`-file. If a `.env`-file is in the current directory, it will be used, or a full path to the `.env`-file can be specified in the config file, with the `dotenv_path`-configuration key.
+---
 
 ## Installation
 
-Install instructions for the solrindexer package.
+### Prerequisites
 
-### Install using python virtualenv
+- Python 3.9 or later
+- A running Apache Solr instance with the [metsis-solr-configsets](https://github.com/metno/metsis-solr-configsets) applied
 
-Make sure to have python3-venv installed.
+### Option A: Install as a package (recommended)
 
-```bash
-sudo apt-get install python3-venv
-```
-
-Create a python virtualenv.
+Create and activate a virtual environment:
 
 ```bash
-python -m venv testenv
+python -m venv .venv
+source .venv/bin/activate
 ```
 
-Activate the virtualenv.
-
-```bash
-source testenv/bin/activate
-```
-
-Install the solrindexer package
+Install the package and its dependencies:
 
 ```bash
 pip install .
 ```
 
-To enable support for thumbnail, additonal dependencies have to be installed.
+This adds `indexdata` and `searchindex` to your `PATH`.
+
+Optional extras:
 
 ```bash
-pip install -r requirements-thumb.txt
+# For vocabulary validation using rdflib
+pip install ".[rdflib]"
+
+# For rich terminal output (colours, syntax highlighting)
+pip install ".[rich]"
+
+# For the legacy metvocab vocabulary backend
+pip install ".[metvocab]"
+
+# Install all development tools (pytest, mypy, ruff, bandit, …)
+pip install ".[dev]"
 ```
 
-### Install using conda
+### Option B: Run without installing (standalone)
 
-Solrindexing depends on cartopy, which cannot be installed in the regular "pip" way. On linux,
-first install libproj and libgeos:
+If dependencies are installed in the active Python environment, you can run the
+root-level wrapper scripts directly without installing the package:
 
 ```bash
-sudo apt-get install libproj-dev libgeos++-dev
+./indexdata -c etc/config.yml -d /data/mmd
+./searchindex -c etc/config.yml -s "metadata_identifier:*"
 ```
 
-To avoid problems with conflicting versions, we recommend using the Conda package manager. The below steps assume that Conda is installed.
-
-Create a new environment:
+### Install using Conda
 
 ```bash
 conda env create -f environment.yml
-```
-
-Verify that the new environment is registered:
-
-```bash
-conda info --envs
-```
-
-Activate (use) the new environment:
-
-```bash
 conda activate solrindexing
-```
-
-Install the solrindexer package:
-
-```text
 pip install .
 ```
-
-All dependencies should now be installed.
 
 ### Install on PPI
 
 ```bash
 source /modules/rhel8/conda/install/etc/profile.d/conda.sh
 conda activate production-08-2024
-cd solr-indexer/
 pip install .
 ```
 
-### Running python tests
+---
 
-To run python tests, install pytest dependency.
+## Configuration
 
-```bash
-pip install pytest
+All commands require a YAML configuration file passed with `-c`. A fully annotated template is
+provided at [`etc/cfg-template.yml`](etc/cfg-template.yml).
+
+### Minimal configuration
+
+```yaml
+solrserver: http://localhost:8983/solr/
+solrcore: mmd-data
 ```
 
-Run the python tests with
+### Authentication
 
-```bash
-python -m pytest -vv
+Credentials can be supplied inline or via a `.env` file (preferred to avoid storing passwords in
+config files):
+
+```yaml
+# Inline (less secure)
+auth-basic-username: solr_user
+auth-basic-password: secret
+
+# .env file (SOLR_USERNAME / SOLR_PASSWORD must be set inside the file)
+dotenv_path: /etc/solrindexer/.env
 ```
 
-### Running flake8 code syntax checker
+If neither `auth-basic-username` nor `dotenv_path` is present the command looks for a `.env`
+file in the current working directory. If `SOLR_USERNAME` and `SOLR_PASSWORD` are empty,
+authentication is disabled.
 
-To run the flake8 code syntax checker, install the flake8 dependency.
+### Configuration reference
 
-```bash
-pip install flake8
+| Key | Default | Description |
+|-----|---------|-------------|
+| `solrserver` | — | **Required.** Base URL of the Solr instance, e.g. `http://localhost:8983/solr/` |
+| `solrcore` | — | **Required.** Solr core or collection name |
+| `auth-basic-username` | — | Solr basic-auth username |
+| `auth-basic-password` | — | Solr basic-auth password |
+| `dotenv_path` | — | Absolute path to a `.env` file containing `SOLR_USERNAME` / `SOLR_PASSWORD` |
+| `batch-size` | `2500` | Documents sent to Solr per HTTP request |
+| `workers` | `1` | Parallel OS-level worker processes (for very large datasets) |
+| `threads` | `20` | Worker threads per process for I/O-bound indexing |
+| `end-solr-commit` | `false` | Send a hard commit to Solr when indexing finishes |
+| `skip-feature-type` | `false` | Skip OPeNDAP feature-type extraction |
+| `override-feature-type` | — | Force a specific feature type for all documents (also skips extraction) |
+| `mmd-xsd-path` | — | Path to `mmd.xsd` for optional XSD validation (warns; never blocks indexing) |
+| `vocabulary-backend` | `native` | Vocabulary backend: `native`, `legacy-metvocab`, or `rest-skosmos` |
+| `vocabulary-ttl-path` | — | Path to a local MMD vocabulary TTL file (used with `native` backend) |
+| `vocabulary-endpoint-base-url` | `https://vocab.met.no/mmd` | Base URL for REST Skosmos vocabulary lookups |
+| `vocabulary-endpoint-timeout` | `20.0` | HTTP timeout (seconds) for REST vocabulary requests |
+| `nbs-thumbnails-base-path` | — | Filesystem root where NBS `thumbnail.png` files are stored |
+| `nbs-thumbnails-base-url` | — | Public base URL from which NBS thumbnails are served |
+| `scope` | — | Set to `NBS` to enable NBS-specific thumbnail lookup |
+
+See [`etc/cfg-template.yml`](etc/cfg-template.yml) for a fully commented example.
+
+### SKOS vocabulary validation
+
+The indexer validatescontrolled vocabulary fields against MMD SKOS vocabularies.
+You can validate by either:
+
+- using a local TTL file (`vocabulary-backend: native` + `vocabulary-ttl-path`), or
+- using the REST SKOS endpoint (`vocabulary-backend: rest-skosmos`).
+
+The MET Norway vocabulary service is available at
+[https://vocab.met.no](https://vocab.met.no).
+
+For MMD vocabularies, use `vocabulary-endpoint-base-url: https://vocab.met.no/mmd`.
+
+---
+
+## Commands
+
+### indexdata
+
+Indexes one or more MMD XML files into Solr. Supports single files, file lists, and directories,
+with optional multi-process and multi-thread parallelism for large-scale ingestion.
+
+```text
+usage: indexdata -c CFGFILE (-i FILE | -l LIST | -d DIR | -parent ID) [options]
+
+required:
+  -c, --cfg CFGFILE         Path to YAML configuration file
+
+input (one required):
+  -i, --input_file FILE     Index a single MMD XML file
+  -l, --list_file LIST      Index files listed one per line in FILE
+  -d, --directory DIR       Index all XML files in DIR (non-recursive by default)
+  -parent, --mark_parent ID Mark an existing Solr document as a parent dataset
+
+input modifiers:
+  -r, --recursive           Recurse into subdirectories when using -d
+
+performance:
+  --threads N               Worker threads per process (default: config or 20)
+  --processes N             Parallel OS-level processes for large bulk runs (default: 1)
+  --chunksize N             Documents per Solr HTTP request (default: config or 2500)
+
+solr:
+  -a, --always_commit       Commit to Solr after every batch
+
+thumbnails (NBS scope only):
+  -t, --thumbnail           Enable NBS thumbnail URL lookup
+  -n, --no_thumbnail        Disable thumbnail lookup
+  -nbs, --nbs               Enable NBS scope (also activates thumbnail lookup)
 ```
 
-Run the flake8 test
+#### Examples
+
+Index a single file:
 
 ```bash
-flake8 . --count --max-line-length=99 --ignore E221,E226,E228,E241 --show-source --statistics --exclude external
+indexdata -c etc/config.yml -i tests/data/full_mmdv4.xml
+```
+
+Index all XML files in a directory (non-recursive):
+
+```bash
+indexdata -c etc/config.yml -d /data/mmd
+```
+
+Index an entire directory tree recursively with 4 threads:
+
+```bash
+indexdata -c etc/config.yml -d /data/mmd -r --threads 4
+```
+
+Index a large dataset using 2 parallel processes, 8 threads each, batch size 1000:
+
+```bash
+indexdata -c etc/config.yml -d /data/mmd -r --processes 2 --threads 8 --chunksize 1000
+```
+
+Index from a file list:
+
+```bash
+find /data/mmd -name "*.xml" > filelist.txt
+indexdata -c etc/config.yml -l filelist.txt
+```
+
+Mark an existing document as a parent:
+
+```bash
+indexdata -c etc/config.yml -parent "no.met:c5ccf1dc-b223-4f44-984b-7edf95ba6012"
+```
+
+---
+
+### searchindex
+
+Searches the Solr index for MMD documents. Supports full Solr query syntax, optional deletion of
+matched records, and returning raw MMD XML.
+
+```text
+usage: searchindex -c CFGFILE -s QUERY [options]
+
+required:
+  -c, --cfg CFGFILE         Path to YAML configuration file
+  -s, --searchstringst QUERY
+                            Solr query string (full Lucene/Solr syntax supported)
+
+options:
+  -d, --delete              Delete all documents matching the query
+  -a, --always_commit       Commit immediately after deletion
+  --mmd                     Return raw MMD XML (mmd_xml_file field) instead of JSON
+```
+
+#### Examples
+
+Search by metadata identifier:
+
+```bash
+searchindex -c etc/config.yml -s "metadata_identifier:no.met:c5ccf1dc-b223-4f44-984b-7edf95ba6012"
+```
+
+Free-text search:
+
+```bash
+searchindex -c etc/config.yml -s "sea ice"
+```
+
+Search and delete matched records:
+
+```bash
+searchindex -c etc/config.yml -s "collection:METNCS" -d
+```
+
+Retrieve raw MMD XML for a document:
+
+```bash
+searchindex -c etc/config.yml -s "metadata_identifier:no.met:abc123" --mmd
+```
+
+> **Note:** When no field is specified, Solr searches the default `full_text` field.
+
+---
+
+## Logging
+
+Logging is controlled via environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SOLRINDEXER_LOGLEVEL` | `INFO` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+| `SOLRINDEXER_LOGFILE` | — | If set, log output is also written to this file path |
+
+Examples:
+
+```bash
+# Verbose debug output to console
+SOLRINDEXER_LOGLEVEL=DEBUG indexdata -c etc/config.yml -i file.xml
+
+# Separate info and error streams
+indexdata -c etc/config.yml -d /data/mmd > index.log 2> errors.log
+
+# Log to file in addition to console
+SOLRINDEXER_LOGFILE=/var/log/solrindexer.log indexdata -c etc/config.yml -d /data/mmd
+```
+
+---
+
+## Development
+
+### Running tests
+
+```bash
+# Run the full test suite
+python -m pytest tests/ -v
+
+# Run a single test file
+python -m pytest tests/test_indexdata.py -v
+
+# Run only tests matching a marker
+python -m pytest -m indexdata -v
+```
+
+### Using tox (recommended)
+
+All quality checks are managed through [tox](https://tox.wiki):
+
+```bash
+tox -e py3          # Full test suite
+tox -e lint         # Lint with ruff
+tox -e lint-fix     # Auto-fix lint warnings
+tox -e format-check # Check formatting
+tox -e format       # Auto-format code
+tox -e typecheck    # Type checking with mypy
+tox -e security     # Security scanning with bandit
+tox -e prospector   # Prospector code analysis
+tox                 # Run all environments
+```
+
+### Project structure
+
+```text
+solr-indexer/
+├── solrindexer/
+│   ├── __init__.py        # Package init; exports IndexMMD, MMD4SolR, BulkIndexer
+│   ├── cli.py             # indexdata CLI entry point
+│   ├── search.py          # searchindex CLI entry point
+│   ├── mmd.py             # MMD4SolR (XML→Solr doc) and IndexMMD (Solr connection)
+│   ├── indexer.py         # BulkIndexer (multi-threaded bulk ingestion)
+│   ├── spatial.py         # Geospatial helpers (WKT, GeoJSON, Solr envelopes)
+│   ├── tools.py           # Utility functions (date parsing, Solr helpers, thumbnails)
+│   ├── threads.py         # Concurrent processing helpers
+│   ├── io.py              # File loading helpers
+│   ├── vocabulary.py      # Vocabulary validation backends
+│   ├── failure_tracker.py # Per-run failure and warning tracking
+│   └── xmlutils.py        # XML parsing utilities
+├── tests/                 # pytest test suite
+├── etc/
+│   └── cfg-template.yml   # Annotated configuration template
+├── indexdata              # Standalone wrapper script (no install needed)
+├── searchindex            # Standalone wrapper script (no install needed)
+├── pyproject.toml
+└── tox.ini
 ```

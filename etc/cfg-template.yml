@@ -1,53 +1,137 @@
-# Configuration template file
+# solrindexer configuration template
 # Created by: Øystein Godøy, METNO/FOU, 2019-10-23
-# Updated by: Magnar Martinsen, METNO/FOU, 2025-05-02
+# Updated by: Magnar Martinsen, METNO/FOU, 2026-04-14
+#
+# Copy this file, remove or fill in the values you need, and pass it to
+# indexdata or searchindex with -c <your-config.yml>.
+#
+# Lines starting with # are comments. Commented-out keys show optional settings
+# with their default values.
 
-#Logging (optional)
-logfile: <YOUR LOGFILE>
+# ---------------------------------------------------------------------------
+# Solr connection (Required)
+# ---------------------------------------------------------------------------
 
-# Solr connection information (Required)
-solrserver: <YOUR SolR Server>
-solrcore: <YOUR SolR Core>
+# Base URL of the Solr instance. Must end with /solr/
+solrserver: http://localhost:8983/solr/
 
-# Add support for solr basic authentication (Optional)
-# uncomment and set <USERNAME> & <PASSWORD> to enable Authentication
+# Solr core or collection name
+solrcore: mmd-data
+
+# ---------------------------------------------------------------------------
+# Authentication (Optional)
+# ---------------------------------------------------------------------------
+# Choose one of the three methods below. If none is configured, authentication
+# is disabled.
+
+# Method 1: Inline credentials (store securely; avoid committing to version control)
 #auth-basic-username: <USERNAME>
 #auth-basic-password: <PASSWORD>
 
-# Bulkindexer settings (optional)
-batch-size: 250
-#Worker processes
-workers: 3
-threads: 4
+# Method 2: Absolute path to a .env file containing SOLR_USERNAME and SOLR_PASSWORD
+#dotenv_path: /etc/solrindexer/.env
 
-# Path to the MMD XSD schema file for optional pre-indexing validation (optional)
-# If set, each MMD document is validated against the schema before indexing.
-# Validation failures are logged as warnings and do not stop indexing.
+# Method 3 (default): If neither of the above is set, a .env file in the
+# current working directory is used automatically. Authentication is disabled
+# if SOLR_USERNAME / SOLR_PASSWORD are absent or empty.
+
+# ---------------------------------------------------------------------------
+# Indexing performance (Optional)
+# ---------------------------------------------------------------------------
+
+# Number of documents sent to Solr in a single HTTP request.
+# Larger values improve throughput but require more memory.
+# Default: 2500
+batch-size: 2500
+
+# Number of parallel OS-level worker processes.
+# Useful for very large datasets on multi-core machines. Each process runs its
+# own BulkIndexer instance. Can also be set with --processes on the CLI.
+# Default: 1
+#workers: 1
+
+# Number of I/O-bound threads per worker process used for reading and
+# transforming MMD files. Can also be set with --threads on the CLI.
+# Default: 20
+threads: 20
+
+# Send a final hard commit to Solr after all documents have been indexed.
+# Useful when Solr's autoCommit interval is long and you need changes visible
+# immediately. Default: false
+#end-solr-commit: false
+
+# ---------------------------------------------------------------------------
+# Feature type extraction (Optional)
+# ---------------------------------------------------------------------------
+
+# Skip OPeNDAP featureType extraction entirely.
+# Extraction opens each dataset's OPeNDAP endpoint via xarray, which can be
+# slow or unavailable. Default: false (extraction is attempted)
+#skip-feature-type: false
+
+# Force a fixed featureType for every document indexed in this run.
+# Valid values: point, timeSeries, trajectory, profile, timeSeriesProfile,
+#               trajectoryProfile
+# Setting this also skips the OPeNDAP extraction.
+#override-feature-type: timeSeries
+
+# ---------------------------------------------------------------------------
+# MMD schema validation (Optional)
+# ---------------------------------------------------------------------------
+
+# Absolute path to the MMD XSD schema file (mmd.xsd).
+# When set, each document is validated before indexing. Validation failures
+# are logged as warnings and never block indexing.
+# Typically found at: /path/to/mmd/xsd/mmd.xsd
 #mmd-xsd-path: /path/to/mmd/xsd/mmd.xsd
 
-# Vocabulary validation settings (optional)
-# Path to the local MMD vocabulary TTL file for controlled-vocabulary validation.
-# When set, each MMD document's controlled fields (iso_topic_category, collection,
-# dataset_production_status, quality_control, metadata_source) are validated against
-# the vocabulary. Non-controlled values are logged as warnings and do not stop indexing.
-# The vocabulary is loaded once at startup and reused for all documents (efficient).
-# If omitted and vocabulary-backend is native/default, the indexer falls back to
-# REST lookup at vocabulary-endpoint-base-url.
-#vocabulary-ttl-path: /path/to/mmd/thesauri/mmd-vocabulary.ttl
+# ---------------------------------------------------------------------------
+# Vocabulary validation (Optional)
+# ---------------------------------------------------------------------------
 
-# Vocabulary backend to use (optional, default: native)
-#   native          - use rdflib to read the local TTL file (requires vocabulary-ttl-path)
-#   legacy-metvocab - use the old metvocab/MMDGroup package (fetches from remote URLs)
-#   rest-skosmos    - fetch vocabulary TTL from a Skosmos REST endpoint (cached in-memory)
+# Controlled vocabulary backend. Validates fields such as iso_topic_category,
+# collection, dataset_production_status, quality_control, and metadata_source.
+# Non-controlled values are logged as warnings and never block indexing.
+#
+# Backends:
+#   native          - Read a local TTL file with rdflib (requires vocabulary-ttl-path
+#                     and the rdflib extra: pip install ".[rdflib]")
+#   legacy-metvocab - Use the metvocab/MMDGroup package (requires metvocab extra)
+#   rest-skosmos    - Fetch and cache vocabulary from a Skosmos REST endpoint
+#
+# Default: native
 #vocabulary-backend: native
 
-# Skosmos REST backend settings (optional, used when vocabulary-backend=rest-skosmos)
-# Base URL can be the site root (https://vocab.met.no) or /mmd path.
-# The indexer normalizes it to /rest/v1/<vocab>/data automatically.
-# Example for https://vocab.met.no/swagger.json API:
+# Path to a local MMD vocabulary TTL file (used with native backend).
+# The vocabulary is loaded once at startup and reused for all documents.
+# Typically found at: /path/to/mmd/thesauri/mmd-vocabulary.ttl
+#vocabulary-ttl-path: /path/to/mmd/thesauri/mmd-vocabulary.ttl
+
+# Base URL for REST Skosmos vocabulary lookups (used with rest-skosmos backend).
+# The URL may point to the API root (https://vocab.met.no) or the /mmd path;
+# the indexer normalises it to /rest/v1/<vocab>/data automatically.
+# Default: https://vocab.met.no/mmd
 #vocabulary-endpoint-base-url: https://vocab.met.no/mmd
+
+# HTTP timeout in seconds for REST vocabulary requests.
+# Default: 20.0
 #vocabulary-endpoint-timeout: 20.0
 
-# NBS specific thumnail configuration (optional)
-#nbs-thumbnails-base-path: <Base file path where to find NBS products and thumbnail.png>
-#nbs-thumbnails-base-url: <Base url from where the thumbnails will be served>
+# ---------------------------------------------------------------------------
+# NBS thumbnail lookup (Optional — NBS scope only)
+# ---------------------------------------------------------------------------
+# When scope is NBS (or --nbs is passed on the CLI), the indexer looks up
+# pre-generated thumbnail.png files on the local filesystem and adds their
+# public URLs to the thumbnail_url Solr field.
+
+# Set scope to NBS to enable NBS-specific processing.
+# Can also be enabled with --nbs on the CLI.
+#scope: NBS
+
+# Root filesystem path where NBS product directories and thumbnail.png files
+# are stored (e.g. /mnt/nbs-products).
+#nbs-thumbnails-base-path: /mnt/nbs-products
+
+# Public base URL from which those thumbnails are served
+# (e.g. https://nbs.example.com/products).
+#nbs-thumbnails-base-url: https://nbs.example.com/products

@@ -28,6 +28,7 @@ import json
 import logging
 import os
 import sys
+from typing import Any, Optional, cast
 
 import lxml.etree as ET
 import pysolr
@@ -46,7 +47,7 @@ SOLR_FL = "*,personnel_json:[json],data_access_json:[json],platform_json:[json],
 SOLR_MMD_FL = "mmd_xml_file:[xml]"
 
 
-def _print_pretty_docs(docs):
+def _print_pretty_docs(docs: list[dict[str, Any]]) -> None:
     """Print docs using rich JSON if available, otherwise plain pretty JSON."""
     if not docs:
         return
@@ -70,18 +71,18 @@ def _print_pretty_docs(docs):
     print(pretty)
 
 
-def _format_xml_for_display(xml_text):
+def _format_xml_for_display(xml_text: str) -> str:
     """Return pretty-printed XML when parsing succeeds, otherwise the original text."""
     if not xml_text:
         return xml_text
     try:
         root = ET.fromstring(xml_text.encode("utf-8"))
-        return ET.tostring(root, pretty_print=True, encoding="unicode")
+        return cast(str, ET.tostring(root, pretty_print=True, encoding="unicode"))
     except Exception:
         return xml_text
 
 
-def _print_pretty_xml(xml_text):
+def _print_pretty_xml(xml_text: str) -> None:
     """Print XML using Rich syntax highlighting if available, otherwise plain text."""
     formatted_xml = _format_xml_for_display(xml_text)
     try:
@@ -121,7 +122,7 @@ def parse_arguments() -> argparse.Namespace:
     return args
 
 
-def build_search_request(args):
+def build_search_request(args: argparse.Namespace) -> dict[str, Any]:
     """Build Solr search parameters for standard and raw MMD XML modes."""
     q_string = str(args.string).strip()
     if args.mmd:
@@ -139,7 +140,7 @@ def build_search_request(args):
     }
 
 
-def parse_cfg(cfgfile):
+def parse_cfg(cfgfile: str) -> dict[str, Any]:
     """Parse configuration file. Raises FileNotFoundError with helpful message if config file does not exist."""
     logger.info("Reading configuration: %s", cfgfile)
     try:
@@ -156,13 +157,21 @@ def parse_cfg(cfgfile):
             f"Please check that the file is valid YAML."
         ) from e
 
+    if not isinstance(cfgstr, dict):
+        raise ValueError(f"Configuration file '{cfgfile}' must contain a YAML mapping/object")
+
     return cfgstr
 
 
 class SearchMMD:
     """Solr search and delete client for MMD documents."""
 
-    def __init__(self, mysolrserver, commit, authentication):
+    def __init__(
+        self,
+        mysolrserver: str,
+        commit: bool,
+        authentication: Optional[HTTPBasicAuth],
+    ) -> None:
         """
         Connect to SolR core
         """
@@ -189,7 +198,7 @@ class SearchMMD:
             logger.error(f"Could not contact solr server: {e}")
             sys.exit(1)
 
-    def delete_item(self, datasetid, commit):
+    def delete_item(self, datasetid: str, commit: Optional[bool]) -> None:
         """Require ID as input"""
         """ Rewrite to take full metadata record as input """
         logger.info("Deleting ", datasetid, " from Level 1")
@@ -200,7 +209,7 @@ class SearchMMD:
 
         logger.info("Record successfully deleted from core")
 
-    def search(self, myargs):
+    def search(self, myargs: argparse.Namespace) -> Optional[Any]:
         """Require Id as input"""
         results = None
         q_string = str(myargs.string).strip()

@@ -17,6 +17,7 @@ implied. See the License for the specific language governing
 permissions and limitations under the License.
 """
 
+import os
 import pickle
 import time
 from pathlib import Path
@@ -32,8 +33,72 @@ from solrindexer.vocabulary import (
     create_vocabulary_loader,
 )
 
-# Path to the TTL vocabulary file in the metsis repository
-VOCABULARY_TTL = Path("../mmd/thesauri/mmd-vocabulary.ttl")
+
+def _vocabulary_ttl_candidates() -> list[Path]:
+    """Return candidate TTL paths for local and CI checkout layouts.
+
+    Priority:
+    1. Explicit env override via MMD_REPO_PATH
+    2. Sibling repo checkout relative to this test file
+    3. Common cwd-relative layouts used in CI and local development
+    """
+    this_file = Path(__file__).resolve()
+    tests_dir = this_file.parent
+    solr_indexer_root = tests_dir.parent
+    workspace_root = solr_indexer_root.parent
+
+    candidates: list[Path] = []
+
+    mmd_repo_path = os.getenv("MMD_REPO_PATH")
+    if mmd_repo_path:
+        env_path = Path(mmd_repo_path).expanduser().resolve()
+        if env_path.name == "mmd-vocabulary.ttl":
+            candidates.append(env_path)
+        else:
+            candidates.append(env_path / "thesauri" / "mmd-vocabulary.ttl")
+
+    candidates.extend(
+        [
+            workspace_root / "mmd" / "thesauri" / "mmd-vocabulary.ttl",
+            solr_indexer_root / ".." / "mmd" / "thesauri" / "mmd-vocabulary.ttl",
+            Path.cwd() / "../mmd/thesauri/mmd-vocabulary.ttl",
+            Path.cwd() / "mmd/thesauri/mmd-vocabulary.ttl",
+        ]
+    )
+
+    # Keep order while removing duplicates.
+    seen: set[Path] = set()
+    unique_candidates: list[Path] = []
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            unique_candidates.append(resolved)
+
+    return unique_candidates
+
+
+def _resolve_vocabulary_ttl() -> Path | None:
+    """Return the first existing vocabulary TTL path, if any."""
+    for candidate in _vocabulary_ttl_candidates():
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _skip_if_no_ttl() -> None:
+    """Skip tests requiring mmd-vocabulary.ttl when not available."""
+    if VOCABULARY_TTL is not None:
+        return
+    candidates = "\n".join(f"  - {path}" for path in _vocabulary_ttl_candidates())
+    pytest.skip(
+        "TTL file not found. Set MMD_REPO_PATH to your mmd repository path "
+        "or file path. Tried:\n"
+        f"{candidates}"
+    )
+
+
+VOCABULARY_TTL = _resolve_vocabulary_ttl()
 
 
 class TestVocabularyLoaderBasics:
@@ -41,8 +106,7 @@ class TestVocabularyLoaderBasics:
 
     def test_init_with_valid_ttl_file(self):
         """Test that VocabularyLoader initializes with a valid TTL file."""
-        if not VOCABULARY_TTL.exists():
-            pytest.skip(f"TTL file not found: {VOCABULARY_TTL}")
+        _skip_if_no_ttl()
 
         loader = VocabularyLoader(str(VOCABULARY_TTL))
         assert loader is not None
@@ -67,8 +131,7 @@ class TestVocabularyLoaderSearch:
     @pytest.fixture
     def loader(self):
         """Fixture to provide a VocabularyLoader instance."""
-        if not VOCABULARY_TTL.exists():
-            pytest.skip(f"TTL file not found: {VOCABULARY_TTL}")
+        _skip_if_no_ttl()
         return VocabularyLoader(str(VOCABULARY_TTL))
 
     def test_search_iso_topic_category_valid_value(self, loader):
@@ -161,8 +224,7 @@ class TestCreateVocabularyLoader:
 
     def test_create_native_loader_with_valid_path(self):
         """Test creating native loader with valid TTL path."""
-        if not VOCABULARY_TTL.exists():
-            pytest.skip(f"TTL file not found: {VOCABULARY_TTL}")
+        _skip_if_no_ttl()
 
         loader = create_vocabulary_loader(ttl_path=str(VOCABULARY_TTL), backend="native")
         assert loader is not None
