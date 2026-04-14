@@ -42,7 +42,7 @@ from solrindexer.script import indexdata
 logger = logging.getLogger(__name__)
 
 
-def main():
+def main() -> int:
     """
     Deprecation wrapper that delegates all arguments to the new unified indexdata command.
 
@@ -87,10 +87,11 @@ def main():
     )
 
     # Delegate to new unified indexdata command
-    return indexdata.main()
+    indexdata.main()
+    return 0
 
 
-def _main():  # pragma: no cover
+def _main() -> None:  # pragma: no cover
     """Compatibility entry point used by console_scripts in setup.cfg."""
     try:
         main()

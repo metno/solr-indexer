@@ -24,18 +24,12 @@ import math
 import os
 import re
 import subprocess
-import sys
-from threading import Lock
 
 import dateutil.parser
-import pysolr
-import requests
 import validators
 
 # Logging Setup
 logger = logging.getLogger(__name__)
-
-lock = Lock()
 
 IDREPLS = [":", "/", "."]
 
@@ -53,88 +47,57 @@ validfeaturetypes = {
     "trajectoryprofile": "trajectoryProfile",
 }
 
-# Global thumb class
-global thumbClass
-thumbClass = None
 
-# Global Solr connection
-global solr_endpoint
-solr_endpoint = None
-
-global solr_pysolr
-solr_pysolr = None
-
-global authClass
-authClass = None
-
-
-def initThumb(thumb):
-    """Initialise configured thumbnail class"""
-    global thumbClass
-    thumbClass = thumb
-
-
-def initSolr(solrc, solrcon, auth):
-    """Initialize Solr"""
-    global solr_endpoint
-    solr_endpoint = solrc
-
-    global solr_pysolr
-    solr_pysolr = solrcon
-
-    global authClass
-    authClass = auth
-
-
-def get_dataset(id):
+def get_dataset(id, *, solr_client):
     """
-    Use real-time get to fetch latest dataset
-    based on id.
+    Fetch dataset by id using Solr realtime get when possible.
+
+    Returns a dict containing a ``doc`` key to match existing call sites,
+    e.g. ``{"doc": <doc or None>}``.
     """
-    res = None
     try:
-        res = requests.get(solr_endpoint + "/get?wt=json&id=" + id, auth=authClass)
-        res.raise_for_status()
-    except requests.exceptions.HTTPError as errh:
-        logger.error("Http Error: %s", errh)
-    except requests.exceptions.ConnectionError as errc:
-        logger.error("Error Connecting: %s", errc)
-    except requests.exceptions.Timeout as errt:
-        logger.error("Timeout Error: %s", errt)
-    except requests.exceptions.RequestException as err:
-        logger.error("OOps: Something Else went wrong: %s", err)
+        payload = solr_client._send_request(
+            "get",
+            "get",
+            params={"wt": "json", "id": id},
+        )
+        if isinstance(payload, str):
+            payload = json.loads(payload)
+        if isinstance(payload, dict):
+            if "doc" in payload:
+                return payload
+            docs = payload.get("response", {}).get("docs", [])
+            return {"doc": docs[0] if docs else None}
+    except Exception as exc:
+        logger.warning(
+            "Realtime get failed for id=%s. Falling back to search. Reason: %s", id, exc
+        )
 
-    if res is None:
+    try:
+        result = solr_client.search(f'id:"{id}"', rows=1)
+        docs = list(result)
+        return {"doc": docs[0] if docs else None}
+    except Exception as exc:
+        logger.error("Could not fetch dataset id=%s from Solr: %s", id, exc)
         return None
-    else:
-        dataset = res.json()
-        return dataset
 
 
-def solr_add(docs):
+def solr_add(docs, *, solr_client):
     """Add documents to solr"""
-    solr_pysolr.add(docs)
+    solr_client.add(docs)
 
 
-def solr_ping():
-    """Ping Solr"""
-    try:
-        pong = solr_pysolr.ping()
-        status = json.loads(pong)["status"]
-        if status == "OK":
-            logger.info("Solr ping with status %s", status)
-        else:
-            logger.error("Error! Solr ping with status %s", status)
-            sys.exit(1)
-
-    except pysolr.SolrError as e:
-        logger.error(f"Could not contact solr server: {e}")
-        sys.exit(1)
-
-
-def solr_commit():
-    """Commit solr transaction and open new searcher"""
-    solr_pysolr.commit()
+def set_parent_flag(parent_id, *, solr_client):
+    """Atomically mark a parent document as isParent=true."""
+    solr_add(
+        [
+            {
+                "id": parent_id,
+                "isParent": {"set": True},
+            }
+        ],
+        solr_client=solr_client,
+    )
 
 
 def flip(x, y):
@@ -416,59 +379,13 @@ def add_nbs_thumbnail(doc, config):
     return doc
 
 
-def add_nbs_thumbnail_bulk(doc):
-    NBS_PROD_RE = r"(\w\d\w)/(\d{4})/(\d{2})/(\d{2})(?:/(IW|EW))?/(.+).zip"
-
-    # Get the configuration
-    nbs_base_path = thumbClass.get("nbs_base_path", None)
-    nbs_base_url = thumbClass.get("nbs_base_url", None)
-    # Extract filename and path from data_access_url_opendap
-    data_access_url_http = doc.get("data_access_url_http", "")[0]
-    if not data_access_url_http.endswith(".zip"):
-        data_access_url_http = doc.get("data_access_url_http", "")[1]
-    logger.debug(data_access_url_http)
-
-    title = doc.get("title", [])[0]
-    logger.debug(title)
-    logger.debug(data_access_url_http)
-    if data_access_url_http is not None:
-        match = re.search(NBS_PROD_RE, data_access_url_http)
-        if match:
-            product = match.group(1)
-            year = match.group(2)
-            month = match.group(3)
-            day = match.group(4)
-            mode = match.group(5)
-            fname = match.group(6)
-            logger.debug(mode)
-            if product.startswith("S1"):
-                thumb_path = f"{nbs_base_path}/{product}/{year}"
-                thumb_path += f"/{month}/{day}/{mode}/ql/{fname}/thumbnail.png"
-                thumbFound = os.path.isfile(thumb_path)
-                if thumbFound:
-                    thumbnail_url = f"{nbs_base_url}/{product}/{year}/"
-                    thumbnail_url += f"{month}/{day}/{mode}/ql/{fname}/thumbnail.png"
-                    logger.debug("NBS thumbnail_url set to: %s", thumbnail_url)
-                    doc["thumbnail_url"] = thumbnail_url
-                else:
-                    logger.error("NBS thumbnail not found: %s", thumb_path)
-
-            else:
-                thumb_path = f"{nbs_base_path}/{product}/{year}"
-                thumb_path += f"/{month}/{day}/ql/{fname}/thumbnail.png"
-
-                thumbFound = os.path.isfile(thumb_path)
-                if thumbFound:
-                    thumbnail_url = f"{nbs_base_url}/{product}/{year}/"
-                    thumbnail_url += f"{month}/{day}/ql/{fname}/thumbnail.png"
-                    logger.debug("NBS thumbnail_url set to: %s", thumbnail_url)
-                    doc["thumbnail_url"] = thumbnail_url
-                else:
-                    logger.error("NBS thumbnail not found: %s", thumb_path)
-    return doc
+def add_nbs_thumbnail_bulk(payload):
+    """Bulk-processing helper that keeps multiprocess input to one argument."""
+    doc, config = payload
+    return add_nbs_thumbnail(doc, config)
 
 
-def main():
+def main() -> None:
     logger.info("Tools Main")
 
 

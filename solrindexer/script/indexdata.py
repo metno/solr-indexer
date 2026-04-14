@@ -18,7 +18,7 @@ from solrindexer.bulkindexer import BulkIndexer
 from solrindexer.failure_tracker import FailureTracker
 from solrindexer.indexdata import IndexMMD
 from solrindexer.script.searchindex import parse_cfg
-from solrindexer.tools import get_dataset, initSolr, solr_add, solr_ping, to_solr_id
+from solrindexer.tools import get_dataset, set_parent_flag, to_solr_id
 
 logger = logging.getLogger(__name__)
 
@@ -111,11 +111,7 @@ def _bulkindex_worker(
     """Run one BulkIndexer instance inside a dedicated process."""
     try:
         authentication = _resolve_authentication(cfg)
-        initSolr(
-            solr_url,
-            pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=authentication),
-            authentication,
-        )
+        solr_client = pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=authentication)
 
         bulk = BulkIndexer(
             shard_files,
@@ -124,7 +120,7 @@ def _bulkindex_worker(
             chunksize=chunksize,
             auth=authentication,
             tflg=thumbnails_enabled,
-            thumbClass=None,
+            solr_client=solr_client,
             config=cfg,
         )
         result = bulk.bulkindex(shard_files)
@@ -170,22 +166,18 @@ def _resolve_pending_parents(solr_url, authentication, parent_ids_pending, paren
         return
 
     try:
-        initSolr(
-            solr_url,
-            pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=authentication),
-            authentication,
-        )
+        solr_client = pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=authentication)
     except Exception as e:
         logger.warning("Could not reinitialize Solr client for final parent pass: %s", e)
         return
 
     for pid in list(parent_ids_pending):
         try:
-            parent = get_dataset(pid)
+            parent = get_dataset(pid, solr_client=solr_client)
             if parent is None or parent.get("doc") is None:
                 continue
             if parent["doc"].get("isParent") is False:
-                solr_add([IndexMMD._solr_update_parent_doc(parent["doc"])])
+                set_parent_flag(pid, solr_client=solr_client)
             parent_ids_processed.add(pid)
             parent_ids_pending.discard(pid)
         except Exception as e:
@@ -390,15 +382,12 @@ def main():
 
         solr_url = cfg["solrserver"] + cfg["solrcore"]
         authentication = _resolve_authentication(cfg)
+        solr_client = pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=authentication)
 
-        # BulkIndexer uses the shared tools.solr_add() client; initialize it here.
-        initSolr(
-            solr_url,
-            pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=authentication),
-            authentication,
-        )
         logger.info("Solr connection establised: %s", solr_url)
-        solr_ping()
+        pong = solr_client.ping()
+        status = pong if isinstance(pong, str) else str(pong)
+        logger.info("Solr ping response: %s", status)
 
         # Keep parent marking as a focused operation.
         if args.mark_parent:
@@ -432,8 +421,6 @@ def main():
             process_count = 1
 
         thumbnails_enabled = _resolve_thumbnail_flags(args, cfg)
-        # Thumbnail generation is handled only for NBS scope.
-        thumb_class = None
 
         logger.info(
             "Starting indexing with files=%d workers=%d chunksize=%d processes=%d thumbnails=%s",
@@ -464,7 +451,7 @@ def main():
                 chunksize=chunksize,
                 auth=authentication,
                 tflg=thumbnails_enabled,
-                thumbClass=thumb_class,
+                solr_client=solr_client,
                 config=cfg,
             )
             result = bulk.bulkindex(files)
@@ -552,7 +539,7 @@ def _format_error_message(exc, args):
     return f"Indexing failed ({exc_type}): {exc_str}"
 
 
-def _main():  # pragma: no cover
+def _main() -> None:  # pragma: no cover
     """Compatibility entry point used by console_scripts in setup.cfg."""
     try:
         main()

@@ -40,11 +40,11 @@ __all__ = ["IndexMMD", "MMD4SolR", "BulkIndexer"]
 
 
 class InfoFilter(logging.Filter):
-    def filter(self, rec):
+    def filter(self, rec: logging.LogRecord) -> bool:
         return rec.levelno == logging.INFO
 
 
-def _init_logging(log_obj):
+def _init_logging(log_obj: logging.Logger) -> None:
     """Initialize package logging from environment variables.
 
     Behavior:

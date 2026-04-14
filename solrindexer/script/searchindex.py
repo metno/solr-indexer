@@ -95,7 +95,7 @@ def _print_pretty_xml(xml_text):
     print(formatted_xml)
 
 
-def parse_arguments():
+def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
 
     parser.add_argument("-c", "--cfg", dest="cfgfile", help="Configuration file", required=True)
@@ -115,7 +115,7 @@ def parse_arguments():
     args = parser.parse_args()
 
     if args.cfgfile is None or args.string is None:
-        parser.logger.info_help()
+        parser.print_help()
         parser.exit()
 
     return args
@@ -229,7 +229,7 @@ class IndexMMD:
         return results
 
 
-def main():
+def main() -> int:
 
     #  Parse command line arguments
     try:
@@ -325,10 +325,10 @@ def main():
     else:
         logger.info("Search contained no results")
 
-    return
+    return 0
 
 
-def _main():  # pragma: no cover
+def _main() -> None:  # pragma: no cover
     try:
         main()  # entry point in setup.cfg
     except ValueError as e:

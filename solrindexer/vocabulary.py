@@ -30,6 +30,7 @@ import tempfile
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Any, Optional
 from urllib.parse import urlparse
 
 import requests
@@ -117,7 +118,7 @@ class VocabularyLoader(VocabularyBackend):
         self._build_cache()
         logger.info(f"Loaded {len(self._cache)} vocabulary collections")
 
-    def _build_cache(self):
+    def _build_cache(self) -> None:
         """Build vocabulary cache from RDF graph.
 
         Extracts all SKOS collections and their member concepts,
@@ -188,20 +189,20 @@ class VocabularyLegacy(VocabularyBackend):
     """
 
     @staticmethod
-    def _import_mmdgroup():
+    def _import_mmdgroup() -> object:
         """Helper method to import MMDGroup. Can be mocked in tests."""
         from metvocab.mmdgroup import MMDGroup
 
         return MMDGroup
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize legacy metvocab backend.
 
         Raises:
             ImportError: If metvocab is not installed
         """
         try:
-            self.MMDGroup = self._import_mmdgroup()
+            self.MMDGroup: Any = self._import_mmdgroup()
             logger.info("Using legacy metvocab backend for vocabulary validation")
         except ImportError:
             logger.error(
@@ -210,7 +211,7 @@ class VocabularyLegacy(VocabularyBackend):
             )
             raise
 
-        self._groups_cache: dict[str, MMDGroup] = {}  # noqa: F821
+        self._groups_cache: dict[str, Any] = {}
 
     def search(self, vocab_uri: str, value: str) -> bool:
         """
@@ -267,7 +268,7 @@ class VocabularyRestSkosmos(VocabularyBackend):
         endpoint_base_url: str,
         endpoint_timeout: float = 20.0,
         cache_ttl: float = 86400.0,
-        cache_dir: str | None = None,
+        cache_dir: Optional[str] = None,
     ):
         if not RDFLIB_AVAILABLE:
             raise ValueError(
@@ -336,14 +337,14 @@ class VocabularyRestSkosmos(VocabularyBackend):
         root = f"{parsed.scheme}://{parsed.netloc}"
         return f"{root}/rest/v1/{vocab_name}"
 
-    def _cache_path(self, vocab_uri: str) -> Path | None:
+    def _cache_path(self, vocab_uri: str) -> Optional[Path]:
         """Return the pickle file path for *vocab_uri*, or None if caching is disabled."""
         if self._cache_dir is None:
             return None
         digest = hashlib.sha256(vocab_uri.encode()).hexdigest()[:24]
         return self._cache_dir / f"v{self._CACHE_VERSION}_{digest}.pkl"
 
-    def _read_disk_cache(self, vocab_uri: str) -> set[str] | None:
+    def _read_disk_cache(self, vocab_uri: str) -> Optional[set[str]]:
         """Return cached labels from disk if still fresh, else None."""
         path = self._cache_path(vocab_uri)
         if path is None or not path.exists():
@@ -439,13 +440,13 @@ class VocabularyRestSkosmos(VocabularyBackend):
 
 
 def create_vocabulary_loader(
-    ttl_path: str | None = None,
+    ttl_path: Optional[str] = None,
     backend: str = "native",
     endpoint_base_url: str = "https://vocab.met.no/mmd",
     endpoint_timeout: float = 20.0,
     cache_ttl: float = 86400.0,
-    cache_dir: str | None = None,
-) -> VocabularyBackend | None:
+    cache_dir: Optional[str] = None,
+) -> Optional[VocabularyBackend]:
     """
     Factory function to create appropriate vocabulary backend.
 

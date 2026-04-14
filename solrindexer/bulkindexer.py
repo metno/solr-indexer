@@ -24,13 +24,14 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from solrindexer.failure_tracker import FailureTracker
-from solrindexer.indexdata import IndexMMD, MMD4SolR
+from solrindexer.indexdata import MMD4SolR
 from solrindexer.multithread.io import load_file
 from solrindexer.multithread.threads import multiprocess
 from solrindexer.tools import (
     add_nbs_thumbnail_bulk,
     get_dataset,
     process_feature_type,
+    set_parent_flag,
     solr_add,
     to_solr_id,
 )
@@ -65,7 +66,7 @@ class BulkIndexer:
         chunksize=2500,
         auth=None,
         tflg=False,
-        thumbClass=None,
+        solr_client=None,
         config=None,
         failure_tracker=None,
     ):
@@ -76,7 +77,9 @@ class BulkIndexer:
         self.chunksize = chunksize
         self.total_in = len(inputList)
         self.indexthreads = []
-        self.thumbClass = thumbClass
+        self.solr_url = solr_url
+        self.auth = auth
+        self.solr_client = solr_client
         self.config = config
         self.failure_tracker = failure_tracker or FailureTracker()
 
@@ -107,13 +110,7 @@ class BulkIndexer:
                 logger.error(f"Failed to initialize vocabulary loader: {e}")
                 logger.warning("Continuing without vocabulary validation")
 
-        # self.solrcon = pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=auth)
-        # self.  = IndexMMD(solr_url, False, authentication=auth)
-
-        """Initialize thumbnail generator"""
         self.tflg = tflg
-        #     self.thumb = thumbClass
-        #     initThumb(thumbClass)
 
     def mmd2solr(self, mmd, status, file):
         """
@@ -321,8 +318,11 @@ class BulkIndexer:
         pst = time.process_time()
         file_ids = file_ids or {}
 
+        if self.solr_client is None:
+            raise ValueError("BulkIndexer requires a configured Solr client")
+
         try:
-            solr_add(docs)
+            solr_add(docs, solr_client=self.solr_client)
         # Handle failing indexing
         except Exception as e:
             tname = threading.current_thread().name
@@ -441,19 +441,17 @@ class BulkIndexer:
             logger.debug("parents found in this chunk: %s", parent)
 
             if parent:
-                myparent = parent.pop()
+                myparent = parent[0]
                 logger.debug("parent found in current chunk: %s", myparent["id"])
                 parent_found = True
                 if myparent["isParent"] is False:
                     logger.debug("found pending parent %s in this job — updating", pid)
-                    docs.remove(myparent)
                     myparent.update({"isParent": True})
-                    docs.append(myparent)
                     parent_ids_pending.discard(pid)
                     parent_ids_processed.add(pid)
 
             if pid in doc_ids_processed and not parent_found:
-                myparent = get_dataset(pid)
+                myparent = get_dataset(pid, solr_client=self.solr_client)
                 if myparent is not None:
                     if myparent["doc"] is None:
                         if pid not in parent_ids_pending:
@@ -462,7 +460,7 @@ class BulkIndexer:
                     elif myparent["doc"]["isParent"] is False:
                         logger.debug("Update on indexed parent %s, isParent: True", pid)
                         try:
-                            solr_add([IndexMMD._solr_update_parent_doc(myparent["doc"])])
+                            set_parent_flag(pid, solr_client=self.solr_client)
                         except Exception as e:
                             logger.error("Could not update parent in index. reason: %s", e)
                         parent_ids_processed.add(pid)
@@ -476,19 +474,17 @@ class BulkIndexer:
                 parent_found = False
                 parent = [el for el in docs if el["id"] == pid]
                 if parent:
-                    myparent = parent.pop()
+                    myparent = parent[0]
                     logger.debug("pending parent found in current chunk: %s", myparent["id"])
                     parent_found = True
                     if myparent["isParent"] is False:
                         logger.debug("found unprocessed pending parent %s — updating", pid)
-                        docs.remove(myparent)
                         myparent.update({"isParent": True})
-                        docs.append(myparent)
                         parent_ids_pending.discard(pid)
                         parent_ids_processed.add(pid)
 
                 if pid in doc_ids_processed and not parent_found:
-                    myparent = get_dataset(pid)
+                    myparent = get_dataset(pid, solr_client=self.solr_client)
                     if myparent is not None and myparent["doc"] is not None:
                         logger.debug(
                             "pending parent found in index: %s, isParent: %s",
@@ -498,7 +494,7 @@ class BulkIndexer:
                         if myparent["doc"]["isParent"] is False:
                             logger.debug("Update on indexed parent %s, isParent: True", pid)
                             try:
-                                solr_add([IndexMMD._solr_update_parent_doc(myparent["doc"])])
+                                set_parent_flag(pid, solr_client=self.solr_client)
                             except Exception as e:
                                 logger.error("Could not update parent. reason: %s", e)
                             parent_ids_processed.add(pid)
@@ -690,11 +686,12 @@ class BulkIndexer:
                 thumb_docs = [doc for doc in chunk_docs if "data_access_url_ogc_wms" in doc]
                 if thumb_docs and nbs_scope:
                     t_thumb_chunk_start = time.perf_counter()
+                    thumb_inputs = [(doc, self.config or {}) for doc in thumb_docs]
                     if self._should_use_process_pool(len(thumb_docs)):
                         logger.info("---- Creating thumbnails concurrently %d ----", self.threads)
-                        for doc, newdoc in multiprocess(
+                        for (doc, _), newdoc in multiprocess(
                             fn=add_nbs_thumbnail_bulk,
-                            inputs=thumb_docs,
+                            inputs=thumb_inputs,
                             max_concurrency=self.threads,
                         ):
                             chunk_docs.remove(doc)
@@ -705,7 +702,7 @@ class BulkIndexer:
                             len(thumb_docs),
                         )
                         for doc in thumb_docs:
-                            newdoc = add_nbs_thumbnail_bulk(doc)
+                            newdoc = add_nbs_thumbnail_bulk((doc, self.config or {}))
                             chunk_docs.remove(doc)
                             chunk_docs.append(newdoc)
                     t_thumb_chunk = time.perf_counter() - t_thumb_chunk_start
@@ -741,7 +738,7 @@ class BulkIndexer:
             logger.info(" --- Final parent/child integrity pass --- ")
             logger.debug("Checking %d unresolved parent IDs", len(ppending))
             for pid in ppending:
-                myparent = get_dataset(pid)
+                myparent = get_dataset(pid, solr_client=self.solr_client)
                 if myparent is not None and myparent.get("doc") is not None:
                     logger.debug(
                         "pending parent found in index: %s, isParent: %s",
@@ -751,7 +748,7 @@ class BulkIndexer:
                     if myparent["doc"]["isParent"] is False:
                         logger.debug("Update on indexed parent %s, isParent: True", pid)
                         try:
-                            solr_add([IndexMMD._solr_update_parent_doc(myparent["doc"])])
+                            set_parent_flag(pid, solr_client=self.solr_client)
                         except Exception as e:
                             logger.error("Could not update parent. reason: %s", e)
                         parent_ids_processed.add(pid)

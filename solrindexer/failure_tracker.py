@@ -20,6 +20,7 @@ permissions and limitations under the License.
 import logging
 import os
 from dataclasses import dataclass, field
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ class FailureRecord:
     """Record of a single document processing failure."""
 
     filename: str
-    metadata_identifier: str = None
+    metadata_identifier: Optional[str] = None
     error_message: str = ""
     error_stage: str = ""  # e.g., "parsing", "validation", "conversion", "indexing"
 
@@ -39,7 +40,7 @@ class WarningRecord:
     """Record of a single document processing warning."""
 
     filename: str
-    metadata_identifier: str = None
+    metadata_identifier: Optional[str] = None
     warning_message: str = ""
     warning_stage: str = ""  # e.g., "validation", "conversion"
 
@@ -64,7 +65,7 @@ class FailureTracker:
         filename: str,
         error_message: str,
         error_stage: str = "",
-        metadata_identifier: str = None,
+        metadata_identifier: Optional[str] = None,
     ) -> None:
         """
         Record a processing failure.
@@ -93,7 +94,7 @@ class FailureTracker:
         filename: str,
         warning_message: str,
         warning_stage: str = "",
-        metadata_identifier: str = None,
+        metadata_identifier: Optional[str] = None,
     ) -> None:
         """Record a processing warning."""
         record = WarningRecord(
@@ -132,7 +133,7 @@ class FailureTracker:
 
         if self.failures:
             # Group failures by filename for better readability
-            by_filename = {}
+            by_filename: dict[str, list[FailureRecord]] = {}
             for failure in self.failures:
                 if failure.filename not in by_filename:
                     by_filename[failure.filename] = []
@@ -167,7 +168,7 @@ class FailureTracker:
             summary_lines.append("WARNING(S)")
             summary_lines.append("=" * 80)
 
-            by_warning_file = {}
+            by_warning_file: dict[str, list[WarningRecord]] = {}
             for warning in self.warnings:
                 if warning.filename not in by_warning_file:
                     by_warning_file[warning.filename] = []
