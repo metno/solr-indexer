@@ -53,30 +53,12 @@ def get_dataset(dataset_id, *, solr_client):
     Returns a dict containing a ``doc`` key to match existing call sites,
     e.g. ``{"doc": <doc or None>}``.
     """
+    path = f"/get?id={dataset_id}"
     try:
-        payload = solr_client._send_request(
-            "get",
-            "get",
-            params={"wt": "json", "id": dataset_id},
-        )
-        if isinstance(payload, str):
-            payload = json.loads(payload)
-        if isinstance(payload, dict):
-            if "doc" in payload:
-                return payload
-            docs = payload.get("response", {}).get("docs", [])
-            return {"doc": docs[0] if docs else None}
-    except Exception as exc:
-        logger.warning(
-            "Realtime get failed for id=%s. Falling back to search. Reason: %s",
-            dataset_id,
-            exc,
-        )
-
-    try:
-        result = solr_client.search(f'id:"{dataset_id}"', rows=1)
-        docs = list(result)
-        return {"doc": docs[0] if docs else None}
+        result = solr_client._send_request("get", path)
+        docs = json.loads(result)
+        logger.debug("Realtime GET, found parent: %s", docs if docs['doc'] is None else docs['doc']['id'])
+        return {"doc": docs['doc'] if docs['doc'] else None}
     except Exception as exc:
         logger.error("Could not fetch dataset id=%s from Solr: %s", dataset_id, exc)
         return None

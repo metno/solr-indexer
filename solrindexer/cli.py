@@ -9,6 +9,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 import pysolr
 from dotenv import load_dotenv
@@ -44,7 +45,7 @@ def main():
         else:
             cfg["scope"] = cfg.get("scope")
 
-        solr_url = cfg["solrserver"] + cfg["solrcore"]
+        solr_url = _build_solr_url(cfg)
         authentication = _resolve_authentication(cfg)
         solr_client = pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=authentication)
 
@@ -509,6 +510,37 @@ def _resolve_thumbnail_flags(args, cfg):
         logger.warning("Thumbnail generation is only supported for NBS scope in this version")
         return False
     return enabled
+
+
+def _build_solr_url(cfg):
+    """Build and validate full Solr core URL from config.
+
+    Requires `solrserver` to end with `/` so that concatenating
+    `solrcore` yields a valid core URL.
+    """
+    solr_server = str(cfg.get("solrserver", "")).strip()
+    solr_core = str(cfg.get("solrcore", "")).strip()
+
+    if not solr_server:
+        raise ValueError("Missing required config key 'solrserver'.")
+    if not solr_core:
+        raise ValueError("Missing required config key 'solrcore'.")
+
+    if not solr_server.endswith("/"):
+        raise ValueError(
+            "Invalid 'solrserver' in config: missing trailing '/'. "
+            "Use a value like 'http://localhost:8983/solr/'."
+        )
+
+    solr_url = solr_server + solr_core
+    parsed = urlparse(solr_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError(
+            "Invalid Solr URL built from config keys 'solrserver' + 'solrcore': "
+            f"'{solr_url}'."
+        )
+
+    return solr_url
 
 
 def _format_error_message(exc, args):

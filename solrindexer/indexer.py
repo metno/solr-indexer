@@ -81,6 +81,12 @@ class BulkIndexer:
         self.solr_url = solr_url
         self.auth = auth
         self.solr_client = solr_client
+        if self.solr_client is not None:
+            try:
+                _ = self.solr_client.get_session()  # Eagerly initialize session
+                logger.debug("Solr session initialized")
+            except Exception as e:
+                logger.warning("Failed to eagerly initialize Solr session: %s", e)
         self.config = config
         self.failure_tracker = failure_tracker or FailureTracker()
 
