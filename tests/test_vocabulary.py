@@ -21,6 +21,7 @@ import os
 import pickle
 import time
 from pathlib import Path
+from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -78,7 +79,7 @@ def _vocabulary_ttl_candidates() -> list[Path]:
     return unique_candidates
 
 
-def _resolve_vocabulary_ttl() -> Path | None:
+def _resolve_vocabulary_ttl() -> Optional[Path]:
     """Return the first existing vocabulary TTL path, if any."""
     for candidate in _vocabulary_ttl_candidates():
         if candidate.exists():
