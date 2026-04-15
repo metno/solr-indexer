@@ -117,6 +117,12 @@ threads: 20
 # Default: 20.0
 #vocabulary-endpoint-timeout: 20.0
 
+# Directory for persistent REST vocabulary cache files.
+# Useful on compute clusters where /tmp is frequently cleared.
+# If omitted, cache is stored under /tmp (system temp dir).
+# Example: /mnt/shared/solrindexer/vocab-cache
+#vocabulary-cache-dir: /mnt/shared/solrindexer/vocab-cache
+
 # ---------------------------------------------------------------------------
 # NBS thumbnail lookup (Optional — NBS scope only)
 # ---------------------------------------------------------------------------

@@ -18,6 +18,7 @@ permissions and limitations under the License.
 """
 
 import logging
+import os
 import re
 import threading
 import time
@@ -95,12 +96,22 @@ class BulkIndexer:
             vocabulary_endpoint_timeout = float(
                 self.config.get("vocabulary-endpoint-timeout", 20.0)
             )
+            vocabulary_cache_dir = self.config.get("vocabulary-cache-dir")
+            if isinstance(vocabulary_cache_dir, str):
+                vocabulary_cache_dir = vocabulary_cache_dir.strip()
+                if vocabulary_cache_dir:
+                    vocabulary_cache_dir = os.path.expanduser(
+                        os.path.expandvars(vocabulary_cache_dir)
+                    )
+                else:
+                    vocabulary_cache_dir = None
             try:
                 self.vocabulary_loader = create_vocabulary_loader(
                     ttl_path=vocabulary_ttl_path,
                     backend=vocabulary_backend,
                     endpoint_base_url=vocabulary_endpoint_base_url,
                     endpoint_timeout=vocabulary_endpoint_timeout,
+                    cache_dir=vocabulary_cache_dir,
                 )
                 if self.vocabulary_loader is not None:
                     logger.info(
@@ -725,7 +736,7 @@ class BulkIndexer:
             t_index_dispatch_start = time.perf_counter()
             indexthread = threading.Thread(
                 target=self.add2solr,
-                name="Index thread %d" % (len(self.indexthreads) + 1),
+                name=f"Index thread {(len(self.indexthreads) + 1)}",
                 args=(chunk_docs, chunk_file_ids),
             )
             indexthread.start()

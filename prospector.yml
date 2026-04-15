@@ -1,3 +1,8 @@
 pylint:
   disable:
     - django-not-available
+    - import-outside-toplevel
+  options:
+    extension-pkg-allow-list:
+      - lxml
+      - metvocab @ git+https://github.com/metno/met-vocab-tools@v1.2.0

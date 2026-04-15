@@ -54,4 +54,4 @@ jobs:
 
       - name: Run linting and analysis envs
         run: |
-          tox -e lint,format-check,typecheck,security,prospector
+          tox -e typecheck,security

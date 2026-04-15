@@ -135,6 +135,7 @@ authentication is disabled.
 | `vocabulary-ttl-path` | — | Path to a local MMD vocabulary TTL file (used with `native` backend) |
 | `vocabulary-endpoint-base-url` | `https://vocab.met.no/mmd` | Base URL for REST Skosmos vocabulary lookups |
 | `vocabulary-endpoint-timeout` | `20.0` | HTTP timeout (seconds) for REST vocabulary requests |
+| `vocabulary-cache-dir` | system temp (`/tmp/...`) | Directory for persisted REST vocabulary cache files; set to shared storage on multi-node clusters |
 | `nbs-thumbnails-base-path` | — | Filesystem root where NBS `thumbnail.png` files are stored |
 | `nbs-thumbnails-base-url` | — | Public base URL from which NBS thumbnails are served |
 | `scope` | — | Set to `NBS` to enable NBS-specific thumbnail lookup |
