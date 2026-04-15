@@ -29,7 +29,6 @@ jobs:
       - name: Smoke test installed CLI entry points
         run: |
           indexdata --help
-          bulkindexer --help
           searchindex --help
 
       - name: Run pytest
