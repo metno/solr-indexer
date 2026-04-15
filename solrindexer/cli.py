@@ -19,7 +19,7 @@ from solrindexer.failure_tracker import FailureTracker
 from solrindexer.indexer import BulkIndexer
 from solrindexer.mmd import IndexMMD
 from solrindexer.search import parse_cfg
-from solrindexer.tools import get_dataset, set_parent_flag, to_solr_id
+from solrindexer.tools import resolve_parent_ids, to_solr_id
 
 logger = logging.getLogger(__name__)
 
@@ -124,11 +124,23 @@ def main():
             )
             result = bulk.bulkindex(files)
 
-        if result and len(result) >= 8:
-            docs_failed = result[4]
-            docs_indexed = result[5]
-            files_processed = result[6]
-            failure_tracker = result[7]
+        if result and len(result) >= 5:
+            parent_ids_referenced = set(result[0])
+            docs_failed = result[1]
+            docs_indexed = result[2]
+            files_processed = result[3]
+            failure_tracker = result[4]
+
+            unresolved_parent_ids = _resolve_referenced_parents(
+                solr_url=solr_url,
+                authentication=authentication,
+                parent_ids_referenced=parent_ids_referenced,
+            )
+            _report_parent_integrity(
+                parent_ids_referenced=parent_ids_referenced,
+                unresolved_parent_ids=unresolved_parent_ids,
+                failure_tracker=failure_tracker,
+            )
 
             logger.info(
                 "Indexing summary: files_processed=%d  docs_indexed=%d  docs_skipped/failed=%d",
@@ -276,7 +288,7 @@ def _bulkindex_worker(
             config=cfg,
         )
         result = bulk.bulkindex(shard_files)
-        if not result or len(result) < 8:
+        if not result or len(result) < 5:
             result_queue.put(
                 {
                     "worker_id": worker_id,
@@ -286,18 +298,15 @@ def _bulkindex_worker(
             )
             return
 
-        failure_tracker = result[7]
+        failure_tracker = result[4]
         result_queue.put(
             {
                 "worker_id": worker_id,
                 "ok": True,
-                "parent_ids_found": list(result[0]),
-                "parent_ids_pending": list(result[1]),
-                "parent_ids_processed": list(result[2]),
-                "doc_ids_processed": list(result[3]),
-                "docs_failed": result[4],
-                "docs_indexed": result[5],
-                "files_processed": result[6],
+                "parent_ids_referenced": list(result[0]),
+                "docs_failed": result[1],
+                "docs_indexed": result[2],
+                "files_processed": result[3],
                 "failures": [vars(f) for f in failure_tracker.failures],
                 "warnings": [vars(w) for w in failure_tracker.warnings],
             }
@@ -312,28 +321,41 @@ def _bulkindex_worker(
         )
 
 
-def _resolve_pending_parents(solr_url, authentication, parent_ids_pending, parent_ids_processed):
-    """Resolve any remaining pending parent IDs after all workers finish."""
-    if not parent_ids_pending:
-        return
+def _resolve_referenced_parents(solr_url, authentication, parent_ids_referenced):
+    """Resolve referenced parent IDs after indexing completes."""
+    if not parent_ids_referenced:
+        return None
 
     try:
         solr_client = pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=authentication)
-    except Exception as e:
-        logger.warning("Could not reinitialize Solr client for final parent pass: %s", e)
+    except Exception as exc:
+        logger.warning("Could not reinitialize Solr client for final parent pass: %s", exc)
+        return set(parent_ids_referenced)
+
+    return resolve_parent_ids(parent_ids_referenced, solr_client=solr_client)
+
+
+def _report_parent_integrity(parent_ids_referenced, unresolved_parent_ids, failure_tracker):
+    """Log final parent/child integrity summary and warnings."""
+    if not parent_ids_referenced:
         return
 
-    for pid in list(parent_ids_pending):
-        try:
-            parent = get_dataset(pid, solr_client=solr_client)
-            if parent is None or parent.get("doc") is None:
-                continue
-            if parent["doc"].get("isParent") is False:
-                set_parent_flag(pid, solr_client=solr_client)
-            parent_ids_processed.add(pid)
-            parent_ids_pending.discard(pid)
-        except Exception as e:
-            logger.warning("Final parent update failed for %s: %s", pid, e)
+    logger.info(" --- Parent/child integrity summary --- ")
+    logger.info("Parents referenced: %d", len(parent_ids_referenced))
+
+    if not unresolved_parent_ids:
+        logger.info("All referenced parents resolved.")
+        return
+
+    logger.warning("Unresolved parent IDs referenced by child documents:")
+    for parent_id in sorted(unresolved_parent_ids):
+        logger.warning("  %s", parent_id)
+        failure_tracker.add_warning(
+            filename="unknown",
+            warning_message="Referenced parent not found or could not be updated in Solr",
+            warning_stage="parent_integrity",
+            metadata_identifier=parent_id,
+        )
 
 
 def _run_bulkindex_multiprocess(
@@ -386,10 +408,7 @@ def _run_bulkindex_multiprocess(
         proc.join()
 
     merged_failure_tracker = FailureTracker()
-    parent_ids_found = set()
-    parent_ids_pending = set()
-    parent_ids_processed = set()
-    doc_ids_processed = set()
+    parent_ids_referenced = set()
     docs_failed = 0
     docs_indexed = 0
     files_processed = 0
@@ -402,10 +421,7 @@ def _run_bulkindex_multiprocess(
             )
             continue
 
-        parent_ids_found.update(payload.get("parent_ids_found", []))
-        parent_ids_pending.update(payload.get("parent_ids_pending", []))
-        parent_ids_processed.update(payload.get("parent_ids_processed", []))
-        doc_ids_processed.update(payload.get("doc_ids_processed", []))
+        parent_ids_referenced.update(payload.get("parent_ids_referenced", []))
         docs_failed += int(payload.get("docs_failed", 0))
         docs_indexed += int(payload.get("docs_indexed", 0))
         files_processed += int(payload.get("files_processed", 0))
@@ -426,25 +442,11 @@ def _run_bulkindex_multiprocess(
                 metadata_identifier=warning.get("metadata_identifier"),
             )
 
-    # Pending cannot include IDs already processed by any worker.
-    parent_ids_pending -= parent_ids_processed
-
-    authentication = _resolve_authentication(cfg)
-    _resolve_pending_parents(
-        solr_url=solr_url,
-        authentication=authentication,
-        parent_ids_pending=parent_ids_pending,
-        parent_ids_processed=parent_ids_processed,
-    )
-
     if worker_errors:
         raise RuntimeError("Multi-process bulkindex failed: " + "; ".join(worker_errors))
 
     return (
-        parent_ids_found,
-        parent_ids_pending,
-        parent_ids_processed,
-        doc_ids_processed,
+        parent_ids_referenced,
         docs_failed,
         docs_indexed,
         files_processed,
@@ -536,8 +538,7 @@ def _build_solr_url(cfg):
     parsed = urlparse(solr_url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise ValueError(
-            "Invalid Solr URL built from config keys 'solrserver' + 'solrcore': "
-            f"'{solr_url}'."
+            f"Invalid Solr URL built from config keys 'solrserver' + 'solrcore': '{solr_url}'."
         )
 
     return solr_url

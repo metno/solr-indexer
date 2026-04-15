@@ -57,8 +57,10 @@ def get_dataset(dataset_id, *, solr_client):
     try:
         result = solr_client._send_request("get", path)
         docs = json.loads(result)
-        logger.debug("Realtime GET, found parent: %s", docs if docs['doc'] is None else docs['doc']['id'])
-        return {"doc": docs['doc'] if docs['doc'] else None}
+        logger.debug(
+            "Realtime GET, found parent: %s", docs if docs["doc"] is None else docs["doc"]["id"]
+        )
+        return {"doc": docs["doc"] if docs["doc"] else None}
     except Exception as exc:
         logger.error("Could not fetch dataset id=%s from Solr: %s", dataset_id, exc)
         return None
@@ -80,6 +82,39 @@ def set_parent_flag(parent_id, *, solr_client):
         ],
         solr_client=solr_client,
     )
+
+
+def resolve_parent_ids(parent_ids, *, solr_client):
+    """Resolve referenced parent IDs in Solr.
+
+    Returns ``None`` when all parent IDs are resolved. Otherwise returns a
+    set containing the unresolved parent IDs.
+    """
+    unresolved_parent_ids = set(parent_ids)
+    if not unresolved_parent_ids:
+        return None
+
+    logger.info(" --- Final parent/child integrity pass --- ")
+    logger.debug("Checking %d referenced parent IDs", len(unresolved_parent_ids))
+
+    for parent_id in list(unresolved_parent_ids):
+        try:
+            parent = get_dataset(parent_id, solr_client=solr_client)
+            if parent is None or parent.get("doc") is None:
+                logger.debug("Referenced parent %s not found in Solr", parent_id)
+                continue
+
+            if parent["doc"].get("isParent") is False:
+                logger.debug("Update on indexed parent %s, isParent: True", parent_id)
+                set_parent_flag(parent_id, solr_client=solr_client)
+
+            unresolved_parent_ids.discard(parent_id)
+        except Exception as exc:
+            logger.warning("Final parent update failed for %s: %s", parent_id, exc)
+
+    if unresolved_parent_ids:
+        return unresolved_parent_ids
+    return None
 
 
 def to_solr_id(metadata_id):

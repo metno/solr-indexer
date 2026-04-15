@@ -7,6 +7,7 @@ from solrindexer.tools import (
     checkDateFormat,
     parse_date,
     process_feature_type,
+    resolve_parent_ids,
     to_solr_id,
 )
 
@@ -162,3 +163,46 @@ class TestProcessFeatureType:
 
         assert err is None
         assert "feature_type" not in result_doc
+
+
+class TestResolveParentIds:
+    """Tests for the final parent resolution helper."""
+
+    @pytest.mark.indexdata
+    def test_empty_parent_ids_returns_none(self):
+        assert resolve_parent_ids(set(), solr_client=MagicMock()) is None
+
+    @pytest.mark.indexdata
+    def test_existing_parent_already_marked_resolves_without_update(self):
+        solr_client = MagicMock()
+
+        with patch(
+            "solrindexer.tools.get_dataset",
+            return_value={"doc": {"id": "parent-1", "isParent": True}},
+        ), patch("solrindexer.tools.set_parent_flag") as set_parent_flag_mock:
+            result = resolve_parent_ids({"parent-1"}, solr_client=solr_client)
+
+        assert result is None
+        set_parent_flag_mock.assert_not_called()
+
+    @pytest.mark.indexdata
+    def test_existing_parent_updates_and_resolves(self):
+        solr_client = MagicMock()
+
+        with patch(
+            "solrindexer.tools.get_dataset",
+            return_value={"doc": {"id": "parent-1", "isParent": False}},
+        ), patch("solrindexer.tools.set_parent_flag") as set_parent_flag_mock:
+            result = resolve_parent_ids({"parent-1"}, solr_client=solr_client)
+
+        assert result is None
+        set_parent_flag_mock.assert_called_once_with("parent-1", solr_client=solr_client)
+
+    @pytest.mark.indexdata
+    def test_missing_parent_is_returned_as_unresolved(self):
+        solr_client = MagicMock()
+
+        with patch("solrindexer.tools.get_dataset", return_value={"doc": None}):
+            result = resolve_parent_ids({"parent-1"}, solr_client=solr_client)
+
+        assert result == {"parent-1"}
