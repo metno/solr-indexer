@@ -108,8 +108,8 @@ class BulkIndexer:
                         vocabulary_backend,
                     )
             except Exception as e:
-                logger.error("Failed to initialize vocabulary loader: %s", e)
-                logger.warning("Continuing without vocabulary validation")
+                logger.error("❌ Failed to initialize vocabulary loader: %s", e)
+                logger.warning("⚠️  Continuing without vocabulary validation")
 
         self.tflg = tflg
 

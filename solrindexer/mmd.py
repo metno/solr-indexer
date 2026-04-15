@@ -1087,7 +1087,7 @@ class IndexMMD:
             res = requests.get(
                 base_url + "/admin/cores?wt=json&action=STATUS&core=" + core,
                 auth=self.authentication,
-                timeout=20
+                timeout=20,
             )
             res.raise_for_status()
         except requests.exceptions.HTTPError as errh:

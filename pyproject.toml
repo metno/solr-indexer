@@ -61,7 +61,7 @@ Homepage = "https://github.com/metno/solrindexing"
 "Bug Tracker" = "https://github.com/metno/solrindexing/issues"
 
 [project.scripts]
-indexdata = "solrindexer.cli:_main"
+indexdata = "solrindexer.cli:main"
 searchindex = "solrindexer.search:_main"
 
 [tool.setuptools]

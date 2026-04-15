@@ -26,6 +26,157 @@ DEFAULT_THREADS = 20
 DEFAULT_CHUNKSIZE = 2500
 
 
+def main():
+    start_dt = datetime.now().astimezone()
+    start_wall = time.perf_counter()
+    start_cpu = time.process_time()
+
+    try:
+        args = parse_arguments()
+        try:
+            cfg = parse_cfg(args.cfgfile)
+        except (FileNotFoundError, ValueError) as e:
+            logger.error("%s", str(e))
+            sys.exit(1)
+
+        if args.nbs:
+            cfg["scope"] = "NBS"
+        else:
+            cfg["scope"] = cfg.get("scope")
+
+        solr_url = cfg["solrserver"] + cfg["solrcore"]
+        authentication = _resolve_authentication(cfg)
+        solr_client = pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=authentication)
+
+        logger.info("Solr connection establised: %s", solr_url)
+        pong = solr_client.ping()
+        status = pong if isinstance(pong, str) else str(pong)
+        logger.info("Solr ping response: %s", status)
+
+        # Keep parent marking as a focused operation.
+        if args.mark_parent:
+            indexer = IndexMMD(solr_url, args.always_commit, authentication, cfg)
+            status, msg = indexer.update_parent(to_solr_id(args.mark_parent.strip()))
+            logger.info("Parent update status=%s message=%s", status, msg)
+            sys.exit(int(status))
+
+        files = _resolve_input_files(args)
+        if not files:
+            raise ValueError("No input files found")
+
+        configured_threads = (
+            args.threads if args.threads is not None else int(cfg.get("threads", DEFAULT_THREADS))
+        )
+        # Use single worker for single file input, multiple workers for batch inputs
+        if args.input_file:
+            workers = 1
+            logger.debug("Single file input: using 1 worker (sequential processing)")
+        else:
+            workers = configured_threads
+            logger.debug(
+                "Multiple file input: using %d workers (concurrent processing)",
+                workers,
+            )
+        chunksize = (
+            args.chunksize
+            if args.chunksize is not None
+            else int(cfg.get("batch-size", DEFAULT_CHUNKSIZE))
+        )
+        process_count = max(1, int(args.processes or 1))
+        if args.input_file and process_count > 1:
+            logger.warning("Single input file mode: forcing --processes=1")
+            process_count = 1
+
+        thumbnails_enabled = _resolve_thumbnail_flags(args, cfg)
+
+        logger.info(
+            "Starting indexing with files=%d workers=%d chunksize=%d processes=%d thumbnails=%s",
+            len(files),
+            workers,
+            chunksize,
+            process_count,
+            thumbnails_enabled,
+        )
+
+        result = None
+        if process_count > 1 and len(files) > 1:
+            result = _run_bulkindex_multiprocess(
+                files=files,
+                process_count=process_count,
+                solr_url=solr_url,
+                cfg=cfg,
+                workers=workers,
+                chunksize=chunksize,
+                thumbnails_enabled=thumbnails_enabled,
+            )
+
+        if result is None:
+            bulk = BulkIndexer(
+                files,
+                solr_url,
+                threads=workers,
+                chunksize=chunksize,
+                auth=authentication,
+                tflg=thumbnails_enabled,
+                solr_client=solr_client,
+                config=cfg,
+            )
+            result = bulk.bulkindex(files)
+
+        if result and len(result) >= 8:
+            docs_failed = result[4]
+            docs_indexed = result[5]
+            files_processed = result[6]
+            failure_tracker = result[7]
+
+            logger.info(
+                "Indexing summary: files_processed=%d  docs_indexed=%d  docs_skipped/failed=%d",
+                files_processed,
+                docs_indexed,
+                docs_failed,
+            )
+            failure_tracker.log_summary()
+        else:
+            logger.info("Processed %s files.", len(files))
+
+        if cfg.get("end-solr-commit", False):
+            indexer = IndexMMD(solr_url, args.always_commit, authentication, cfg)
+            indexer.commit()
+            logger.info("Final Solr commit sent")
+
+        end_dt = datetime.now().astimezone()
+        wall_elapsed = time.perf_counter() - start_wall
+        cpu_elapsed = time.process_time() - start_cpu
+        cpu_util_pct = (cpu_elapsed / wall_elapsed * 100.0) if wall_elapsed > 0 else 0.0
+        peak_memory_mb = _get_peak_memory_mb()
+
+        if peak_memory_mb is None:
+            logger.info(
+                "Done | start=%s end=%s wall=%s cpu=%s cpu_util=%.1f%% peak_rss_mb=unavailable",
+                start_dt.isoformat(timespec="seconds"),
+                end_dt.isoformat(timespec="seconds"),
+                _format_duration(wall_elapsed),
+                _format_duration(cpu_elapsed),
+                cpu_util_pct,
+            )
+        else:
+            logger.info(
+                "Done | start=%s end=%s wall=%s cpu=%s cpu_util=%.1f%% peak_rss_mb=%.1f",
+                start_dt.isoformat(timespec="seconds"),
+                end_dt.isoformat(timespec="seconds"),
+                _format_duration(wall_elapsed),
+                _format_duration(cpu_elapsed),
+                cpu_util_pct,
+                peak_memory_mb,
+            )
+    except Exception as exc:
+        # args may not always be defined if exception occurs during arg parsing
+        # but it should be defined for most cases since parse_arguments is first
+        error_msg = _format_error_message(exc, args if "args" in locals() else None)
+        logger.error("%s", error_msg)
+        sys.exit(1)
+
+
 def _format_duration(seconds):
     """Format duration as HH:MM:SS."""
     return time.strftime("%H:%M:%S", time.gmtime(max(0.0, seconds)))
@@ -336,12 +487,10 @@ def _resolve_input_files(args):
         directory_path = Path(args.directory)
 
         if args.recursive:
-            # Use rglob for efficient recursive search of XML files
             for xml_file in sorted(directory_path.rglob("*.xml")):
                 if xml_file.is_file():
                     files.append(str(xml_file))
         else:
-            # Non-recursive: only look in top-level directory
             for name in os.listdir(args.directory):
                 if name.lower().endswith(".xml"):
                     files.append(os.path.join(args.directory, name))
@@ -360,157 +509,6 @@ def _resolve_thumbnail_flags(args, cfg):
         logger.warning("Thumbnail generation is only supported for NBS scope in this version")
         return False
     return enabled
-
-
-def main():
-    start_dt = datetime.now().astimezone()
-    start_wall = time.perf_counter()
-    start_cpu = time.process_time()
-
-    try:
-        args = parse_arguments()
-        try:
-            cfg = parse_cfg(args.cfgfile)
-        except (FileNotFoundError, ValueError) as e:
-            logger.error("%s", str(e))
-            sys.exit(1)
-
-        if args.nbs:
-            cfg["scope"] = "NBS"
-        else:
-            cfg["scope"] = cfg.get("scope")
-
-        solr_url = cfg["solrserver"] + cfg["solrcore"]
-        authentication = _resolve_authentication(cfg)
-        solr_client = pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=authentication)
-
-        logger.info("Solr connection establised: %s", solr_url)
-        pong = solr_client.ping()
-        status = pong if isinstance(pong, str) else str(pong)
-        logger.info("Solr ping response: %s", status)
-
-        # Keep parent marking as a focused operation.
-        if args.mark_parent:
-            indexer = IndexMMD(solr_url, args.always_commit, authentication, cfg)
-            status, msg = indexer.update_parent(to_solr_id(args.mark_parent.strip()))
-            logger.info("Parent update status=%s message=%s", status, msg)
-            sys.exit(int(status))
-
-        files = _resolve_input_files(args)
-        if not files:
-            raise ValueError("No input files found")
-
-        configured_threads = (
-            args.threads if args.threads is not None else int(cfg.get("threads", DEFAULT_THREADS))
-        )
-        # Use single worker for single file input, multiple workers for batch inputs
-        if args.input_file:
-            workers = 1
-            logger.debug("Single file input: using 1 worker (sequential processing)")
-        else:
-            workers = configured_threads
-            logger.debug(
-                "Multiple file input: using %d workers (concurrent processing)",
-                workers,
-            )
-        chunksize = (
-            args.chunksize
-            if args.chunksize is not None
-            else int(cfg.get("batch-size", DEFAULT_CHUNKSIZE))
-        )
-        process_count = max(1, int(args.processes or 1))
-        if args.input_file and process_count > 1:
-            logger.warning("Single input file mode: forcing --processes=1")
-            process_count = 1
-
-        thumbnails_enabled = _resolve_thumbnail_flags(args, cfg)
-
-        logger.info(
-            "Starting indexing with files=%d workers=%d chunksize=%d processes=%d thumbnails=%s",
-            len(files),
-            workers,
-            chunksize,
-            process_count,
-            thumbnails_enabled,
-        )
-
-        result = None
-        if process_count > 1 and len(files) > 1:
-            result = _run_bulkindex_multiprocess(
-                files=files,
-                process_count=process_count,
-                solr_url=solr_url,
-                cfg=cfg,
-                workers=workers,
-                chunksize=chunksize,
-                thumbnails_enabled=thumbnails_enabled,
-            )
-
-        if result is None:
-            bulk = BulkIndexer(
-                files,
-                solr_url,
-                threads=workers,
-                chunksize=chunksize,
-                auth=authentication,
-                tflg=thumbnails_enabled,
-                solr_client=solr_client,
-                config=cfg,
-            )
-            result = bulk.bulkindex(files)
-
-        if result and len(result) >= 8:
-            docs_failed = result[4]
-            docs_indexed = result[5]
-            files_processed = result[6]
-            failure_tracker = result[7]
-
-            logger.info(
-                "Indexing summary: files_processed=%d  docs_indexed=%d  docs_skipped/failed=%d",
-                files_processed,
-                docs_indexed,
-                docs_failed,
-            )
-            failure_tracker.log_summary()
-        else:
-            logger.info("Processed %s files.", len(files))
-
-        if cfg.get("end-solr-commit", False):
-            indexer = IndexMMD(solr_url, args.always_commit, authentication, cfg)
-            indexer.commit()
-            logger.info("Final Solr commit sent")
-
-        end_dt = datetime.now().astimezone()
-        wall_elapsed = time.perf_counter() - start_wall
-        cpu_elapsed = time.process_time() - start_cpu
-        cpu_util_pct = (cpu_elapsed / wall_elapsed * 100.0) if wall_elapsed > 0 else 0.0
-        peak_memory_mb = _get_peak_memory_mb()
-
-        if peak_memory_mb is None:
-            logger.info(
-                "Done | start=%s end=%s wall=%s cpu=%s cpu_util=%.1f%% peak_rss_mb=unavailable",
-                start_dt.isoformat(timespec="seconds"),
-                end_dt.isoformat(timespec="seconds"),
-                _format_duration(wall_elapsed),
-                _format_duration(cpu_elapsed),
-                cpu_util_pct,
-            )
-        else:
-            logger.info(
-                "Done | start=%s end=%s wall=%s cpu=%s cpu_util=%.1f%% peak_rss_mb=%.1f",
-                start_dt.isoformat(timespec="seconds"),
-                end_dt.isoformat(timespec="seconds"),
-                _format_duration(wall_elapsed),
-                _format_duration(cpu_elapsed),
-                cpu_util_pct,
-                peak_memory_mb,
-            )
-    except Exception as exc:
-        # args may not always be defined if exception occurs during arg parsing
-        # but it should be defined for most cases since parse_arguments is first
-        error_msg = _format_error_message(exc, args if "args" in locals() else None)
-        logger.error("%s", error_msg)
-        sys.exit(1)
 
 
 def _format_error_message(exc, args):
@@ -542,15 +540,5 @@ def _format_error_message(exc, args):
     return f"Indexing failed ({exc_type}): {exc_str}"
 
 
-def _main() -> None:  # pragma: no cover
-    """Compatibility entry point used by console_scripts in setup.cfg."""
-    try:
-        main()  # type: ignore[no-untyped-call]
-    except ValueError as exc:
-        print(exc)
-    except AttributeError as exc:
-        print(exc)
-
-
 if __name__ == "__main__":
-    _main()
+    main()  # type: ignore[no-untyped-call]
