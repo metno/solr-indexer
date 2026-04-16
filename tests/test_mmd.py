@@ -284,6 +284,27 @@ def test_extract_personnel_json_omits_empty_values_in_entry_and_contact_address(
 
 
 @pytest.mark.indexdata
+def test_extract_personnel_adds_email_and_uris_to_resources():
+    root = _make_mmd_with_personnel(
+        """<personnel>
+      <role>Technical contact</role>
+      <name uri="https://orcid.org/0000-1111-2222-3333">Ole Dole</name>
+      <organisation uri="https://ror.org/001n36p86">MET Norway</organisation>
+      <email>ole.dole@example.com</email>
+    </personnel>"""
+    )
+    doc = MMD4SolR(mydoc=root)
+    solr = {"resources": ["https://existing.example/resource"]}
+    doc._extract_personnel(solr)
+    assert solr["resources"] == [
+        "https://existing.example/resource",
+        "ole.dole@example.com",
+        "https://orcid.org/0000-1111-2222-3333",
+        "https://ror.org/001n36p86",
+    ]
+
+
+@pytest.mark.indexdata
 def test_extract_platform_required_fields():
     root = _make_mmd(
         """<platform>
@@ -298,8 +319,10 @@ def test_extract_platform_required_fields():
     assert solr["platform_short_name"] == ["Sentinel-1A"]
     assert solr["platform_long_name"] == ["Sentinel-1A (C-band SAR)"]
     assert solr["platform_name"] == ["Sentinel-1A"]
+    assert solr["platform_name_facet"] == ["Sentinel-1A"]
     assert "platform_resource" not in solr
     assert "platform_instrument_short_name" not in solr
+    assert "platform_instrument_name_facet" not in solr
     assert "platform_ancillary_cloud_coverage" not in solr
 
 
@@ -340,6 +363,8 @@ def test_extract_platform_full_with_instrument_and_ancillary():
     assert solr["platform_instrument_short_name"] == ["SAR-C"]
     assert solr["platform_instrument_long_name"] == ["Synthetic Aperture Radar C-band"]
     assert solr["platform_instrument_name"] == ["SAR-C"]
+    assert solr["platform_name_facet"] == ["Sentinel-1A"]
+    assert solr["platform_instrument_name_facet"] == ["SAR-C"]
     assert solr["platform_instrument_resource"] == ["https://example.com/instrument"]
     assert solr["platform_instrument_mode"] == ["IW"]
     assert solr["platform_instrument_polarisation"] == ["VV+VH"]
@@ -347,6 +372,10 @@ def test_extract_platform_full_with_instrument_and_ancillary():
     assert solr["platform_ancillary_cloud_coverage"] == [12.5]
     assert solr["platform_ancillary_scene_coverage"] == [95.0]
     assert solr["platform_ancillary_timeliness"] == ["NRT"]
+    assert solr["resources"] == [
+      "https://example.com/platform",
+      "https://example.com/instrument",
+    ]
 
     parsed = json.loads(solr["platform_json"])
     assert len(parsed) == 1
@@ -373,6 +402,7 @@ def test_extract_platform_multiple_platforms():
     assert solr["platform_short_name"] == ["Sentinel-1A", "Sentinel-2A"]
     assert solr["platform_long_name"] == ["Sentinel-1A SAR", "Sentinel-2A MSI"]
     assert solr["platform_name"] == ["Sentinel-1A", "Sentinel-2A"]
+    assert solr["platform_name_facet"] == ["Sentinel-1A", "Sentinel-2A"]
     parsed = json.loads(solr["platform_json"])
     assert len(parsed) == 2
 
@@ -391,6 +421,7 @@ def test_extract_platform_name_falls_back_to_long_name():
     assert "platform_short_name" not in solr
     assert solr["platform_long_name"] == ["Fallback Platform Name"]
     assert solr["platform_name"] == ["Fallback Platform Name"]
+    assert solr["platform_name_facet"] == ["Fallback Platform Name"]
 
 
 @pytest.mark.indexdata
@@ -410,6 +441,39 @@ def test_extract_platform_instrument_name_falls_back_to_long_name():
     assert "platform_instrument_short_name" not in solr
     assert solr["platform_instrument_long_name"] == ["Fallback Instrument Name"]
     assert solr["platform_instrument_name"] == ["Fallback Instrument Name"]
+    assert solr["platform_instrument_name_facet"] == ["Fallback Instrument Name"]
+
+
+@pytest.mark.indexdata
+def test_extract_platform_appends_resources_and_deduplicates_facets():
+    root = _make_mmd(
+        """<platform>
+          <short_name>Sentinel-1A</short_name>
+          <resource>https://example.com/shared-resource</resource>
+          <instrument>
+            <short_name>SAR-C</short_name>
+            <resource>https://example.com/shared-resource</resource>
+          </instrument>
+        </platform>
+        <platform>
+          <short_name>Sentinel-1A</short_name>
+          <instrument>
+            <short_name>SAR-C</short_name>
+          </instrument>
+        </platform>"""
+    )
+    doc = MMD4SolR(mydoc=root)
+    solr = {"resources": ["https://existing.example/resource"]}
+    doc._extract_platform(solr)
+
+    assert solr["platform_name"] == ["Sentinel-1A"]
+    assert solr["platform_name_facet"] == ["Sentinel-1A"]
+    assert solr["platform_instrument_name"] == ["SAR-C"]
+    assert solr["platform_instrument_name_facet"] == ["SAR-C"]
+    assert solr["resources"] == [
+        "https://existing.example/resource",
+        "https://example.com/shared-resource",
+    ]
 
 
 @pytest.mark.indexdata
@@ -670,8 +734,7 @@ def test_extract_related_information_single():
     assert solr["related_information_type"] == ["Dataset landing page"]
     assert solr["related_information_description"] == ["Landing page for this dataset"]
     assert solr["related_information_resource"] == ["https://example.com/dataset/landing"]
-    assert solr["related_url_landing_page"] == ["https://example.com/dataset/landing"]
-    assert solr["related_url_landing_page_desc"] == ["Landing page for this dataset"]
+    assert "related_url_landing_page" not in solr
 
     related_json = json.loads(solr["related_information_json"])
     assert len(related_json) == 1
@@ -712,9 +775,9 @@ def test_extract_related_information_multiple_mixed_types():
     assert "Scientific publication" in solr["related_information_type"]
     assert "Users guide" in solr["related_information_type"]
 
-    assert solr["related_url_landing_page"] == ["https://example.com/dataset/landing"]
-    assert solr["related_url_scientific_publication"] == ["https://doi.org/10.1234/example"]
-    assert solr["related_url_user_guide"] == ["https://example.com/docs/guide.pdf"]
+    assert "related_url_landing_page" not in solr
+    assert "related_url_scientific_publication" not in solr
+    assert "related_url_user_guide" not in solr
 
     related_json = json.loads(solr["related_information_json"])
     assert len(related_json) == 3
@@ -762,10 +825,10 @@ def test_extract_related_information_all_types():
     # Check that all types are present
     assert len(solr["related_information_type"]) == 11
 
-    # Check that type-specific fields are populated
+    # Check that type-specific fields are not present (deprecated)
     for info_type, field_name, url in types_and_URLs:
-        assert solr[field_name] == [url], f"Field {field_name} not correctly populated"
-        assert solr[field_name + "_desc"] == [f"Description for {info_type}"]
+        assert field_name not in solr, f"Deprecated field {field_name} should not be present"
+        assert (field_name + "_desc") not in solr, f"Deprecated field {field_name}_desc should not be present"
 
 
 @pytest.mark.indexdata
@@ -788,14 +851,12 @@ def test_extract_related_information_duplicate_types():
     doc._extract_related_information(solr)
 
     assert solr["related_information_type"] == ["Scientific publication", "Scientific publication"]
-    assert solr["related_url_scientific_publication"] == [
+    assert solr["related_information_resource"] == [
         "https://example.com/pub1",
         "https://example.com/pub2",
     ]
-    assert solr["related_url_scientific_publication_desc"] == [
-        "First publication",
-        "Second publication",
-    ]
+    assert "related_url_scientific_publication" not in solr
+    assert "related_url_scientific_publication_desc" not in solr
 
 
 @pytest.mark.indexdata
@@ -854,6 +915,25 @@ def test_extract_related_information_no_related_information():
     assert "related_information_description" not in solr
     assert "related_information_json" not in solr
     assert "related_url_landing_page" not in solr
+
+
+@pytest.mark.indexdata
+def test_extract_related_information_observation_facility_description_to_field():
+    """Test that Observation facility type with description appends to observation_facility field."""
+    root = _make_mmd_with_related_information(
+        """<related_information>
+        <type>Observation facility</type>
+        <description>Ny-Alesund observatory</description>
+        <resource>https://facility.example.com</resource>
+      </related_information>"""
+    )
+    doc = MMD4SolR(mydoc=root)
+    solr = {"observation_facility": ["Existing facility"]}
+    doc._extract_related_information(solr)
+    assert solr["observation_facility"] == [
+        "Existing facility",
+        "Ny-Alesund observatory",
+    ]
 
 
 @pytest.mark.indexdata

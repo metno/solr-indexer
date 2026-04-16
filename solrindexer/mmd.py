@@ -153,6 +153,21 @@ class MMD4SolR:
         return [value for value in (self._text(node) for node in self._nodes(xpath)) if value]
 
     @staticmethod
+    def _append_multivalued(target, field_name, values):
+        """Append values to a multivalued Solr field without overwriting existing entries."""
+        cleaned_values = [v for v in values if v]
+        if not cleaned_values:
+            return
+        existing = target.get(field_name, [])
+        if not isinstance(existing, list):
+            existing = [existing] if existing else []
+        merged = list(existing)
+        for v in cleaned_values:
+            if v not in merged:
+                merged.append(v)
+        target[field_name] = merged
+
+    @staticmethod
     def _normalize_datetime(value):
         if not value:
             return None
@@ -425,7 +440,7 @@ class MMD4SolR:
 
     def _extract_personnel(self, solr_doc):
         personnel_json = []
-        roles, names, orgs = [], [], []
+        roles, names, orgs, resources = [], [], [], []
         for node in self._nodes("./mmd:personnel"):
             role = self._first_text_for(node, "./mmd:role")
             personnel_type = self._first_text_for(node, "./mmd:type")
@@ -437,6 +452,13 @@ class MMD4SolR:
             organisation_nodes = node.xpath("./mmd:organisation", namespaces=self.NSMAP)
             orcid_uri = name_nodes[0].attrib.get("uri") if name_nodes else None
             ror_uri = organisation_nodes[0].attrib.get("uri") if organisation_nodes else None
+
+            if email:
+                resources.append(email)
+            if orcid_uri:
+                resources.append(orcid_uri)
+            if ror_uri:
+                resources.append(ror_uri)
 
             contact_address = {
                 "address": self._first_text_for(node, "./mmd:contact_address/mmd:address"),
@@ -498,6 +520,7 @@ class MMD4SolR:
             solr_doc["personnel_json"] = json.dumps(
                 personnel_json, ensure_ascii=False, separators=(",", ":")
             )
+        self._append_multivalued(solr_doc, "resources", resources)
 
     def _extract_data_access(self, solr_doc):
         urls_by_field = {
@@ -520,6 +543,8 @@ class MMD4SolR:
             "ODATA": "data_access_url_odata",
         }
         data_access_json = []
+        descriptions = []
+        resources = []
 
         for node in self._nodes("./mmd:data_access"):
             access_type_raw = self._first_text_for(node, "./mmd:type")
@@ -541,23 +566,31 @@ class MMD4SolR:
 
             data_access_json.append(data_access_entry)
 
-            if not resource:
-                continue
-
-            access_type = (access_type_raw or "").strip().upper()
-            target_field = type_to_field.get(access_type)
-            if target_field is None:
-                continue
-
-            urls_by_field[target_field].append(resource)
+            if description:
+                descriptions.append(description)
+            if resource:
+                resources.append(resource)
+                access_type = (access_type_raw or "").strip().upper()
+                target_field = type_to_field.get(access_type)
+                if target_field is not None:
+                    urls_by_field[target_field].append(resource)
 
         for field_name, values in urls_by_field.items():
             if values:
                 solr_doc[field_name] = values
 
-        if data_access_json:
+        # Append descriptions and resources to their respective multivalued fields
+        self._append_multivalued(solr_doc, "descriptions", descriptions)
+        self._append_multivalued(solr_doc, "resources", resources)
+
+        # Filter data_access_json to remove null values in each entry
+        filtered_data_access_json = [
+            {k: v for k, v in entry.items() if v is not None}
+            for entry in data_access_json
+        ]
+        if filtered_data_access_json:
             solr_doc["data_access_json"] = json.dumps(
-                data_access_json,
+                filtered_data_access_json,
                 ensure_ascii=False,
                 separators=(",", ":"),
             )
@@ -570,55 +603,14 @@ class MMD4SolR:
         - related_information_type: list of all types
         - related_information_resource: list of all resources
         - related_information_description: list of all descriptions
-        - related_url_*: type-specific URLs
-        - related_url_*_desc: type-specific descriptions
         """
-        urls_by_field = {
-            "related_url_landing_page": [],
-            "related_url_user_guide": [],
-            "related_url_home_page": [],
-            "related_url_obs_facility": [],
-            "related_url_ext_metadata": [],
-            "related_url_scientific_publication": [],
-            "related_url_data_paper": [],
-            "related_url_data_management_plan": [],
-            "related_url_other_documentation": [],
-            "related_url_software": [],
-            "related_url_data_server_landing_page": [],
-        }
-
-        descs_by_field = {
-            "related_url_landing_page_desc": [],
-            "related_url_user_guide_desc": [],
-            "related_url_home_page_desc": [],
-            "related_url_obs_facility_desc": [],
-            "related_url_ext_metadata_desc": [],
-            "related_url_scientific_publication_desc": [],
-            "related_url_data_paper_desc": [],
-            "related_url_data_management_plan_desc": [],
-            "related_url_other_documentation_desc": [],
-            "related_url_software_desc": [],
-            "related_url_data_server_landing_page_desc": [],
-        }
-
-        type_to_field = {
-            "Dataset landing page": "related_url_landing_page",
-            "Users guide": "related_url_user_guide",
-            "Project home page": "related_url_home_page",
-            "Observation facility": "related_url_obs_facility",
-            "Extended metadata": "related_url_ext_metadata",
-            "Scientific publication": "related_url_scientific_publication",
-            "Data paper": "related_url_data_paper",
-            "Data management plan": "related_url_data_management_plan",
-            "Other documentation": "related_url_other_documentation",
-            "Software": "related_url_software",
-            "Data server landing page": "related_url_data_server_landing_page",
-        }
 
         related_information_json = []
         all_types = []
         all_resources = []
         all_descriptions = []
+        descriptions_list = []
+        resources_list = []
 
         for node in self._nodes("./mmd:related_information"):
             info_type = self._first_text_for(node, "./mmd:type")
@@ -630,8 +622,14 @@ class MMD4SolR:
                 all_types.append(info_type)
             if resource:
                 all_resources.append(resource)
+                resources_list.append(resource)
             if description:
                 all_descriptions.append(description)
+                descriptions_list.append(description)
+
+            # If type is "Observation facility" and has a description, append to observation_facility field
+            if info_type and info_type.strip().lower() == "observation facility" and description:
+                self._append_multivalued(solr_doc, "observation_facility", [description])
 
             # Create JSON entry
             related_info_entry = {
@@ -641,24 +639,6 @@ class MMD4SolR:
             }
             related_information_json.append(related_info_entry)
 
-            # Map to type-specific fields if resource exists
-            if resource:
-                target_field = type_to_field.get(info_type)
-                if target_field:
-                    urls_by_field[target_field].append(resource)
-                    if description:
-                        descs_by_field[target_field + "_desc"].append(description)
-
-        # Add type-specific URL fields
-        for field_name, values in urls_by_field.items():
-            if values:
-                solr_doc[field_name] = values
-
-        # Add type-specific description fields
-        for field_name, values in descs_by_field.items():
-            if values:
-                solr_doc[field_name] = values
-
         # Add general arrays
         if all_types:
             solr_doc["related_information_type"] = all_types
@@ -667,10 +647,18 @@ class MMD4SolR:
         if all_descriptions:
             solr_doc["related_information_description"] = all_descriptions
 
-        # Add JSON representation
-        if related_information_json:
+        # Append resources and descriptions to their respective multivalued fields
+        self._append_multivalued(solr_doc, "resources", resources_list)
+        self._append_multivalued(solr_doc, "descriptions", descriptions_list)
+
+        # Add JSON representation with null values filtered out
+        filtered_related_information_json = [
+            {k: v for k, v in entry.items() if v is not None}
+            for entry in related_information_json
+        ]
+        if filtered_related_information_json:
             solr_doc["related_information_json"] = json.dumps(
-                related_information_json,
+                filtered_related_information_json,
                 ensure_ascii=False,
                 separators=(",", ":"),
             )
@@ -782,6 +770,7 @@ class MMD4SolR:
             "platform_ancillary_timeliness": [],
         }
         platform_json = []
+        resources = []
 
         for node in self._nodes("./mmd:platform"):
             short = self._first_text_for(node, "./mmd:short_name")
@@ -799,6 +788,7 @@ class MMD4SolR:
                 acc["platform_name"].append(short or long)
             if resource:
                 acc["platform_resource"].append(resource)
+                resources.append(resource)
             if orbit_rel_raw:
                 with contextlib.suppress(ValueError):
                     acc["platform_orbit_relative"].append(int(orbit_rel_raw))
@@ -840,6 +830,7 @@ class MMD4SolR:
                     acc["platform_instrument_name"].append(inst_short or inst_long)
                 if inst_resource:
                     acc["platform_instrument_resource"].append(inst_resource)
+                    resources.append(inst_resource)
                 if inst_mode:
                     acc["platform_instrument_mode"].append(inst_mode)
                 if inst_pol:
@@ -892,9 +883,20 @@ class MMD4SolR:
 
             platform_json.append(platform_entry)
 
+        # Keep name fields unique like other facet-backed name fields.
+        acc["platform_name"] = sorted(set(acc["platform_name"]))
+        acc["platform_instrument_name"] = sorted(set(acc["platform_instrument_name"]))
+
         for field, values in acc.items():
             if values:
                 solr_doc[field] = values
+
+        if acc["platform_name"]:
+            solr_doc["platform_name_facet"] = sorted(set(acc["platform_name"]))
+        if acc["platform_instrument_name"]:
+            solr_doc["platform_instrument_name_facet"] = sorted(set(acc["platform_instrument_name"]))
+
+        self._append_multivalued(solr_doc, "resources", resources)
 
         if platform_json:
             solr_doc["platform_json"] = json.dumps(

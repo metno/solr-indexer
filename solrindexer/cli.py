@@ -27,6 +27,48 @@ DEFAULT_THREADS = 20
 DEFAULT_CHUNKSIZE = 2500
 
 
+def parse_arguments():
+    parser = argparse.ArgumentParser(description="Index MMD XML files into Solr")
+    parser.add_argument("-c", "--cfg", dest="cfgfile", required=True, help="Configuration file")
+    parser.add_argument("-a", "--always_commit", action="store_true", help="Always commit to Solr")
+    parser.add_argument("-i", "--input_file", help="Individual file to ingest")
+    parser.add_argument("-l", "--list_file", help="File containing xml file paths to ingest")
+    parser.add_argument("-d", "--directory", help="Directory with xml files to ingest")
+    parser.add_argument(
+        "-r",
+        "--recursive",
+        action="store_true",
+        help="Recursively search for XML files in directory and subdirectories (requires -d)",
+    )
+    parser.add_argument(
+        "-parent",
+        "--mark_parent",
+        required=False,
+        help="Metadata identifier of existing Solr document to mark as parent",
+    )
+
+    parser.add_argument("--threads", type=int, default=None, help="Number of worker threads")
+    parser.add_argument(
+        "--processes",
+        type=int,
+        default=1,
+        help="Number of BulkIndexer processes for large bulk runs",
+    )
+    parser.add_argument("--chunksize", type=int, default=None, help="Batch size for bulk indexing")
+
+    parser.add_argument("-t", "--thumbnail", action="store_true", help="Enable thumbnail indexing")
+    parser.add_argument(
+        "-n", "--no_thumbnail", action="store_true", help="Disable thumbnail indexing"
+    )
+    parser.add_argument("-nbs", "--nbs", action="store_true", help="Enable NBS thumbnail mode")
+
+    args = parser.parse_args()
+    if not args.input_file and not args.list_file and not args.directory and not args.mark_parent:
+        parser.print_help()
+        parser.exit(2)
+    return args
+
+
 def main():
     start_dt = datetime.now().astimezone()
     start_wall = time.perf_counter()
@@ -207,48 +249,6 @@ def _get_peak_memory_mb():
         return peak_rss / 1024
     except Exception:
         return None
-
-
-def parse_arguments():
-    parser = argparse.ArgumentParser(description="Index MMD XML files into Solr")
-    parser.add_argument("-c", "--cfg", dest="cfgfile", required=True, help="Configuration file")
-    parser.add_argument("-a", "--always_commit", action="store_true", help="Always commit to Solr")
-    parser.add_argument("-i", "--input_file", help="Individual file to ingest")
-    parser.add_argument("-l", "--list_file", help="File containing xml file paths to ingest")
-    parser.add_argument("-d", "--directory", help="Directory with xml files to ingest")
-    parser.add_argument(
-        "-r",
-        "--recursive",
-        action="store_true",
-        help="Recursively search for XML files in directory and subdirectories (requires -d)",
-    )
-    parser.add_argument(
-        "-parent",
-        "--mark_parent",
-        required=False,
-        help="Metadata identifier of existing Solr document to mark as parent",
-    )
-
-    parser.add_argument("--threads", type=int, default=None, help="Number of worker threads")
-    parser.add_argument(
-        "--processes",
-        type=int,
-        default=1,
-        help="Number of BulkIndexer processes for large bulk runs",
-    )
-    parser.add_argument("--chunksize", type=int, default=None, help="Batch size for bulk indexing")
-
-    parser.add_argument("-t", "--thumbnail", action="store_true", help="Enable thumbnail indexing")
-    parser.add_argument(
-        "-n", "--no_thumbnail", action="store_true", help="Disable thumbnail indexing"
-    )
-    parser.add_argument("-nbs", "--nbs", action="store_true", help="Enable NBS thumbnail mode")
-
-    args = parser.parse_args()
-    if not args.input_file and not args.list_file and not args.directory and not args.mark_parent:
-        parser.print_help()
-        parser.exit(2)
-    return args
 
 
 def _split_files_for_processes(files, process_count):
