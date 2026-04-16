@@ -585,8 +585,7 @@ class MMD4SolR:
 
         # Filter data_access_json to remove null values in each entry
         filtered_data_access_json = [
-            {k: v for k, v in entry.items() if v is not None}
-            for entry in data_access_json
+            {k: v for k, v in entry.items() if v is not None} for entry in data_access_json
         ]
         if filtered_data_access_json:
             solr_doc["data_access_json"] = json.dumps(
@@ -653,8 +652,7 @@ class MMD4SolR:
 
         # Add JSON representation with null values filtered out
         filtered_related_information_json = [
-            {k: v for k, v in entry.items() if v is not None}
-            for entry in related_information_json
+            {k: v for k, v in entry.items() if v is not None} for entry in related_information_json
         ]
         if filtered_related_information_json:
             solr_doc["related_information_json"] = json.dumps(
@@ -894,7 +892,9 @@ class MMD4SolR:
         if acc["platform_name"]:
             solr_doc["platform_name_facet"] = sorted(set(acc["platform_name"]))
         if acc["platform_instrument_name"]:
-            solr_doc["platform_instrument_name_facet"] = sorted(set(acc["platform_instrument_name"]))
+            solr_doc["platform_instrument_name_facet"] = sorted(
+                set(acc["platform_instrument_name"])
+            )
 
         self._append_multivalued(solr_doc, "resources", resources)
 

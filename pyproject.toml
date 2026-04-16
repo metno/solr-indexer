@@ -59,6 +59,7 @@ dev = [
 Homepage = "https://github.com/metno/solrindexing"
 "Source Code" = "https://github.com/metno/solrindexing"
 "Bug Tracker" = "https://github.com/metno/solrindexing/issues"
+"Authors" =  "https://github.com/metno/solr-indexer/graphs/contributors"
 
 [project.scripts]
 indexdata = "solrindexer.cli:main"
@@ -109,9 +110,6 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = [
-    "solrindexer.script.searchindex",
-    "solrindexer.script.indexdata",
-    "solrindexer.script.bulkindexer",
     "solrindexer.tools.tools",
     "solrindexer.__init__",
 ]

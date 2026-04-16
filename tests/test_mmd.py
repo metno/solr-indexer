@@ -373,8 +373,8 @@ def test_extract_platform_full_with_instrument_and_ancillary():
     assert solr["platform_ancillary_scene_coverage"] == [95.0]
     assert solr["platform_ancillary_timeliness"] == ["NRT"]
     assert solr["resources"] == [
-      "https://example.com/platform",
-      "https://example.com/instrument",
+        "https://example.com/platform",
+        "https://example.com/instrument",
     ]
 
     parsed = json.loads(solr["platform_json"])
@@ -828,7 +828,9 @@ def test_extract_related_information_all_types():
     # Check that type-specific fields are not present (deprecated)
     for info_type, field_name, url in types_and_URLs:
         assert field_name not in solr, f"Deprecated field {field_name} should not be present"
-        assert (field_name + "_desc") not in solr, f"Deprecated field {field_name}_desc should not be present"
+        assert (field_name + "_desc") not in solr, (
+            f"Deprecated field {field_name}_desc should not be present"
+        )
 
 
 @pytest.mark.indexdata
