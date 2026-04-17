@@ -155,6 +155,20 @@ The MET Norway vocabulary service is available at
 
 For MMD vocabularies, use `vocabulary-endpoint-base-url: https://vocab.met.no/mmd`.
 
+### XSD Validation and Schema Caching
+
+When XSD validation is enabled (via `mmd-xsd-path`), the indexer caches compiled schemas
+in thread-local storage to eliminate per-document disk I/O and compilation overhead.
+This optimization is automatic and transparent:
+
+- **Single-process indexing**: Each of the worker threads maintains its own schema cache
+- **Multi-process indexing**: Each worker process pre-compiles the schema once before indexing begins
+- **Scope**: Schemas are cached for the entire indexing run; no live reloads
+
+This approach ensures optimal performance for large bulk indexing jobs while maintaining
+thread-safe concurrent validation (lxml XMLSchema validation is not thread-safe; thread-local
+caching prevents race conditions).
+
 ---
 
 ## Commands
@@ -191,6 +205,12 @@ thumbnails (NBS scope only):
   -t, --thumbnail           Enable NBS thumbnail URL lookup
   -n, --no_thumbnail        Disable thumbnail lookup
   -nbs, --nbs               Enable NBS scope (also activates thumbnail lookup)
+
+exit codes:
+  0                         Completed with no tracked failures or warnings
+  1                         Completed with one or more tracked failures, or aborted on runtime/config error
+  2                         CLI usage error (for example, missing required input arguments)
+  3                         Completed with warnings only and no tracked failures
 ```
 
 #### Examples

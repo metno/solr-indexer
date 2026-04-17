@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "solrindexer"
-version = "4.0.0"
+version = "4.0.0.dev1"
 description = "Tools and wrappers used for indexing MMD in SolR"
 readme = "README.md"
 requires-python = ">=3.8"

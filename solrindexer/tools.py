@@ -26,6 +26,22 @@ import subprocess
 import dateutil.parser
 import validators
 
+# Optional imports - loaded once at module init
+try:
+    import xarray as xr
+
+    HAS_XARRAY = True
+except ImportError:
+    xr = None  # type: ignore[assignment]
+    HAS_XARRAY = False
+
+try:
+    import netCDF4  # noqa: F401
+
+    HAS_NETCDF4 = True
+except ImportError:
+    HAS_NETCDF4 = False
+
 # Logging Setup
 logger = logging.getLogger(__name__)
 
@@ -214,9 +230,14 @@ def _extract_feature_type(dapurl):
     Either value in the returned tuple may be None. error_msg is only set when an actual
     exception prevented extraction (not when the attribute is simply absent).
     """
+    if not HAS_XARRAY:
+        error_msg = "xarray not available"
+        logger.error(
+            "Cannot extract featureType from %s: xarray not installed",
+            dapurl,
+        )
+        return (None, error_msg)
     try:
-        import xarray as xr
-
         ds = xr.open_dataset(dapurl, decode_times=False)
         try:
             ft = ds.attrs.get("featureType")

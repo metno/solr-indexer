@@ -17,7 +17,7 @@ from requests.auth import HTTPBasicAuth
 
 from solrindexer.failure_tracker import FailureTracker
 from solrindexer.indexer import BulkIndexer
-from solrindexer.mmd import IndexMMD
+from solrindexer.mmd import IndexMMD, _get_cached_schema
 from solrindexer.search import parse_cfg
 from solrindexer.tools import resolve_parent_ids, to_solr_id
 
@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_THREADS = 20
 DEFAULT_CHUNKSIZE = 2500
+EXIT_SUCCESS = 0
+EXIT_FAILURE = 1
+EXIT_USAGE = 2
+EXIT_WARNINGS = 3
 
 
 def parse_arguments():
@@ -65,7 +69,7 @@ def parse_arguments():
     args = parser.parse_args()
     if not args.input_file and not args.list_file and not args.directory and not args.mark_parent:
         parser.print_help()
-        parser.exit(2)
+        parser.exit(EXIT_USAGE)
     return args
 
 
@@ -73,6 +77,7 @@ def main():
     start_dt = datetime.now().astimezone()
     start_wall = time.perf_counter()
     start_cpu = time.process_time()
+    exit_code = EXIT_SUCCESS
 
     try:
         args = parse_arguments()
@@ -101,7 +106,7 @@ def main():
             indexer = IndexMMD(solr_url, args.always_commit, authentication, cfg)
             status, msg = indexer.update_parent(to_solr_id(args.mark_parent.strip()))
             logger.info("Parent update status=%s message=%s", status, msg)
-            sys.exit(int(status))
+            sys.exit(EXIT_SUCCESS if status else EXIT_FAILURE)
 
         files = _resolve_input_files(args)
         if not files:
@@ -190,7 +195,8 @@ def main():
                 docs_indexed,
                 docs_failed,
             )
-            failure_tracker.log_summary()
+            failure_tracker.log_summary(total_input_files=len(files))
+            exit_code = _determine_exit_code(failure_tracker)
         else:
             logger.info("Processed %s files.", len(files))
 
@@ -224,12 +230,13 @@ def main():
                 cpu_util_pct,
                 peak_memory_mb,
             )
+            sys.exit(exit_code)
     except Exception as exc:
         # args may not always be defined if exception occurs during arg parsing
         # but it should be defined for most cases since parse_arguments is first
         error_msg = _format_error_message(exc, args if "args" in locals() else None)
         logger.error("%s", error_msg)
-        sys.exit(1)
+        sys.exit(EXIT_FAILURE)
 
 
 def _format_duration(seconds):
@@ -249,6 +256,15 @@ def _get_peak_memory_mb():
         return peak_rss / 1024
     except Exception:
         return None
+
+
+def _determine_exit_code(failure_tracker):
+    """Return CLI exit code based on tracked failures and warnings."""
+    if failure_tracker.failures:
+        return EXIT_FAILURE
+    if failure_tracker.warnings:
+        return EXIT_WARNINGS
+    return EXIT_SUCCESS
 
 
 def _split_files_for_processes(files, process_count):
@@ -276,6 +292,17 @@ def _bulkindex_worker(
     try:
         authentication = _resolve_authentication(cfg)
         solr_client = pysolr.Solr(solr_url, always_commit=False, timeout=1020, auth=authentication)
+
+        # Warm up XSD schema cache in this process if validation is enabled.
+        # This eliminates per-document schema compilation overhead.
+        xsd_path = cfg.get("xsd_path")
+        if xsd_path:
+            try:
+                _get_cached_schema(xsd_path)
+                logger.debug("XSD schema preloaded for worker %d", worker_id)
+            except Exception as e:
+                # Non-fatal: schema will be loaded on-demand if warm-up fails
+                logger.warning("Schema warm-up failed for worker %d: %s", worker_id, e)
 
         bulk = BulkIndexer(
             shard_files,

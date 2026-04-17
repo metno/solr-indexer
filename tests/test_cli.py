@@ -2,7 +2,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from solrindexer.cli import _report_parent_integrity, _resolve_referenced_parents
+from solrindexer.cli import (
+    EXIT_FAILURE,
+    EXIT_SUCCESS,
+    EXIT_WARNINGS,
+    _determine_exit_code,
+    _report_parent_integrity,
+    _resolve_referenced_parents,
+)
 from solrindexer.failure_tracker import FailureTracker
 
 
@@ -57,3 +64,25 @@ def test_resolve_referenced_parents_uses_tools_helper():
         {"parent-1", "parent-3"},
         solr_client=solr_client,
     )
+
+
+@pytest.mark.indexdata
+def test_determine_exit_code_returns_success_when_no_failures_or_warnings():
+    assert _determine_exit_code(FailureTracker()) == EXIT_SUCCESS
+
+
+@pytest.mark.indexdata
+def test_determine_exit_code_returns_warning_code_when_only_warnings_exist():
+    failure_tracker = FailureTracker()
+    failure_tracker.add_warning("file.xml", "warning", "validation", "id-1")
+
+    assert _determine_exit_code(failure_tracker) == EXIT_WARNINGS
+
+
+@pytest.mark.indexdata
+def test_determine_exit_code_returns_failure_code_when_failures_exist():
+    failure_tracker = FailureTracker()
+    failure_tracker.add_warning("file.xml", "warning", "validation", "id-1")
+    failure_tracker.add_failure("file.xml", "failure", "indexing", "id-1")
+
+    assert _determine_exit_code(failure_tracker) == EXIT_FAILURE

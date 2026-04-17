@@ -234,6 +234,26 @@ def test_summary_includes_warnings_for_failed_documents():
     assert "[VALIDATION] mmd:collection has non-controlled value: ADC" in summary
 
 
+def test_summary_includes_analytics_when_total_input_files_is_provided():
+    """Analytics should include counts and percentages relative to total input files."""
+    tracker = FailureTracker()
+    tracker.add_failure("file1.xml", "Parse error", "parsing", "id_001")
+    tracker.add_failure("file2.xml", "Index error", "indexing", None)
+    tracker.add_warning("file2.xml", "Non-controlled value", "validation", "id_002")
+    tracker.add_warning("file3.xml", "Missing parent", "parent_integrity", None)
+
+    summary = tracker.get_summary(total_input_files=5)
+
+    assert "ANALYTICS" in summary
+    assert "FAILURE ANALYTICS" in summary
+    assert "WARNING ANALYTICS" in summary
+    assert "Total input files: 5" in summary
+    assert "Files with failures: 2 (40.0%)" in summary
+    assert "Files with warnings: 2 (40.0%)" in summary
+    assert "parsing         :   1 record(s),   1 file(s) (20.0%)" in summary
+    assert "validation      :   1 record(s),   1 file(s) (20.0%)" in summary
+
+
 def test_failure_record_with_partial_data():
     """Test FailureRecord with minimal data."""
     record = FailureRecord(filename="test.xml")

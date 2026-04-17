@@ -23,6 +23,7 @@ import json
 import logging
 import os
 import sys
+import threading
 
 import lxml.etree as ET
 import netCDF4
@@ -40,6 +41,56 @@ from solrindexer.tools import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Thread-local schema cache: keyed by xsd_path, stores compiled ET.XMLSchema objects.
+# Each thread maintains its own cache to avoid concurrent validation race conditions.
+_schema_cache = threading.local()
+
+
+def _get_cached_schema(xsd_path):
+    """Retrieve a compiled XSD schema from thread-local cache.
+
+    Loads and compiles the schema from disk on first call per thread per process.
+    Subsequent calls from the same thread return the cached object, eliminating
+    repeated disk I/O and compilation overhead during bulk indexing.
+
+    Parameters
+    ----------
+    xsd_path : str
+        Absolute or relative path to the XSD schema file.
+
+    Returns
+    -------
+    ET.XMLSchema or None
+        Compiled schema object (cached), or None if loading/compilation fails.
+        Failure is logged but does not raise; callers handle None gracefully.
+    """
+    if not xsd_path:
+        return None
+
+    # Initialize per-thread schema dict if needed
+    if not hasattr(_schema_cache, "schemas"):
+        _schema_cache.schemas = {}
+
+    schemas = _schema_cache.schemas
+
+    # Cache miss: load and compile schema for this thread
+    if xsd_path not in schemas:
+        try:
+            logger.debug(
+                "Loading and compiling XSD schema for thread %s: %s",
+                threading.current_thread().name,
+                xsd_path,
+            )
+            schema_doc = ET.parse(xsd_path)
+            schema = ET.XMLSchema(schema_doc)
+            schemas[xsd_path] = schema
+            logger.debug("XSD schema cached for thread %s", threading.current_thread().name)
+        except Exception as e:
+            logger.warning("Could not load XSD schema from %s: %s", xsd_path, e)
+            return None
+
+    return schemas[xsd_path]
 
 
 class MMD4SolR:
@@ -191,15 +242,14 @@ class MMD4SolR:
         """
         if not self.xsd_path:
             return True
-        try:
-            schema_doc = ET.parse(self.xsd_path)
-            schema = ET.XMLSchema(schema_doc)
-        except Exception as exc:
+
+        schema = _get_cached_schema(self.xsd_path)
+        if schema is None:
+            # Schema loading failed; log was already done in _get_cached_schema
             self._record_warning(
-                "%s Could not load XSD from %s: %s",
+                "%s Could not load XSD from %s",
                 self._icon("warn"),
                 self.xsd_path,
-                exc,
             )
             return True  # config error — do not block indexing
 

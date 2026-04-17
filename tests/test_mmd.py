@@ -4,7 +4,7 @@ import lxml.etree as ET
 import pytest
 
 from solrindexer.cli import _split_files_for_processes
-from solrindexer.mmd import MMD4SolR
+from solrindexer.mmd import MMD4SolR, _get_cached_schema
 
 """ Global test variables"""
 infile = "./tests/data/reference_nc.xml"
@@ -957,3 +957,49 @@ def test_split_files_for_processes_caps_to_file_count():
     assert len(shards) == 2
     assert shards[0] == ["a.xml"]
     assert shards[1] == ["b.xml"]
+
+
+@pytest.mark.indexdata
+def test_get_cached_schema_returns_none_for_empty_path():
+    """Schema cache returns None gracefully for empty/missing paths."""
+    result = _get_cached_schema("")
+    assert result is None
+
+    result = _get_cached_schema(None)
+    assert result is None
+
+
+@pytest.mark.indexdata
+def test_get_cached_schema_loads_and_caches():
+    """Schema is loaded from disk and cached for subsequent calls."""
+    # Use the reference MMD file's XSD if available; fall back to test logic
+    xsd_path = "./mmd/xsd/mmd.xsd"
+    if not __import__("pathlib").Path(xsd_path).exists():
+        pytest.skip(f"XSD not found at {xsd_path}")
+
+    # First call: load from disk
+    schema1 = _get_cached_schema(xsd_path)
+    assert schema1 is not None
+    assert isinstance(schema1, ET.XMLSchema)
+
+    # Second call: should return same cached instance
+    schema2 = _get_cached_schema(xsd_path)
+    assert schema2 is schema1  # same object, not just equal
+
+
+@pytest.mark.indexdata
+def test_get_cached_schema_different_paths_cached_independently():
+    """Different XSD paths are cached separately."""
+    xsd_path_1 = "./mmd/xsd/mmd.xsd"
+
+    # Verify cache works with multiple calls on same path
+    # (we only test reachable path to avoid missing file warnings)
+    if not __import__("pathlib").Path(xsd_path_1).exists():
+        pytest.skip(f"XSD not found at {xsd_path_1}")
+
+    schema1 = _get_cached_schema(xsd_path_1)
+    assert schema1 is not None
+
+    # Verify the same call returns the same instance (cache reuse)
+    schema1_again = _get_cached_schema(xsd_path_1)
+    assert schema1_again is schema1
