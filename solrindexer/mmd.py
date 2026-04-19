@@ -32,6 +32,7 @@ import requests
 
 from solrindexer.spatial import handle_solr_spatial
 from solrindexer.tools import (
+    add_adc_thumbnails,
     add_nbs_thumbnail,
     get_dataset,
     parse_date,
@@ -1208,9 +1209,12 @@ class IndexMMD:
                 if self.config.get("scope", "") == "NBS":
                     logger.debug("Calling add_nbs_thumbnail()-function")
                     input_record = add_nbs_thumbnail(input_record, self.config)
+                elif self.config.get("scope", "") == "ADC":
+                    logger.debug("Calling add_adc_thumbnails()-function")
+                    input_record = add_adc_thumbnails(input_record, self.config)
                 else:
                     logger.warning(
-                        "Skipping thumbnail generation for record %s: only NBS scope is supported",
+                        "Skipping thumbnail generation for record %s: supported scopes are NBS and ADC",
                         input_record.get("id", "unknown"),
                     )
 

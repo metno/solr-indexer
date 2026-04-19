@@ -29,6 +29,7 @@ from solrindexer.io import load_file
 from solrindexer.mmd import MMD4SolR
 from solrindexer.threads import multiprocess
 from solrindexer.tools import (
+    add_adc_thumbnails_bulk,
     add_nbs_thumbnail_bulk,
     process_feature_type,
     solr_add,
@@ -397,6 +398,7 @@ class BulkIndexer:
         chunksize = self.chunksize
         skip_feature_type = self.config.get("skip-feature-type", False)
         nbs_scope = self.config.get("scope", "") == "NBS"
+        adc_scope = self.config.get("scope", "") == "ADC"
 
         logger.debug("-- Got %d input file(s)", len(filelist))
 
@@ -547,13 +549,19 @@ class BulkIndexer:
 
             if self.tflg is True:
                 thumb_docs = [doc for doc in chunk_docs if "data_access_url_ogc_wms" in doc]
-                if thumb_docs and nbs_scope:
+                if thumb_docs and (nbs_scope or adc_scope):
                     t_thumb_chunk_start = time.perf_counter()
                     thumb_inputs = [(doc, self.config or {}) for doc in thumb_docs]
+                    thumbnail_fn = add_nbs_thumbnail_bulk if nbs_scope else add_adc_thumbnails_bulk
+                    thumbnail_label = "NBS" if nbs_scope else "ADC"
                     if self._should_use_process_pool(len(thumb_docs)):
-                        logger.info("---- Creating thumbnails concurrently %d ----", self.threads)
+                        logger.info(
+                            "---- Resolving %s thumbnails concurrently %d ----",
+                            thumbnail_label,
+                            self.threads,
+                        )
                         for (doc, _), newdoc in multiprocess(
-                            fn=add_nbs_thumbnail_bulk,
+                            fn=thumbnail_fn,
                             inputs=thumb_inputs,
                             max_concurrency=self.threads,
                         ):
@@ -561,11 +569,12 @@ class BulkIndexer:
                             chunk_docs.append(newdoc)
                     else:
                         logger.info(
-                            "---- Creating thumbnails inline for small batch (%d docs) ----",
+                            "---- Resolving %s thumbnails inline for small batch (%d docs) ----",
+                            thumbnail_label,
                             len(thumb_docs),
                         )
                         for doc in thumb_docs:
-                            newdoc = add_nbs_thumbnail_bulk((doc, self.config or {}))
+                            newdoc = thumbnail_fn((doc, self.config or {}))
                             chunk_docs.remove(doc)
                             chunk_docs.append(newdoc)
                     t_thumb_chunk = time.perf_counter() - t_thumb_chunk_start
@@ -577,9 +586,7 @@ class BulkIndexer:
                         len(thumb_docs),
                     )
                 elif thumb_docs:
-                    logger.warning(
-                        "Thumbnail flag enabled, but only NBS thumbnail generation is supported"
-                    )
+                    logger.warning("Thumbnail flag enabled, but supported scopes are NBS or ADC")
 
             docs_indexed += len(chunk_docs)
             logger.info("---- Indexing %d documents ----", len(chunk_docs))

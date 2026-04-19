@@ -9,3 +9,5 @@ requests
 pygml
 python-dotenv
 pygeoif
+# Optional: ADC thumbnail path resolution (required when using --adc)
+metsis-thumbnail-generator @ git+https://github.com/magnarem/metsis-thumbnail.generator.git@main

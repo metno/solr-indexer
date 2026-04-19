@@ -22,6 +22,8 @@ import logging
 import os
 import re
 import subprocess
+import sys
+from pathlib import Path
 
 import dateutil.parser
 import validators
@@ -367,6 +369,130 @@ def add_nbs_thumbnail_bulk(payload):
     """Bulk-processing helper that keeps multiprocess input to one argument."""
     doc, config = payload
     return add_nbs_thumbnail(doc, config)
+
+
+def _first_string(value):
+    """Return first value as string for Solr fields that can be list/scalar."""
+    if isinstance(value, list):
+        if not value:
+            return None
+        first = value[0]
+        if first is None:
+            return None
+        return str(first).strip()
+
+    if value is None:
+        return None
+
+    return str(value).strip()
+
+
+def _load_adc_path_builder():
+    """Load deterministic path builder from metsis-thumbnail-generator."""
+    try:
+        from metsis_thumbnail_generator.thumbnail_path_api import (
+            build_thumbnail_relative_path,
+        )
+
+        return build_thumbnail_relative_path
+    except Exception:
+        pass
+
+    local_src = Path(__file__).resolve().parents[2] / "metsis-thumbnail-generator" / "src"
+    if local_src.is_dir() and str(local_src) not in sys.path:
+        sys.path.insert(0, str(local_src))
+
+    try:
+        from metsis_thumbnail_generator.thumbnail_path_api import (
+            build_thumbnail_relative_path,
+        )
+
+        return build_thumbnail_relative_path
+    except Exception as exc:
+        logger.error(
+            "ADC thumbnail path resolver unavailable from metsis-thumbnail-generator: %s",
+            exc,
+        )
+        return None
+
+
+def load_adc_thumbnail_path_contract_cases():
+    """Load shared deterministic thumbnail contract vectors."""
+    try:
+        from metsis_thumbnail_generator.thumbnail_path_api import (
+            THUMBNAIL_PATH_CONTRACT_CASES,
+        )
+
+        return THUMBNAIL_PATH_CONTRACT_CASES
+    except Exception:
+        pass
+
+    local_src = Path(__file__).resolve().parents[2] / "metsis-thumbnail-generator" / "src"
+    if local_src.is_dir() and str(local_src) not in sys.path:
+        sys.path.insert(0, str(local_src))
+
+    try:
+        from metsis_thumbnail_generator.thumbnail_path_api import (
+            THUMBNAIL_PATH_CONTRACT_CASES,
+        )
+
+        return THUMBNAIL_PATH_CONTRACT_CASES
+    except Exception as exc:
+        logger.error(
+            "ADC thumbnail contract cases unavailable from metsis-thumbnail-generator: %s",
+            exc,
+        )
+        return ()
+
+
+def add_adc_thumbnails(doc, config):
+    """Set thumbnail_url from deterministic ADC pre-generated thumbnail path."""
+    adc_base_path = config.get("adc-thumbnails-base-path")
+    adc_base_url = config.get("adc-thumbnails-base-url")
+    if not adc_base_path or not adc_base_url:
+        logger.warning(
+            "ADC scope enabled but adc-thumbnails-base-path/base-url are not configured"
+        )
+        return doc
+
+    metadata_identifier = _first_string(doc.get("metadata_identifier"))
+    if not metadata_identifier:
+        logger.debug("Skipping ADC thumbnail lookup: metadata_identifier missing")
+        return doc
+
+    wms_url = _first_string(doc.get("data_access_url_ogc_wms") or doc.get("wms_url"))
+    start_date = _first_string(doc.get("temporal_extent_start_date") or doc.get("start_date"))
+    if not wms_url:
+        logger.debug(
+            "Skipping ADC thumbnail lookup for %s: WMS URL missing",
+            metadata_identifier,
+        )
+        return doc
+
+    build_thumbnail_relative_path = _load_adc_path_builder()
+    if build_thumbnail_relative_path is None:
+        return doc
+
+    relative_path = build_thumbnail_relative_path(
+        metadata_identifier=metadata_identifier,
+        start_date=start_date,
+        wms_url=wms_url,
+    )
+    thumbnail_path = Path(str(adc_base_path)) / relative_path
+    if not thumbnail_path.is_file():
+        logger.error("ADC thumbnail not found: %s", thumbnail_path)
+        return doc
+
+    thumbnail_url = f"{str(adc_base_url).rstrip('/')}/{relative_path.as_posix()}"
+    logger.info("ADC thumbnail_url set to: %s", thumbnail_url)
+    doc["thumbnail_url"] = thumbnail_url
+    return doc
+
+
+def add_adc_thumbnails_bulk(payload):
+    """Bulk-processing helper that keeps multiprocess input to one argument."""
+    doc, config = payload
+    return add_adc_thumbnails(doc, config)
 
 
 def main() -> None:

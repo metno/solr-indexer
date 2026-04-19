@@ -1,10 +1,13 @@
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from solrindexer.tools import (
     _extract_feature_type,
+    add_adc_thumbnails,
     checkDateFormat,
+    load_adc_thumbnail_path_contract_cases,
     parse_date,
     process_feature_type,
     resolve_parent_ids,
@@ -206,3 +209,76 @@ class TestResolveParentIds:
             result = resolve_parent_ids({"parent-1"}, solr_client=solr_client)
 
         assert result == {"parent-1"}
+
+
+class TestAddAdcThumbnails:
+    """Tests for ADC pre-generated thumbnail lookup."""
+
+    @pytest.mark.indexdata
+    def test_sets_thumbnail_url_when_file_exists(self, tmp_path):
+        relative_path = tmp_path / "no.met" / "no.met.thredds" / "2024" / "11"
+        relative_path.mkdir(parents=True, exist_ok=True)
+        file_path = relative_path / "no-met-dataset-id.png"
+        file_path.write_bytes(b"png")
+
+        doc = {
+            "metadata_identifier": "no.met:dataset-id",
+            "data_access_url_ogc_wms": ["https://thredds.met.no/data/wms"],
+            "temporal_extent_start_date": "2024-11-10",
+        }
+        cfg = {
+            "adc-thumbnails-base-path": str(tmp_path),
+            "adc-thumbnails-base-url": "https://adc.example/thumbnails",
+        }
+
+        def fake_builder(metadata_identifier, start_date, wms_url):
+            assert metadata_identifier == "no.met:dataset-id"
+            assert start_date == "2024-11-10"
+            assert wms_url == "https://thredds.met.no/data/wms"
+            return Path("no.met") / "no.met.thredds" / "2024" / "11" / "no-met-dataset-id.png"
+
+        with patch("solrindexer.tools._load_adc_path_builder", return_value=fake_builder):
+            updated_doc = add_adc_thumbnails(doc, cfg)
+
+        assert updated_doc["thumbnail_url"] == (
+            "https://adc.example/thumbnails/no.met/no.met.thredds/2024/11/no-met-dataset-id.png"
+        )
+
+    @pytest.mark.indexdata
+    def test_leaves_doc_unchanged_when_file_missing(self, tmp_path):
+        doc = {
+            "metadata_identifier": "no.met:dataset-id",
+            "data_access_url_ogc_wms": ["https://thredds.met.no/data/wms"],
+            "temporal_extent_start_date": "2024-11-10",
+        }
+        cfg = {
+            "adc-thumbnails-base-path": str(tmp_path),
+            "adc-thumbnails-base-url": "https://adc.example/thumbnails",
+        }
+
+        with patch(
+            "solrindexer.tools._load_adc_path_builder",
+            return_value=lambda **_: Path("missing.png"),
+        ):
+            updated_doc = add_adc_thumbnails(doc, cfg)
+
+        assert "thumbnail_url" not in updated_doc
+
+
+@pytest.mark.indexdata
+def test_adc_deterministic_path_contract_vectors():
+    from solrindexer.tools import _load_adc_path_builder
+
+    builder = _load_adc_path_builder()
+    contract_cases = load_adc_thumbnail_path_contract_cases()
+
+    assert builder is not None
+    assert contract_cases
+
+    for case in contract_cases:
+        resolved = builder(
+            metadata_identifier=case["metadata_identifier"],
+            start_date=case["start_date"],
+            wms_url=case["wms_url"],
+        )
+        assert resolved.as_posix() == case["expected_relative_path"], case["name"]

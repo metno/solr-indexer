@@ -65,8 +65,12 @@ def parse_arguments():
         "-n", "--no_thumbnail", action="store_true", help="Disable thumbnail indexing"
     )
     parser.add_argument("-nbs", "--nbs", action="store_true", help="Enable NBS thumbnail mode")
+    parser.add_argument("-adc", "--adc", action="store_true", help="Enable ADC thumbnail mode")
 
     args = parser.parse_args()
+    if args.nbs and args.adc:
+        parser.error("Use either --nbs or --adc, not both")
+
     if not args.input_file and not args.list_file and not args.directory and not args.mark_parent:
         parser.print_help()
         parser.exit(EXIT_USAGE)
@@ -89,6 +93,8 @@ def main():
 
         if args.nbs:
             cfg["scope"] = "NBS"
+        elif args.adc:
+            cfg["scope"] = "ADC"
         else:
             cfg["scope"] = cfg.get("scope")
 
@@ -535,8 +541,8 @@ def _resolve_thumbnail_flags(args, cfg):
     if args.no_thumbnail:
         return False
     enabled = bool(args.thumbnail or cfg.get("tflg", False))
-    if enabled and cfg.get("scope") != "NBS":
-        logger.warning("Thumbnail generation is only supported for NBS scope in this version")
+    if enabled and cfg.get("scope") not in {"NBS", "ADC"}:
+        logger.warning("Thumbnail generation is only supported for NBS or ADC scope")
         return False
     return enabled
 

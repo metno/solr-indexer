@@ -7,7 +7,7 @@ name = "solrindexer"
 version = "4.0.0.dev1"
 description = "Tools and wrappers used for indexing MMD in SolR"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = {text = "GPL-3.0"}
 authors = [
     {name = "MET Norway", email = "csw-services@met.no"}
@@ -45,6 +45,7 @@ dependencies = [
 metvocab = ["metvocab @ git+https://github.com/metno/met-vocab-tools@v1.2.0"]
 rdflib = ["rdflib"]
 rich = ["rich"]
+adc = ["metsis-thumbnail-generator @ git+https://github.com/magnarem/metsis-thumbnail.generator.git@main"]
 dev = [
     "pytest",
     "pytest-cov",
