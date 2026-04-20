@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd" xmlns:xml="http://www.w3.org/XML/1998/namespace">
+  <mmd:metadata_identifier>urn:uuid:66666666-6666-4666-8666-666666666666</mmd:metadata_identifier>
+  <mmd:title xml:lang="en">Platform Instrument Ancillary Full Fixture</mmd:title>
+  <mmd:abstract xml:lang="en">Exercises nested platform, instrument and ancillary options with realistic structure depth. More details: https://example.org/mmd/platform and support: sensor-support@example.org.</mmd:abstract>
+  <mmd:metadata_status>Active</mmd:metadata_status>
+  <mmd:dataset_production_status>Complete</mmd:dataset_production_status>
+  <mmd:collection>SESS2025</mmd:collection>
+  <mmd:last_metadata_update>
+    <mmd:update>
+      <mmd:datetime>2026-01-20T06:30:00Z</mmd:datetime>
+      <mmd:type>Created</mmd:type>
+    </mmd:update>
+  </mmd:last_metadata_update>
+  <mmd:temporal_extent>
+    <mmd:start_date>2023-03-01T00:00:00Z</mmd:start_date>
+    <mmd:end_date>2023-03-31T23:59:59Z</mmd:end_date>
+  </mmd:temporal_extent>
+  <mmd:iso_topic_category>imageryBaseMapsEarthCover</mmd:iso_topic_category>
+  <mmd:keywords vocabulary="GCMDPLT">
+    <mmd:keyword>Earth Observation Satellites</mmd:keyword>
+  </mmd:keywords>
+  <mmd:keywords vocabulary="GCMDSK">
+    <mmd:keyword>Earth Science > Atmosphere</mmd:keyword>
+  </mmd:keywords>
+  <mmd:geographic_extent>
+    <mmd:rectangle>
+      <mmd:north>80.0</mmd:north>
+      <mmd:south>50.0</mmd:south>
+      <mmd:east>40.0</mmd:east>
+      <mmd:west>-15.0</mmd:west>
+    </mmd:rectangle>
+  </mmd:geographic_extent>
+  <mmd:activity_type>Space Borne Instrument</mmd:activity_type>
+  <mmd:activity_type>Maps/Charts/Photographs</mmd:activity_type>
+  <mmd:platform>
+    <mmd:short_name>Sentinel-1A</mmd:short_name>
+    <mmd:long_name>Sentinel-1A</mmd:long_name>
+    <mmd:resource>https://space.oscar.wmo.int/satellites/view/sentinel_1a</mmd:resource>
+    <mmd:orbit_relative>121</mmd:orbit_relative>
+    <mmd:orbit_absolute>62391</mmd:orbit_absolute>
+    <mmd:orbit_direction>ascending</mmd:orbit_direction>
+    <mmd:instrument>
+      <mmd:short_name>SAR-C</mmd:short_name>
+      <mmd:long_name>Synthetic Aperture Radar (C-band)</mmd:long_name>
+      <mmd:resource>https://space.oscar.wmo.int/instruments/view/sar_c_sentinel_1</mmd:resource>
+      <mmd:mode>IW</mmd:mode>
+      <mmd:polarisation>VV+VH</mmd:polarisation>
+      <mmd:product_type>SAR-IW-L1-GRDH</mmd:product_type>
+    </mmd:instrument>
+    <mmd:ancillary>
+      <mmd:cloud_coverage>12.5</mmd:cloud_coverage>
+      <mmd:scene_coverage>97.3</mmd:scene_coverage>
+      <mmd:timeliness>NRT</mmd:timeliness>
+    </mmd:ancillary>
+  </mmd:platform>
+  <mmd:platform>
+    <mmd:short_name>Sentinel-2A</mmd:short_name>
+    <mmd:long_name>Sentinel-2A</mmd:long_name>
+    <mmd:instrument>
+      <mmd:short_name>MSI</mmd:short_name>
+      <mmd:long_name>MultiSpectral Instrument</mmd:long_name>
+      <mmd:mode>SM</mmd:mode>
+      <mmd:product_type>MSI-L2A</mmd:product_type>
+    </mmd:instrument>
+  </mmd:platform>
+  <mmd:spatial_representation>grid</mmd:spatial_representation>
+</mmd:mmd>

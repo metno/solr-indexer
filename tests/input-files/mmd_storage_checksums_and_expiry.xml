@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd" xmlns:xml="http://www.w3.org/XML/1998/namespace">
+  <mmd:metadata_identifier>urn:uuid:77777777-7777-4777-8777-777777777777</mmd:metadata_identifier>
+  <mmd:title xml:lang="en">Storage Checksum and Expiry Fixture</mmd:title>
+  <mmd:abstract xml:lang="en">Exercises storage_information fields and checksum types for archive validation checks. Storage handbook: https://example.org/mmd/storage and ops contact: archive-ops@example.org.</mmd:abstract>
+  <mmd:metadata_status>Active</mmd:metadata_status>
+  <mmd:dataset_production_status>Complete</mmd:dataset_production_status>
+  <mmd:collection>DAM</mmd:collection>
+  <mmd:last_metadata_update>
+    <mmd:update>
+      <mmd:datetime>2026-02-25T14:20:00Z</mmd:datetime>
+      <mmd:type>Created</mmd:type>
+    </mmd:update>
+    <mmd:update>
+      <mmd:datetime>2026-03-25T14:20:00Z</mmd:datetime>
+      <mmd:type>Major modification</mmd:type>
+      <mmd:note>Storage metadata enriched.</mmd:note>
+    </mmd:update>
+  </mmd:last_metadata_update>
+  <mmd:temporal_extent>
+    <mmd:start_date>2024-01-01T00:00:00Z</mmd:start_date>
+    <mmd:end_date>2024-12-31T23:59:59Z</mmd:end_date>
+  </mmd:temporal_extent>
+  <mmd:iso_topic_category>location</mmd:iso_topic_category>
+  <mmd:keywords vocabulary="None">
+    <mmd:keyword>storage</mmd:keyword>
+    <mmd:keyword>checksum</mmd:keyword>
+  </mmd:keywords>
+  <mmd:geographic_extent>
+    <mmd:rectangle>
+      <mmd:north>71.0</mmd:north>
+      <mmd:south>69.5</mmd:south>
+      <mmd:east>20.0</mmd:east>
+      <mmd:west>17.0</mmd:west>
+    </mmd:rectangle>
+  </mmd:geographic_extent>
+  <mmd:storage_information>
+    <mmd:file_name>fixture_archive_v1.tar</mmd:file_name>
+    <mmd:file_location>https://example.org/archive/fixture_archive_v1.tar</mmd:file_location>
+    <mmd:file_format>TAR</mmd:file_format>
+    <mmd:file_size unit="GB">2.75</mmd:file_size>
+    <mmd:checksum type="sha512sum">9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a089f1f2e4b5f3e6f9b30a7f64f9cc4f6ac65356f322f9f0dfd9e832f9f7f7f7f7</mmd:checksum>
+    <mmd:storage_expiry_date>2030-01-01</mmd:storage_expiry_date>
+  </mmd:storage_information>
+  <mmd:metadata_source>Internal</mmd:metadata_source>
+</mmd:mmd>

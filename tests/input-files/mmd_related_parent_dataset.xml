@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd" xmlns:xml="http://www.w3.org/XML/1998/namespace">
+  <mmd:metadata_identifier>urn:uuid:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa</mmd:metadata_identifier>
+  <mmd:title xml:lang="en">Parent Dataset for Relationship Fixture</mmd:title>
+  <mmd:abstract xml:lang="en">Companion dataset used by relationship tests as a resolvable parent record. See https://example.org/mmd/related-parent and contact parent-datasets@example.org.</mmd:abstract>
+  <mmd:metadata_status>Active</mmd:metadata_status>
+  <mmd:dataset_production_status>Complete</mmd:dataset_production_status>
+  <mmd:collection>NBS</mmd:collection>
+  <mmd:last_metadata_update>
+    <mmd:update>
+      <mmd:datetime>2026-02-02T12:10:00Z</mmd:datetime>
+      <mmd:type>Created</mmd:type>
+    </mmd:update>
+  </mmd:last_metadata_update>
+  <mmd:temporal_extent>
+    <mmd:start_date>2019-01-01T00:00:00Z</mmd:start_date>
+    <mmd:end_date>2022-12-31T00:00:00Z</mmd:end_date>
+  </mmd:temporal_extent>
+  <mmd:iso_topic_category>oceans</mmd:iso_topic_category>
+  <mmd:keywords vocabulary="GCMDSK">
+    <mmd:keyword>EARTH SCIENCE &gt; OCEANS &gt; OCEAN TEMPERATURE &gt; WATER TEMPERATURE</mmd:keyword>
+  </mmd:keywords>
+  <mmd:geographic_extent>
+    <mmd:rectangle>
+      <mmd:north>78.0</mmd:north>
+      <mmd:south>70.0</mmd:south>
+      <mmd:east>30.0</mmd:east>
+      <mmd:west>5.0</mmd:west>
+    </mmd:rectangle>
+  </mmd:geographic_extent>
+</mmd:mmd>

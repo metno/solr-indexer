@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd" xmlns:xml="http://www.w3.org/XML/1998/namespace">
+  <mmd:metadata_identifier>urn:uuid:44444444-4444-4444-8444-444444444444</mmd:metadata_identifier>
+  <mmd:title xml:lang="en">Use Constraint Identifier Resource Fixture</mmd:title>
+  <mmd:abstract xml:lang="en">Validates structured use_constraint branch with identifier and resource for policy parsing tests. Terms page: https://example.org/mmd/terms, questions: licensing@example.org.</mmd:abstract>
+  <mmd:metadata_status>Active</mmd:metadata_status>
+  <mmd:dataset_production_status>Complete</mmd:dataset_production_status>
+  <mmd:collection>ACCESS</mmd:collection>
+  <mmd:last_metadata_update>
+    <mmd:update>
+      <mmd:datetime>2026-01-15T08:00:00Z</mmd:datetime>
+      <mmd:type>Created</mmd:type>
+    </mmd:update>
+  </mmd:last_metadata_update>
+  <mmd:temporal_extent>
+    <mmd:start_date>2018-01-01T00:00:00Z</mmd:start_date>
+  </mmd:temporal_extent>
+  <mmd:iso_topic_category>geoscientificInformation</mmd:iso_topic_category>
+  <mmd:keywords vocabulary="None">
+    <mmd:keyword>license-structured</mmd:keyword>
+  </mmd:keywords>
+  <mmd:keywords vocabulary="GCMDSK">
+    <mmd:keyword>Earth Science > Atmosphere</mmd:keyword>
+  </mmd:keywords>
+  <mmd:dataset_language>en</mmd:dataset_language>
+  <mmd:geographic_extent>
+    <mmd:rectangle>
+      <mmd:north>69.0</mmd:north>
+      <mmd:south>66.0</mmd:south>
+      <mmd:east>19.0</mmd:east>
+      <mmd:west>13.0</mmd:west>
+    </mmd:rectangle>
+  </mmd:geographic_extent>
+  <mmd:access_constraint>Open</mmd:access_constraint>
+  <mmd:use_constraint>
+    <mmd:identifier>CC-BY-4.0</mmd:identifier>
+    <mmd:resource>https://spdx.org/licenses/CC-BY-4.0</mmd:resource>
+  </mmd:use_constraint>
+</mmd:mmd>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd" xmlns:xml="http://www.w3.org/XML/1998/namespace">
+  <mmd:metadata_identifier>urn:uuid:88888888-8888-4888-8888-888888888888</mmd:metadata_identifier>
+  <mmd:title xml:lang="en">Minimal Optional Coverage Fixture</mmd:title>
+  <mmd:abstract xml:lang="en">Minimal valid profile with only mandatory and essential choice content, used for baseline parser checks. Spec note: https://example.org/mmd/baseline and contact: baseline@example.org.</mmd:abstract>
+  <mmd:metadata_status>Active</mmd:metadata_status>
+  <mmd:dataset_production_status>Not available</mmd:dataset_production_status>
+  <mmd:collection>ADC</mmd:collection>
+  <mmd:last_metadata_update>
+    <mmd:update>
+      <mmd:datetime>2026-04-01T00:00:00Z</mmd:datetime>
+      <mmd:type>Original record</mmd:type>
+    </mmd:update>
+  </mmd:last_metadata_update>
+  <mmd:temporal_extent>
+    <mmd:start_date>2000-01-01T00:00:00Z</mmd:start_date>
+  </mmd:temporal_extent>
+  <mmd:iso_topic_category>Not available</mmd:iso_topic_category>
+  <mmd:keywords vocabulary="GCMDSK">
+    <mmd:keyword>Earth Science > Atmosphere</mmd:keyword>
+  </mmd:keywords>
+  <mmd:geographic_extent>
+    <mmd:rectangle>
+      <mmd:north>0.0</mmd:north>
+      <mmd:south>-1.0</mmd:south>
+      <mmd:east>1.0</mmd:east>
+      <mmd:west>0.0</mmd:west>
+    </mmd:rectangle>
+  </mmd:geographic_extent>
+</mmd:mmd>

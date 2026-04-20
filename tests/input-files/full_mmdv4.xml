@@ -1,0 +1,203 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd">
+  <mmd:metadata_identifier>8a21900c-61ee-56eb-ab20-c1a4826982b7</mmd:metadata_identifier><mmd:alternate_identifier type="WIS">urn:wmo:md:int.wmo.wis::ca.gc.ec.msc-1.1.9.3</mmd:alternate_identifier>
+  <mmd:title xml:lang="en">Title in English</mmd:title>
+  <mmd:title xml:lang="no">Title på norsk</mmd:title>
+  <mmd:abstract xml:lang="en">Summary in English with additional context on scope and provenance. Documentation: https://example.org/mmd/full and support email: support@example.org.</mmd:abstract>
+  <mmd:abstract xml:lang="no">Sammendrag pa norsk med ekstra kontekst. Dokumentasjon: https://example.org/mmd/full og kontakt: support@example.org.</mmd:abstract>
+  <mmd:metadata_status>Active</mmd:metadata_status>
+  <mmd:dataset_production_status>Not available</mmd:dataset_production_status>
+  <mmd:collection>ADC</mmd:collection>
+  <mmd:collection>SIOS</mmd:collection>
+  <mmd:last_metadata_update>
+    <mmd:update>
+      <mmd:datetime>2024-10-24T10:00:00Z</mmd:datetime>
+      <mmd:type>Created</mmd:type>
+      <mmd:note>MMD record created from the NetCDF file</mmd:note>
+    </mmd:update>
+    <mmd:update>
+      <mmd:datetime>2025-11-28T10:00:00Z</mmd:datetime>
+      <mmd:type>Major modification</mmd:type>
+      <mmd:note>Converted to MMD v4</mmd:note>
+    </mmd:update>
+  </mmd:last_metadata_update>
+  <mmd:temporal_extent>
+    <mmd:start_date>2004-08-23T03:00:00Z</mmd:start_date>
+    <mmd:end_date>2005-09-14T09:00:00Z</mmd:end_date>
+  </mmd:temporal_extent>
+  <mmd:iso_topic_category>climatologyMeteorologyAtmosphere</mmd:iso_topic_category>
+  <mmd:iso_topic_category>oceans</mmd:iso_topic_category>
+  <mmd:iso_topic_category>imageryBaseMapsEarthCover</mmd:iso_topic_category>
+  <mmd:keywords vocabulary="GCMDSK">
+    <mmd:keyword>Earth Science &gt; Spectral/Engineering &gt; RADAR &gt; RADAR backscatter</mmd:keyword>
+  <mmd:keyword>Earth Science &gt; Spectral/Engineering &gt; RADAR &gt; RADAR imagery</mmd:keyword>
+  <mmd:keyword>Earth Science &gt; Spectral/Engineering &gt; Microwave &gt; Microwave imagery</mmd:keyword>
+  <mmd:resource>https://gcmd.earthdata.nasa.gov/kms/concepts/concept_scheme/sciencekeywords</mmd:resource>
+  <mmd:separator>&gt;</mmd:separator>
+  </mmd:keywords>
+  <mmd:keywords vocabulary="GEMET">
+    <mmd:keyword>Orthoimagery</mmd:keyword>
+    <mmd:keyword>Land cover</mmd:keyword>
+    <mmd:keyword>Oceanographic geographical features</mmd:keyword>
+    <mmd:resource>http://inspire.ec.europa.eu/theme</mmd:resource>
+  </mmd:keywords>
+  <mmd:operational_status>Scientific</mmd:operational_status>
+  <mmd:dataset_language>en</mmd:dataset_language>
+  <mmd:geographic_extent>
+    <mmd:rectangle srsName="EPSG:4326">
+      <mmd:north>78.95738</mmd:north>
+      <mmd:south>78.95738</mmd:south>
+      <mmd:east>11.82275</mmd:east>
+      <mmd:west>11.82275</mmd:west>
+    </mmd:rectangle>
+  </mmd:geographic_extent>
+  <mmd:access_constraint>Open</mmd:access_constraint>
+  <mmd:use_constraint>
+    <mmd:identifier>CC-BY-4.0</mmd:identifier>
+    <mmd:resource>http://spdx.org/licenses/CC-BY-4.0</mmd:resource>
+  </mmd:use_constraint>
+  <mmd:project>
+    <mmd:short_name>MYPR1</mmd:short_name>
+    <mmd:long_name>My Project 1</mmd:long_name>
+  </mmd:project>
+  <mmd:project>
+    <mmd:short_name>MYPR2</mmd:short_name>
+    <mmd:long_name>My Project 2</mmd:long_name>
+  </mmd:project>
+  <mmd:activity_type>Space Borne Instrument</mmd:activity_type>
+  <mmd:activity_type>Climate Indicator</mmd:activity_type>
+  <mmd:platform>
+    <mmd:short_name>Sentinel-1C</mmd:short_name>
+    <mmd:long_name>Sentinel-1C</mmd:long_name>
+    <mmd:resource>https://space.oscar.wmo.int/satellites/view/sentinel_1c</mmd:resource>
+  </mmd:platform>
+  <mmd:platform>
+    <mmd:short_name>Sentinel-1A</mmd:short_name>
+    <mmd:long_name>Sentinel-1A</mmd:long_name>
+    <mmd:resource>https://space.oscar.wmo.int/satellites/view/sentinel_1a</mmd:resource>
+    <mmd:orbit_relative>121</mmd:orbit_relative>
+    <mmd:orbit_absolute>62391</mmd:orbit_absolute>
+    <mmd:orbit_direction>ascending</mmd:orbit_direction>
+    <mmd:instrument>
+         <mmd:short_name>SAR-C</mmd:short_name>
+         <mmd:long_name>Synthetic Aperture Radar (C-band)</mmd:long_name>
+         <mmd:resource>https://space.oscar.wmo.int/instruments/view/sar_c_sentinel_1</mmd:resource>
+         <mmd:mode>IW</mmd:mode>
+         <mmd:polarisation>VV+VH</mmd:polarisation>
+    </mmd:instrument>
+    <mmd:ancillary>
+         <mmd:cloud_coverage>23.4</mmd:cloud_coverage>
+         <mmd:scene_coverage>77</mmd:scene_coverage>
+         <mmd:timeliness>NRT</mmd:timeliness>
+    </mmd:ancillary>
+  </mmd:platform>
+  <mmd:platform>
+    <mmd:short_name/>
+    <mmd:long_name>Oceania</mmd:long_name>
+    <mmd:resource>http://vocab.nerc.ac.uk/collection/C17/current/67CE/</mmd:resource>
+    <mmd:instrument>
+         <mmd:short_name>CTD</mmd:short_name>
+         <mmd:long_name>Conductivity, temperature and depth package</mmd:long_name>
+         <mmd:resource>http://vocab.nerc.ac.uk/collection/L22/current/TOOL0001/</mmd:resource>
+    </mmd:instrument>
+  </mmd:platform>
+  <mmd:platform>
+    <mmd:short_name>Another</mmd:short_name>
+    <mmd:long_name/>
+    <mmd:resource/>
+    <mmd:instrument>
+         <mmd:short_name>ASL IPS4 ice profiler</mmd:short_name>
+         <mmd:long_name/>
+         <mmd:resource>http://vocab.nerc.ac.uk/collection/L22/current/TOOL0292/</mmd:resource>
+    </mmd:instrument>
+  </mmd:platform>
+   <mmd:spatial_representation>grid</mmd:spatial_representation>
+   <mmd:related_information>
+     <mmd:type>Observation facility</mmd:type>
+     <mmd:description>WIGOS Station: KVITOYA (0-20000-0-01011)</mmd:description>
+     <mmd:resource>https://oscar.wmo.int/surface/#/search/station/stationReportDetails/0-20000-0-01011</mmd:resource>
+  </mmd:related_information>
+  <mmd:related_information>
+    <mmd:type>Other documentation</mmd:type>
+    <mmd:description>Other documentation</mmd:description>
+    <mmd:resource>https://doi.org/10.XXXXX/AABBCCDD</mmd:resource>
+  </mmd:related_information>
+  <mmd:personnel>
+    <mmd:name uri="https://orcid.org/0000-0001-5221-1377">First1 Family1</mmd:name>
+    <mmd:role>Investigator</mmd:role>
+    <mmd:type>Person</mmd:type>
+    <mmd:email>first.fam@met.no</mmd:email>
+    <mmd:organisation uri="https://ror.org/001n36p86">Norwegian Meteorological Institute</mmd:organisation>
+    <mmd:contact_address>
+     <mmd:address>Meteorologisk institutt, Henrik Mohnsplass 1</mmd:address>
+     <mmd:city>Oslo</mmd:city>
+     <mmd:province_or_state>Oslo</mmd:province_or_state>
+     <mmd:postal_code>0000</mmd:postal_code>
+     <mmd:country>Norway</mmd:country>
+     </mmd:contact_address>
+  </mmd:personnel>
+  <mmd:personnel>
+    <mmd:name>First2 Family2</mmd:name>
+    <mmd:role>Investigator</mmd:role>
+    <mmd:type>Person</mmd:type>
+    <mmd:email>first2.fam2@nve.no</mmd:email>
+    <mmd:organisation uri="https://ror.org/02syy7986">Norwegian Water Resources and Energy Directorate</mmd:organisation>
+   <mmd:contact_address>
+      <mmd:address>Meteorologisk institutt, Henrik Mohnsplass 1</mmd:address>
+      <mmd:city>Oslo</mmd:city>
+      <mmd:province_or_state>Oslo</mmd:province_or_state>
+      <mmd:postal_code>0000</mmd:postal_code>
+      <mmd:country>Norway</mmd:country>
+    </mmd:contact_address>
+  </mmd:personnel>
+  <mmd:personnel>
+    <mmd:name>First3 Family3</mmd:name>
+    <mmd:role>Technical contact</mmd:role>
+    <mmd:email>first3.fam3@met.no</mmd:email>
+    <mmd:organisation uri="https://ror.org/001n36p86">Norwegian Meteorological Institute</mmd:organisation>
+  </mmd:personnel>
+  <mmd:personnel>
+    <mmd:role>Metadata author</mmd:role>
+    <mmd:type>Organisation</mmd:type>
+    <mmd:name>NBS Helpdesk</mmd:name>
+    <mmd:email>nbs-helpdesk@met.no</mmd:email>
+    <mmd:organisation uri="https://ror.org/001n36p86">Norwegian Meteorological Institute</mmd:organisation>
+  </mmd:personnel>
+  <mmd:personnel>
+    <mmd:name>ADC support</mmd:name>
+    <mmd:role>Data center contact</mmd:role>
+    <mmd:type>Organisation</mmd:type>
+    <mmd:email>adc-support@met.no</mmd:email>
+    <mmd:organisation>Norwegian Meteorological Institute / Arctic Data Centre</mmd:organisation>
+  </mmd:personnel>
+  <mmd:dataset_citation>
+    <mmd:title>Title in English</mmd:title>
+    <mmd:author>First1 Family1 and First2 Family2</mmd:author>
+    <mmd:publisher>Norwegian Meteorological Institute</mmd:publisher>
+    <mmd:publication_date>2024-11-04</mmd:publication_date>
+    <mmd:doi>https://doi.org/10.21343/XXXX-YYYY</mmd:doi>
+  </mmd:dataset_citation>
+  <mmd:quality_control>Basic quality control</mmd:quality_control>
+  <mmd:data_access>
+    <mmd:type>OPeNDAP</mmd:type>
+    <mmd:description>Open-source Project for a Network Data Access Protocol</mmd:description>
+    <mmd:resource>https://thredds.met.no/thredds/dodsC/arcticdata/obsSynop/02910</mmd:resource>
+  </mmd:data_access>
+  <mmd:data_center>
+    <mmd:data_center_name>
+      <mmd:short_name>NO/MET/ADC</mmd:short_name>
+      <mmd:long_name>Norwegian Meteorological Institute / Arctic Data Centre</mmd:long_name>
+    </mmd:data_center_name>
+    <mmd:data_center_url>https://adc.met.no/</mmd:data_center_url>
+  </mmd:data_center>
+  <mmd:related_dataset relation_type="parent">1a9e3cd3-0905-48b2-86e6-5585dcdf8cc1</mmd:related_dataset>
+  <mmd:storage_information>
+    <mmd:file_name>S1A_WV_OCN__2SSV_20240302T191855_20240302T192435_052807_0663FD_9E80.nc</mmd:file_name>
+    <mmd:file_location>/some/path/that/should/not/be/exposed</mmd:file_location>
+    <mmd:file_format>NetCDF-CF</mmd:file_format>
+    <mmd:file_size unit="MB">163.95</mmd:file_size>
+    <mmd:checksum type="md5sum">3e25fde68624b130c5b1fa9c59366921</mmd:checksum>
+    <mmd:storage_expiry_date>2026-10-11</mmd:storage_expiry_date>
+  </mmd:storage_information>
+  <mmd:metadata_source>Internal</mmd:metadata_source>
+</mmd:mmd>

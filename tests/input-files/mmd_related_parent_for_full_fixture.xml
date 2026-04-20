@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd" xmlns:xml="http://www.w3.org/XML/1998/namespace">
+  <mmd:metadata_identifier>1a9e3cd3-0905-48b2-86e6-5585dcdf8cc1</mmd:metadata_identifier>
+  <mmd:title xml:lang="en">Parent Dataset Referenced by Full Fixture</mmd:title>
+  <mmd:abstract xml:lang="en">Companion dataset used to resolve the parent relation from the full fixture. Overview: https://example.org/mmd/full-parent and contact: full-graph@example.org.</mmd:abstract>
+  <mmd:metadata_status>Active</mmd:metadata_status>
+  <mmd:dataset_production_status>Complete</mmd:dataset_production_status>
+  <mmd:collection>ADC</mmd:collection>
+  <mmd:last_metadata_update>
+    <mmd:update>
+      <mmd:datetime>2026-02-03T09:00:00Z</mmd:datetime>
+      <mmd:type>Created</mmd:type>
+    </mmd:update>
+  </mmd:last_metadata_update>
+  <mmd:temporal_extent>
+    <mmd:start_date>2018-01-01T00:00:00Z</mmd:start_date>
+    <mmd:end_date>2024-12-31T23:59:59Z</mmd:end_date>
+  </mmd:temporal_extent>
+  <mmd:iso_topic_category>climatologyMeteorologyAtmosphere</mmd:iso_topic_category>
+  <mmd:keywords vocabulary="GCMDSK">
+    <mmd:keyword>Earth Science &gt; Atmosphere &gt; Atmospheric Temperature</mmd:keyword>
+  </mmd:keywords>
+  <mmd:geographic_extent>
+    <mmd:rectangle>
+      <mmd:north>85.0</mmd:north>
+      <mmd:south>55.0</mmd:south>
+      <mmd:east>45.0</mmd:east>
+      <mmd:west>-25.0</mmd:west>
+    </mmd:rectangle>
+  </mmd:geographic_extent>
+</mmd:mmd>

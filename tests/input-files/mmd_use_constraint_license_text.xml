@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd" xmlns:xml="http://www.w3.org/XML/1998/namespace">
+  <mmd:metadata_identifier>urn:uuid:55555555-5555-4555-8555-555555555555</mmd:metadata_identifier>
+  <mmd:title xml:lang="en">Use Constraint License Text Fixture</mmd:title>
+  <mmd:abstract xml:lang="en">Validates free-text license branch in use_constraint and downstream indexing behavior. License info: https://example.org/mmd/license and legal contact: legal@example.org.</mmd:abstract>
+  <mmd:metadata_status>Active</mmd:metadata_status>
+  <mmd:dataset_production_status>Planned</mmd:dataset_production_status>
+  <mmd:collection>APPL</mmd:collection>
+  <mmd:last_metadata_update>
+    <mmd:update>
+      <mmd:datetime>2026-03-11T11:11:11Z</mmd:datetime>
+      <mmd:type>Created</mmd:type>
+      <mmd:note>Planned release metadata.</mmd:note>
+    </mmd:update>
+  </mmd:last_metadata_update>
+  <mmd:temporal_extent>
+    <mmd:start_date>2027-01-01T00:00:00Z</mmd:start_date>
+  </mmd:temporal_extent>
+  <mmd:iso_topic_category>planningCadastre</mmd:iso_topic_category>
+  <mmd:keywords vocabulary="None">
+    <mmd:keyword>license-text</mmd:keyword>
+    <mmd:keyword>planned</mmd:keyword>
+  </mmd:keywords>
+  <mmd:keywords vocabulary="GCMDSK">
+    <mmd:keyword>Earth Science > Atmosphere</mmd:keyword>
+  </mmd:keywords>
+  <mmd:geographic_extent>
+    <mmd:rectangle>
+      <mmd:north>65.0</mmd:north>
+      <mmd:south>60.0</mmd:south>
+      <mmd:east>12.0</mmd:east>
+      <mmd:west>5.0</mmd:west>
+    </mmd:rectangle>
+  </mmd:geographic_extent>
+  <mmd:use_constraint>
+    <mmd:license_text>This test dataset may be used internally for algorithm validation with attribution.</mmd:license_text>
+  </mmd:use_constraint>
+</mmd:mmd>
