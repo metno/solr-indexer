@@ -501,15 +501,15 @@ class MMD4SolR:
             phone = self._first_text_for(node, "./mmd:phone")
             name_nodes = node.xpath("./mmd:name", namespaces=self.NSMAP)
             organisation_nodes = node.xpath("./mmd:organisation", namespaces=self.NSMAP)
-            orcid_uri = name_nodes[0].attrib.get("uri") if name_nodes else None
-            ror_uri = organisation_nodes[0].attrib.get("uri") if organisation_nodes else None
+            name_uri = name_nodes[0].attrib.get("uri") if name_nodes else None
+            org_uri = organisation_nodes[0].attrib.get("uri") if organisation_nodes else None
 
             if email:
                 resources.append(email)
-            if orcid_uri:
-                resources.append(orcid_uri)
-            if ror_uri:
-                resources.append(ror_uri)
+            if name_uri:
+                resources.append(name_uri)
+            if org_uri:
+                resources.append(org_uri)
 
             contact_address = {
                 "address": self._first_text_for(node, "./mmd:contact_address/mmd:address"),
@@ -546,10 +546,10 @@ class MMD4SolR:
 
             if personnel_type:
                 personnel_entry["type"] = personnel_type
-            if orcid_uri:
-                personnel_entry["orcid_uri"] = orcid_uri
-            if ror_uri:
-                personnel_entry["ror_uri"] = ror_uri
+            if name_uri:
+                personnel_entry["name_uri"] = name_uri
+            if org_uri:
+                personnel_entry["org_uri"] = org_uri
             if contact_address:
                 personnel_entry["contact_address"] = contact_address
 
@@ -1197,10 +1197,7 @@ class IndexMMD:
                 # return False
 
             # Handle explicit dataset level parent/children relations.
-            if level == 1:
-                input_record.update({"dataset_type": "Level-1"})
             if level == 2:
-                input_record.update({"dataset_type": "Level-2"})
                 input_record.update({"isChild": True})
 
             # If OGC WMS is available, no point in looking for featureType in OPeNDAP.

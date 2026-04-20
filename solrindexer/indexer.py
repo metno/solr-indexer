@@ -23,6 +23,7 @@ import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 
 from solrindexer.failure_tracker import FailureTracker
 from solrindexer.io import load_file
@@ -151,6 +152,76 @@ class BulkIndexer:
         metadata_id = None
         validation_messages = []
 
+        def _as_list(value):
+            if value is None:
+                return []
+            if isinstance(value, list):
+                return value
+            return [value]
+
+        def _parse_iso_datetime(value):
+            if value is None:
+                return None
+            text = str(value).strip()
+            if not text:
+                return None
+            if text.endswith("Z"):
+                text = f"{text[:-1]}+00:00"
+            try:
+                parsed = datetime.fromisoformat(text)
+            except ValueError:
+                return None
+            if parsed.tzinfo is not None:
+                parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+            return parsed
+
+        def _validate_temporal_ranges(solr_doc):
+            starts = _as_list(solr_doc.get("temporal_extent_start_date"))
+            ends = _as_list(solr_doc.get("temporal_extent_end_date"))
+
+            for index, start_value in enumerate(starts):
+                end_value = ends[index] if index < len(ends) else None
+                if end_value is None or str(end_value).strip() == "":
+                    # Open-ended ranges are valid.
+                    continue
+                start_dt = _parse_iso_datetime(start_value)
+                end_dt = _parse_iso_datetime(end_value)
+                if start_dt is None or end_dt is None:
+                    continue
+                if start_dt > end_dt:
+                    return (
+                        "Invalid temporal extent range at index "
+                        f"{index}: start_date '{start_value}' is newer than end_date "
+                        f"'{end_value}'"
+                    )
+
+            for period_value in _as_list(solr_doc.get("temporal_extent_period_dr")):
+                if period_value is None:
+                    continue
+                period_text = str(period_value).strip()
+                if not period_text:
+                    continue
+                match = re.match(r"^\[\s*(.*?)\s+TO\s+(.*?)\s*\]$", period_text)
+                if not match:
+                    continue
+                period_start = match.group(1).strip()
+                period_end = match.group(2).strip()
+                if "*" in period_start or "*" in period_end:
+                    # Ignore open-ended wildcard date ranges.
+                    continue
+
+                start_dt = _parse_iso_datetime(period_start)
+                end_dt = _parse_iso_datetime(period_end)
+                if start_dt is None or end_dt is None:
+                    continue
+                if start_dt > end_dt:
+                    return (
+                        "Invalid temporal_extent_period_dr range: start_date "
+                        f"'{period_start}' is newer than end_date '{period_end}'"
+                    )
+
+            return None
+
         def _clean_validation_message(message):
             """Remove leading icon tokens from warning text for summary readability."""
             return re.sub(r"^(?:\[FAIL\]|\[WARN\]|❌|⚠️)\s*", "", message).strip()
@@ -270,6 +341,19 @@ class BulkIndexer:
             )
             return (None, status)
 
+        temporal_range_error = _validate_temporal_ranges(tmpdoc)
+        if temporal_range_error is not None:
+            logger.error(
+                "File %s failed temporal range sanity checks: %s", file, temporal_range_error
+            )
+            self.failure_tracker.add_failure(
+                filename=file,
+                error_message=temporal_range_error,
+                error_stage="conversion",
+                metadata_identifier=tmpdoc.get("id"),
+            )
+            return (None, status)
+
         if "related_dataset" in tmpdoc:
             logger.debug("got related dataset")
             if isinstance(tmpdoc["related_dataset"], str):
@@ -289,7 +373,6 @@ class BulkIndexer:
                 # Skip if DOI is used to refer to parent, that isn't consistent.
                 if "doi.org" not in tmpdoc["related_dataset"]:
                     # Update document with child specific fields
-                    tmpdoc.update({"dataset_type": "Level-2"})
                     tmpdoc.update({"isChild": True})
                     # tmpdoc.update({'isParent': False})
 
@@ -302,7 +385,6 @@ class BulkIndexer:
 
         else:
             # Assume we have level-1 doc that are not parent
-            tmpdoc.update({"dataset_type": "Level-1"})
             tmpdoc.update({"isParent": False})
 
         return (tmpdoc, status)

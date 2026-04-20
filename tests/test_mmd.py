@@ -207,9 +207,9 @@ def test_extract_personnel_json_includes_type_and_uris():
             "role": "Technical contact",
             "type": "Person",
             "name": "Ole Dole",
-            "orcid_uri": "https://orcid.org/0000-1111-2222-3333",
+            "name_uri": "https://orcid.org/0000-1111-2222-3333",
             "organisation": "Norwegian Meteorological Institute",
-            "ror_uri": "https://ror.org/001n36p86",
+            "org_uri": "https://ror.org/001n36p86",
             "email": "ole.dole@example.com",
             "phone": "004711111111",
             "contact_address": {
