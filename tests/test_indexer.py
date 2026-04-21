@@ -53,3 +53,42 @@ def test_bulkindex_collects_unique_parent_ids(monkeypatch):
     assert result[2] == 3
     assert result[3] == 3
     assert result[4] is bulk.failure_tracker
+
+
+@pytest.mark.indexdata
+def test_mmd2solr_missing_required_field_is_reported_as_validation_failure(monkeypatch):
+    bulk = BulkIndexer([], "http://example/solr/core", threads=1, config={})
+
+    class FakeMMD4SolR:
+        def __init__(
+            self,
+            filename=None,
+            mydoc=None,
+            bulkFile=None,
+            xsd_path=None,
+            warning_callback=None,
+            vocabulary_loader=None,
+        ):
+            self.warning_callback = warning_callback
+
+        def check_mmd(self):
+            if callable(self.warning_callback):
+                self.warning_callback(
+                    "❌ check_mmd missing required mmd:dataset_production_status",
+                    "validation",
+                )
+            return False
+
+        def get_metadata_identifier(self):
+            return "urn:uuid:test-missing-required"
+
+    monkeypatch.setattr("solrindexer.indexer.MMD4SolR", FakeMMD4SolR)
+
+    doc, status = bulk.mmd2solr(mmd=object(), status=None, file="bad.xml")
+
+    assert doc is None
+    assert status is None
+    assert len(bulk.failure_tracker.failures) == 1
+    failure = bulk.failure_tracker.failures[0]
+    assert failure.error_stage == "validation"
+    assert "dataset_production_status" in failure.error_message

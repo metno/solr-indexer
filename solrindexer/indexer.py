@@ -259,7 +259,7 @@ class BulkIndexer:
             missing_required_messages = [
                 _clean_validation_message(msg)
                 for msg in validation_messages
-                if ("check_mmd missing required", "metadata_status") in msg
+                if "check_mmd missing required" in msg
             ]
             if missing_required_messages:
                 # Keep message order, drop duplicates.
