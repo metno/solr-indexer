@@ -22,13 +22,12 @@ import os
 import re
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from datetime import datetime, timezone
 
 from solrindexer.failure_tracker import FailureTracker
 from solrindexer.io import load_file
 from solrindexer.mmd import MMD4SolR
-from solrindexer.threads import multiprocess
 from solrindexer.tools import (
     add_adc_thumbnails_bulk,
     add_nbs_thumbnail_bulk,
@@ -469,12 +468,12 @@ class BulkIndexer:
         return doc_count >= max(2, min_docs)
 
     def bulkindex(self, filelist):
-        """Index MMD files to Solr using a two-phase pipeline.
+        """Index MMD files using a unified streaming pipeline.
 
-        Phase 1: load/parse/convert all files concurrently.
-        Phase 2: process feature_type/thumbnails and index in chunks.
-
-        Parent/child integrity is resolved once globally (not per chunk).
+        All futures (pipeline + feature_type) are tracked in a single set.
+        As each future completes it is processed immediately — feature_type
+        futures are added to the same set on the fly, so chunk flushing is
+        continuous rather than deferred to a second phase.
         """
 
         chunksize = self.chunksize
@@ -490,198 +489,181 @@ class BulkIndexer:
         docs_indexed = 0
         docs_skipped = 0
 
-        # Stage timing (wall-clock seconds)
         t_bulk_start = time.perf_counter()
-        t_phase1 = 0.0
-        t_parent_prepare = 0.0
         t_feature_type = 0.0
-        t_thumbnail = 0.0
         t_index_dispatch = 0.0
         t_index_join = 0.0
 
         # ------------------------------------------------------------------ #
-        # Per-file closure: runs entirely inside a worker thread.             #
-        # Returns (doc, status); never raises — exceptions go to tracker.     #
+        # _pipeline: load XML, validate, convert to Solr doc, add thumbnails.#
+        # Returns (doc, status); never raises.                                #
         # ------------------------------------------------------------------ #
         def _pipeline(file_path):
-            # Stage 1: load XML
             mmd = load_file(file_path)
-
-            # Stage 2: parse, validate, convert to Solr doc
             doc, status = self.mmd2solr(mmd, None, file_path)
+            if doc is None:
+                return (None, None)
+            if self.tflg and (nbs_scope or adc_scope):
+                if "data_access_url_ogc_wms" in doc:
+                    if nbs_scope:
+                        doc = add_nbs_thumbnail_bulk((doc, self.config or {}))
+                    elif adc_scope:
+                        doc = add_adc_thumbnails_bulk((doc, self.config or {}))
             return (doc, status)
 
-        docs: list = []
-        statuses: list = []
-        file_ids: dict = {}
-
         # ------------------------------------------------------------------ #
-        # Phase 1: Read and convert all files concurrently                    #
+        # Streaming chunk state (accessed only from the main loop thread).   #
         # ------------------------------------------------------------------ #
-        t_phase1_start = time.perf_counter()
-        with ThreadPoolExecutor(max_workers=self.threads) as executor:
-            futures = {executor.submit(_pipeline, f): f for f in filelist}
-            total = len(futures)
-            completed = 0
+        current_chunk: list = []
+        current_chunk_file_ids: dict = {}
 
-            for future in as_completed(futures):
-                file_path = futures[future]
-                files_processed += 1
-                completed += 1
-
-                try:
-                    doc, status = future.result()
-                except Exception as e:
-                    logger.error("Unexpected pipeline error for %s: %s", file_path, e)
-                    self.failure_tracker.add_failure(
-                        filename=file_path,
-                        error_message=f"Unexpected pipeline error: {e}",
-                        error_stage="pipeline",
-                    )
-                    docs_skipped += 1
-                    continue
-
-                if doc is None:
-                    docs_skipped += 1
-                else:
-                    docs.append(doc)
-                    statuses.append(status)
-                    file_ids[doc["id"]] = file_path
-
-                if completed % chunksize == 0 or completed == total:
-                    logger.info("Progress: completed %d / %d files", completed, total)
-        t_phase1 = time.perf_counter() - t_phase1_start
-        logger.debug(
-            "timing.phase1_load_convert=%.3fs files=%d docs_ok=%d docs_skipped=%d",
-            t_phase1,
-            files_processed,
-            len(docs),
-            docs_skipped,
-        )
-
-        # Build parent-tracking state once for the full document set.
-        t_parent_prepare_start = time.perf_counter()
-        parent_ids_referenced.update(status for status in statuses if status is not None)
-        t_parent_prepare = time.perf_counter() - t_parent_prepare_start
-        logger.debug(
-            "timing.parent_prepare=%.3fs parent_refs=%d",
-            t_parent_prepare,
-            len(parent_ids_referenced),
-        )
-
-        # ------------------------------------------------------------------ #
-        # Phase 2: Process and index in chunks                                #
-        # ------------------------------------------------------------------ #
-        if skip_feature_type is True:
-            logger.info("skip-feature-type is True in config. Skipping feature type..")
-
-        for i in range(0, len(docs), chunksize):
-            chunk_docs = list(docs[i : i + chunksize])
-            if not chunk_docs:
-                continue
-
-            chunk_file_ids = {doc["id"]: file_ids.get(doc["id"], "unknown") for doc in chunk_docs}
-
-            if skip_feature_type is not True:
-                dap_docs = [doc for doc in chunk_docs if "data_access_url_opendap" in doc]
-                if dap_docs:
-                    t_feature_chunk_start = time.perf_counter()
-                    if self._should_use_process_pool(len(dap_docs)):
-                        logger.info(
-                            "---- Process featureType with processes %d ----", self.threads
-                        )
-                        for doc, (newdoc, ft_error) in multiprocess(
-                            fn=process_feature_type,
-                            inputs=dap_docs,
-                            max_concurrency=self.threads,
-                        ):
-                            chunk_docs.remove(doc)
-                            chunk_docs.append(newdoc)
-                            if ft_error is not None:
-                                self.failure_tracker.add_warning(
-                                    filename=chunk_file_ids.get(doc.get("id"), "unknown"),
-                                    warning_message=ft_error,
-                                    warning_stage="feature_type",
-                                    metadata_identifier=doc.get("id"),
-                                )
-                    else:
-                        logger.info(
-                            "---- Process featureType inline for small batch (%d docs) ----",
-                            len(dap_docs),
-                        )
-                        for doc in dap_docs:
-                            newdoc, ft_error = process_feature_type(doc)
-                            chunk_docs.remove(doc)
-                            chunk_docs.append(newdoc)
-                            if ft_error is not None:
-                                self.failure_tracker.add_warning(
-                                    filename=chunk_file_ids.get(doc.get("id"), "unknown"),
-                                    warning_message=ft_error,
-                                    warning_stage="feature_type",
-                                    metadata_identifier=doc.get("id"),
-                                )
-                    t_feature_chunk = time.perf_counter() - t_feature_chunk_start
-                    t_feature_type += t_feature_chunk
-                    logger.debug(
-                        "timing.chunk_feature_type=%.3fs chunk_size=%d dap_docs=%d",
-                        t_feature_chunk,
-                        len(chunk_docs),
-                        len(dap_docs),
-                    )
-
-            if self.tflg is True:
-                thumb_docs = [doc for doc in chunk_docs if "data_access_url_ogc_wms" in doc]
-                if thumb_docs and (nbs_scope or adc_scope):
-                    t_thumb_chunk_start = time.perf_counter()
-                    thumb_inputs = [(doc, self.config or {}) for doc in thumb_docs]
-                    thumbnail_fn = add_nbs_thumbnail_bulk if nbs_scope else add_adc_thumbnails_bulk
-                    thumbnail_label = "NBS" if nbs_scope else "ADC"
-                    if self._should_use_process_pool(len(thumb_docs)):
-                        logger.info(
-                            "---- Resolving %s thumbnails concurrently %d ----",
-                            thumbnail_label,
-                            self.threads,
-                        )
-                        for (doc, _), newdoc in multiprocess(
-                            fn=thumbnail_fn,
-                            inputs=thumb_inputs,
-                            max_concurrency=self.threads,
-                        ):
-                            chunk_docs.remove(doc)
-                            chunk_docs.append(newdoc)
-                    else:
-                        logger.info(
-                            "---- Resolving %s thumbnails inline for small batch (%d docs) ----",
-                            thumbnail_label,
-                            len(thumb_docs),
-                        )
-                        for doc in thumb_docs:
-                            newdoc = thumbnail_fn((doc, self.config or {}))
-                            chunk_docs.remove(doc)
-                            chunk_docs.append(newdoc)
-                    t_thumb_chunk = time.perf_counter() - t_thumb_chunk_start
-                    t_thumbnail += t_thumb_chunk
-                    logger.debug(
-                        "timing.chunk_thumbnail=%.3fs chunk_size=%d thumb_docs=%d",
-                        t_thumb_chunk,
-                        len(chunk_docs),
-                        len(thumb_docs),
-                    )
-                elif thumb_docs:
-                    logger.warning("Thumbnail flag enabled, but supported scopes are NBS or ADC")
-
-            docs_indexed += len(chunk_docs)
-            logger.info("---- Indexing %d documents ----", len(chunk_docs))
-            t_index_dispatch_start = time.perf_counter()
+        def _flush_chunk_if_full():
+            nonlocal docs_indexed, t_index_dispatch, chunk_count, docs_dispatched
+            if len(current_chunk) < chunksize:
+                return
+            chunk_count += 1
+            chunk_start = docs_dispatched + 1
+            docs_dispatched += len(current_chunk)
+            docs_indexed += len(current_chunk)
+            logger.info(
+                "---- Indexing chunk %d: docs %d–%d (feature_type pending=%d) ----",
+                chunk_count,
+                chunk_start,
+                docs_dispatched,
+                feature_pending - feature_completed,
+            )
+            t0 = time.perf_counter()
             indexthread = threading.Thread(
                 target=self.add2solr,
-                name=f"Index thread {(len(self.indexthreads) + 1)}",
-                args=(chunk_docs, chunk_file_ids),
+                name=f"Index thread {chunk_count}",
+                args=(list(current_chunk), dict(current_chunk_file_ids)),
             )
             indexthread.start()
             self.indexthreads.append(indexthread)
             logger.debug("Started %s", indexthread.name)
-            t_index_dispatch += time.perf_counter() - t_index_dispatch_start
+            t_index_dispatch += time.perf_counter() - t0
+            current_chunk.clear()
+            current_chunk_file_ids.clear()
+
+        def _add_doc_to_chunk(doc, file_path):
+            current_chunk.append(doc)
+            current_chunk_file_ids[doc["id"]] = file_path
+            _flush_chunk_if_full()
+
+        # ------------------------------------------------------------------ #
+        # Unified futures loop: pipeline futures + feature_type futures share #
+        # one `remaining` set.  Feature_type futures are added mid-loop.     #
+        # ------------------------------------------------------------------ #
+        # Tag each future so we know how to handle its result:
+        #   all_futures[future] = ("pipeline", file_path)
+        #   all_futures[future] = ("feature", original_doc, file_path)
+        all_futures: dict = {}
+        remaining: set = set()
+
+        total_pipeline = len(filelist)
+        pipeline_completed = 0
+        feature_pending = 0
+        feature_completed = 0
+        chunk_count = 0
+        docs_dispatched = 0
+
+        with ThreadPoolExecutor(max_workers=self.threads) as executor:
+            for f in filelist:
+                fut = executor.submit(_pipeline, f)
+                all_futures[fut] = ("pipeline", f)
+                remaining.add(fut)
+
+            while remaining:
+                done, remaining = wait(remaining, return_when=FIRST_COMPLETED)
+
+                for future in done:
+                    tag = all_futures.pop(future)
+                    kind = tag[0]
+
+                    if kind == "pipeline":
+                        file_path = tag[1]
+                        files_processed += 1
+                        pipeline_completed += 1
+
+                        try:
+                            doc, status = future.result()
+                        except Exception as e:
+                            logger.error("Unexpected pipeline error for %s: %s", file_path, e)
+                            self.failure_tracker.add_failure(
+                                filename=file_path,
+                                error_message=f"Unexpected pipeline error: {e}",
+                                error_stage="pipeline",
+                            )
+                            docs_skipped += 1
+                            continue
+
+                        if doc is None:
+                            docs_skipped += 1
+                        else:
+                            if status is not None:
+                                parent_ids_referenced.add(status)
+
+                            if not skip_feature_type and "data_access_url_opendap" in doc:
+                                # Submit feature_type and keep it in the same loop
+                                t0 = time.perf_counter()
+                                ft_fut = executor.submit(process_feature_type, doc)
+                                t_feature_type += time.perf_counter() - t0
+                                all_futures[ft_fut] = ("feature", doc, file_path)
+                                remaining.add(ft_fut)
+                                feature_pending += 1
+                            else:
+                                _add_doc_to_chunk(doc, file_path)
+
+                        if (
+                            pipeline_completed % chunksize == 0
+                            or pipeline_completed == total_pipeline
+                        ):
+                            logger.info(
+                                "Progress: parsed %d / %d files (feature_type pending=%d)",
+                                pipeline_completed,
+                                total_pipeline,
+                                feature_pending - feature_completed,
+                            )
+
+                    else:  # kind == "feature"
+                        original_doc, file_path = tag[1], tag[2]
+                        feature_completed += 1
+                        t0 = time.perf_counter()
+                        try:
+                            newdoc, ft_error = future.result()
+                            if ft_error is not None:
+                                self.failure_tracker.add_warning(
+                                    filename=file_path,
+                                    warning_message=ft_error,
+                                    warning_stage="feature_type",
+                                    metadata_identifier=original_doc.get("id"),
+                                )
+                            _add_doc_to_chunk(newdoc, file_path)
+                        except Exception as e:
+                            logger.error("Feature type future failed for %s: %s", file_path, e)
+                        t_feature_type += time.perf_counter() - t0
+
+        # Flush remaining docs that didn't fill a full chunk
+        if current_chunk:
+            chunk_count += 1
+            chunk_start = docs_dispatched + 1
+            docs_dispatched += len(current_chunk)
+            docs_indexed += len(current_chunk)
+            logger.info(
+                "---- Indexing final chunk %d: docs %d–%d ----",
+                chunk_count,
+                chunk_start,
+                docs_dispatched,
+            )
+            t0 = time.perf_counter()
+            indexthread = threading.Thread(
+                target=self.add2solr,
+                name=f"Index thread {chunk_count}",
+                args=(current_chunk, current_chunk_file_ids),
+            )
+            indexthread.start()
+            self.indexthreads.append(indexthread)
+            t_index_dispatch += time.perf_counter() - t0
 
         # Wait for all Solr index threads to finish
         t_index_join_start = time.perf_counter()
@@ -691,13 +673,10 @@ class BulkIndexer:
 
         t_bulk_total = time.perf_counter() - t_bulk_start
         logger.debug(
-            "timing.bulkindex total=%.3fs phase1=%.3fs parent_prepare=%.3fs feature_type=%.3fs "
-            "thumbnail=%.3fs index_dispatch=%.3fs index_join=%.3fs",
+            "timing.bulkindex total=%.3fs feature_type=%.3fs "
+            "index_dispatch=%.3fs index_join=%.3fs",
             t_bulk_total,
-            t_phase1,
-            t_parent_prepare,
             t_feature_type,
-            t_thumbnail,
             t_index_dispatch,
             t_index_join,
         )
