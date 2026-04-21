@@ -301,8 +301,9 @@ class MMD4SolR:
             for value in values:
                 if not self.vocabulary_loader.search(vocab_url, value):
                     # if tag == "metadata_status":
+                    #     status_ok = False
                     #     self._record_warning(
-                    #         "%s metadata_status:%s has non-controlled value: %s",
+                    #         "%s mmd:%s has non-controlled value: %s",
                     #         self._icon("fail"),
                     #         tag,
                     #         value,
