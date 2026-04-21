@@ -53,7 +53,7 @@ def testDateFormatInValid():
 
 
 class TestExtractFeatureType:
-    """Tests for _extract_feature_type (xarray only, thread-safe)."""
+    """Tests for _extract_feature_type backend selection and extraction."""
 
     @pytest.mark.indexdata
     def test_xarray_success(self):
@@ -99,6 +99,31 @@ class TestExtractFeatureType:
 
         assert ft is None
         assert err is None
+
+    @pytest.mark.indexdata
+    def test_netcdf4_used_when_xarray_missing(self):
+        """When xarray is unavailable, netCDF4 is used for featureType extraction."""
+        mock_ds = MagicMock()
+        mock_ds.getncattr.return_value = "trajectory"
+
+        with patch("solrindexer.tools.HAS_XARRAY", False), patch(
+            "solrindexer.tools.HAS_NETCDF4", True
+        ), patch("solrindexer.tools.Dataset", return_value=mock_ds):
+            ft, err = _extract_feature_type("http://fake.dap/ds")
+
+        assert ft == "trajectory"
+        assert err is None
+
+    @pytest.mark.indexdata
+    def test_missing_backends_returns_explicit_error(self):
+        """When both backends are missing, extraction returns an explicit error."""
+        with patch("solrindexer.tools.HAS_XARRAY", False), patch(
+            "solrindexer.tools.HAS_NETCDF4", False
+        ):
+            ft, err = _extract_feature_type("http://fake.dap/ds")
+
+        assert ft is None
+        assert err == "feature type cannot be extracted: missing xarray and netCDF4"
 
 
 # ---------------------------------------------------------------------------

@@ -119,6 +119,7 @@ class MMD4SolR:
         "dataset_production_status": "https://vocab.met.no/mmd/Dataset_Production_Status",
         "quality_control": "https://vocab.met.no/mmd/Quality_Control",
         "metadata_source": "https://vocab.met.no/mmd/Metadata_Source",
+        "metadata_status": "https://vocab.met.no/mmd/Metadata_Status",
     }
 
     def __init__(
@@ -299,12 +300,20 @@ class MMD4SolR:
                 continue
             for value in values:
                 if not self.vocabulary_loader.search(vocab_url, value):
-                    self._record_warning(
-                        "%s mmd:%s has non-controlled value: %s",
-                        self._icon("warn"),
-                        tag,
-                        value,
-                    )
+                    if tag == "metadata_status":
+                        self._record_warning(
+                            "%s metadata_status:%s has non-controlled value: %s",
+                            self._icon("fail"),
+                            tag,
+                            value,
+                        )
+                    else:
+                        self._record_warning(
+                            "%s mmd:%s has non-controlled value: %s",
+                            self._icon("warn"),
+                            tag,
+                            value,
+                        )
 
         gcmd_values = []
         for keywords in self._nodes("./mmd:keywords"):
@@ -681,6 +690,10 @@ class MMD4SolR:
             if info_type and info_type.strip().lower() == "observation facility" and description:
                 self._append_multivalued(solr_doc, "observation_facility", [description])
 
+            # Store the landing page in the origianl related_url_landing_page solr field.
+            if info_type and info_type.strip().lower() == "dataset landing page" and resource:
+                solr_doc["related_url_landing_page"] = resource
+
             # Create JSON entry
             related_info_entry = {
                 "type": info_type,
@@ -797,6 +810,73 @@ class MMD4SolR:
 
         if storage_expiry_date:
             solr_doc["storage_information_file_storage_expiry_date"] = storage_expiry_date
+
+    def _extract_dataset_citation(self, solr_doc):
+        citation_json = []
+        description_values = []
+        resource_values = []
+        doi_values = []
+        publication_dates = []
+        publication_titles = []
+
+        citation_fields = (
+            "author",
+            "publication_date",
+            "title",
+            "series",
+            "edition",
+            "volume",
+            "issue",
+            "publication_place",
+            "publisher",
+            "pages",
+            "isbn",
+            "doi",
+            "url",
+            "other",
+        )
+
+        for node in self._nodes("./mmd:dataset_citation"):
+            entry = {}
+            for field_name in citation_fields:
+                field_value = self._first_text_for(node, f"./mmd:{field_name}")
+                if not field_value:
+                    continue
+
+                entry[field_name] = field_value
+
+                if field_name in ("doi", "url"):
+                    resource_values.append(field_value)
+                    if field_name == "doi":
+                        doi_values.append(field_value)
+                    continue
+
+                description_values.append(field_value)
+                if field_name == "publication_date":
+                    parsed_date = self._normalize_datetime(field_value)
+                    if parsed_date:
+                        publication_dates.append(parsed_date)
+                if field_name == "title":
+                    publication_titles.append(field_value)
+            if entry:
+                citation_json.append(entry)
+
+        if citation_json:
+            solr_doc["dataset_citation_json"] = json.dumps(
+                citation_json,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+
+        self._append_multivalued(solr_doc, "descriptions", description_values)
+        self._append_multivalued(solr_doc, "resources", resource_values)
+
+        if publication_dates:
+            solr_doc["dataset_citation_publication_date"] = sorted(set(publication_dates))
+        if doi_values:
+            solr_doc["dataset_citation_doi"] = sorted(set(doi_values))
+        if publication_titles:
+            solr_doc["dataset_citation_title"] = sorted(set(publication_titles))
 
     def _extract_platform(self, solr_doc):
         acc = {
@@ -1036,6 +1116,7 @@ class MMD4SolR:
         self._extract_projects(solr_doc)
         self._extract_data_center(solr_doc)
         self._extract_storage_information(solr_doc)
+        self._extract_dataset_citation(solr_doc)
         self._extract_platform(solr_doc)
 
         iso_topic_category = self._all_text("./mmd:iso_topic_category")

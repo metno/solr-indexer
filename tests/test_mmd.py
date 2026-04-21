@@ -717,6 +717,135 @@ def _make_mmd_with_related_information(*related_information_fragments):
     return ET.fromstring(xml.encode())
 
 
+def _make_mmd_with_dataset_citation(*dataset_citation_fragments):
+    """Build a minimal MMD root element with the given mmd:dataset_citation snippets."""
+    dataset_citation_xml = "\n".join(dataset_citation_fragments)
+    xml = f"""<mmd xmlns="http://www.met.no/schema/mmd">
+  <metadata_identifier>test-id</metadata_identifier>
+  {dataset_citation_xml}
+</mmd>"""
+    return ET.fromstring(xml.encode())
+
+
+@pytest.mark.indexdata
+def test_extract_dataset_citation_json_descriptions_resources_and_dates():
+    root = _make_mmd_with_dataset_citation(
+        """<dataset_citation>
+        <author>Cristian Lussana</author>
+        <title>seNorge_2018</title>
+        <series>Earth System Science Data</series>
+        <volume>11</volume>
+        <issue>4</issue>
+        <publication_date>2019-10-01</publication_date>
+        <publisher>Copernicus Publications</publisher>
+        <doi>https://doi.org/10.5194/essd-11-1531-2019</doi>
+        <url>https://example.org/citation</url>
+      </dataset_citation>"""
+    )
+    doc = MMD4SolR(mydoc=root)
+    solr = {"descriptions": ["existing-description"], "resources": ["https://existing.example"]}
+    doc._extract_dataset_citation(solr)
+
+    citation_json = json.loads(solr["dataset_citation_json"])
+    assert citation_json == [
+        {
+            "author": "Cristian Lussana",
+            "title": "seNorge_2018",
+            "series": "Earth System Science Data",
+            "volume": "11",
+            "issue": "4",
+            "publication_date": "2019-10-01",
+            "publisher": "Copernicus Publications",
+            "doi": "https://doi.org/10.5194/essd-11-1531-2019",
+            "url": "https://example.org/citation",
+        }
+    ]
+
+    assert solr["descriptions"] == [
+        "existing-description",
+        "Cristian Lussana",
+        "2019-10-01",
+        "seNorge_2018",
+        "Earth System Science Data",
+        "11",
+        "4",
+        "Copernicus Publications",
+    ]
+    assert solr["resources"] == [
+        "https://existing.example",
+        "https://doi.org/10.5194/essd-11-1531-2019",
+        "https://example.org/citation",
+    ]
+    assert solr["dataset_citation_doi"] == ["https://doi.org/10.5194/essd-11-1531-2019"]
+    assert solr["dataset_citation_publication_date"] == ["2019-10-01T00:00:00Z"]
+
+
+@pytest.mark.indexdata
+def test_extract_dataset_citation_skips_invalid_publication_date_and_filters_empty_values():
+    root = _make_mmd_with_dataset_citation(
+        """<dataset_citation>
+        <author>Jane Doe</author>
+        <publication_date>not-a-date</publication_date>
+        <title></title>
+        <doi>https://doi.org/10.1234/example</doi>
+      </dataset_citation>"""
+    )
+    doc = MMD4SolR(mydoc=root)
+    solr = {}
+    doc._extract_dataset_citation(solr)
+
+    citation_json = json.loads(solr["dataset_citation_json"])
+    assert citation_json == [
+        {
+            "author": "Jane Doe",
+            "publication_date": "not-a-date",
+            "doi": "https://doi.org/10.1234/example",
+        }
+    ]
+    assert solr["descriptions"] == ["Jane Doe", "not-a-date"]
+    assert solr["resources"] == ["https://doi.org/10.1234/example"]
+    assert solr["dataset_citation_doi"] == ["https://doi.org/10.1234/example"]
+    assert "dataset_citation_publication_date" not in solr
+
+
+@pytest.mark.indexdata
+def test_extract_dataset_citation_repeated_with_deduped_doi_and_publication_dates():
+    root = _make_mmd_with_dataset_citation(
+        """<dataset_citation>
+        <author>Alice</author>
+        <publication_date>2019-10-01</publication_date>
+        <doi>https://doi.org/10.1234/dup</doi>
+      </dataset_citation>""",
+        """<dataset_citation>
+        <author>Bob</author>
+        <publication_date>2019-10-01T00:00:00Z</publication_date>
+        <doi>https://doi.org/10.1234/dup</doi>
+      </dataset_citation>""",
+    )
+    doc = MMD4SolR(mydoc=root)
+    solr = {}
+    doc._extract_dataset_citation(solr)
+
+    citation_json = json.loads(solr["dataset_citation_json"])
+    assert len(citation_json) == 2
+    assert solr["dataset_citation_doi"] == ["https://doi.org/10.1234/dup"]
+    assert solr["dataset_citation_publication_date"] == ["2019-10-01T00:00:00Z"]
+
+
+@pytest.mark.indexdata
+def test_extract_dataset_citation_no_nodes_is_noop():
+    root = _make_mmd_with_dataset_citation()
+    doc = MMD4SolR(mydoc=root)
+    solr = {}
+    doc._extract_dataset_citation(solr)
+
+    assert "dataset_citation_json" not in solr
+    assert "dataset_citation_doi" not in solr
+    assert "dataset_citation_publication_date" not in solr
+    assert "descriptions" not in solr
+    assert "resources" not in solr
+
+
 @pytest.mark.indexdata
 def test_extract_related_information_single():
     """Test extraction of a single related_information entry."""
@@ -734,7 +863,7 @@ def test_extract_related_information_single():
     assert solr["related_information_type"] == ["Dataset landing page"]
     assert solr["related_information_description"] == ["Landing page for this dataset"]
     assert solr["related_information_resource"] == ["https://example.com/dataset/landing"]
-    assert "related_url_landing_page" not in solr
+    assert solr["related_url_landing_page"] == "https://example.com/dataset/landing"
 
     related_json = json.loads(solr["related_information_json"])
     assert len(related_json) == 1
@@ -775,7 +904,7 @@ def test_extract_related_information_multiple_mixed_types():
     assert "Scientific publication" in solr["related_information_type"]
     assert "Users guide" in solr["related_information_type"]
 
-    assert "related_url_landing_page" not in solr
+    assert solr["related_url_landing_page"] == "https://example.com/dataset/landing"
     assert "related_url_scientific_publication" not in solr
     assert "related_url_user_guide" not in solr
 
@@ -825,8 +954,11 @@ def test_extract_related_information_all_types():
     # Check that all types are present
     assert len(solr["related_information_type"]) == 11
 
-    # Check that type-specific fields are not present (deprecated)
+    # related_url_landing_page is populated; all other type-specific fields are deprecated
+    assert solr["related_url_landing_page"] == "https://landing.example.com"
     for info_type, field_name, url in types_and_URLs:
+        if field_name == "related_url_landing_page":
+            continue
         assert field_name not in solr, f"Deprecated field {field_name} should not be present"
         assert (field_name + "_desc") not in solr, (
             f"Deprecated field {field_name}_desc should not be present"
@@ -900,7 +1032,7 @@ def test_extract_related_information_missing_resource():
     assert solr["related_information_description"] == ["A landing page"]
     # Empty resource should not be in the list
     assert "related_information_resource" not in solr
-    # Type-specific URL field should not be populated without resource
+    # landing page field should not be populated when resource is empty
     assert "related_url_landing_page" not in solr
 
 

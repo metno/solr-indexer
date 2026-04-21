@@ -43,7 +43,7 @@ if os.getenv("SOLRINDEXER_LOGLEVEL", "INFO") == "DEBUG":
     logger.debug("Loglevel was set to DEBUG")
 
 
-SOLR_FL = "*,personnel_json:[json],data_access_json:[json],platform_json:[json],geometry_geojson:[json],related_information_json:[json],last_metadata_update_json:[json]"
+SOLR_FL = "*,personnel_json:[json],data_access_json:[json],platform_json:[json],geometry_geojson:[json],related_information_json:[json],last_metadata_update_json:[json],dataset_citation_json:[json]"
 SOLR_MMD_FL = "mmd_xml_file:[xml]"
 
 

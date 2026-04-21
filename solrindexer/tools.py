@@ -38,10 +38,11 @@ except ImportError:
     HAS_XARRAY = False
 
 try:
-    import netCDF4  # noqa: F401
+    from netCDF4 import Dataset  # noqa: F401
 
     HAS_NETCDF4 = True
 except ImportError:
+    Dataset = None  # type: ignore[assignment]
     HAS_NETCDF4 = False
 
 # Logging Setup
@@ -228,41 +229,54 @@ def _fix_nersc_url(dapurl):
 def _extract_feature_type(dapurl):
     """Open remote dataset and return (featureType, error_msg).
 
-    Uses xarray for thread-safe extraction (netCDF4 can segfault in multithreaded contexts).
+    Backend priority is xarray first, then netCDF4.
     Either value in the returned tuple may be None. error_msg is only set when an actual
     exception prevented extraction (not when the attribute is simply absent).
     """
-    if not HAS_XARRAY:
-        error_msg = "xarray not available"
-        logger.error(
-            "Cannot extract featureType from %s: xarray not installed",
-            dapurl,
-        )
-        return (None, error_msg)
-    try:
-        ds = xr.open_dataset(dapurl, decode_times=False)
+    if HAS_XARRAY:
         try:
-            ft = ds.attrs.get("featureType")
-        finally:
-            ds.close()
-        return (ft, None)
-    except ImportError:
-        error_msg = "xarray not available"
-        logger.error(
-            "Cannot extract featureType from %s: xarray not installed",
-            dapurl,
-        )
-        return (None, error_msg)
-    except AttributeError:
-        return (None, None)
-    except Exception as e:
-        error_msg = f"Feature type extraction failed: {e}"
-        logger.error(
-            "Something failed extracting featureType from %s. Reason: %s",
-            dapurl,
-            e,
-        )
-        return (None, error_msg)
+            ds = xr.open_dataset(dapurl, decode_times=False)
+            try:
+                ft = ds.attrs.get("featureType")
+            finally:
+                ds.close()
+            return (ft, None)
+        except AttributeError:
+            return (None, None)
+        except Exception as e:
+            error_msg = f"Feature type extraction failed: {e}"
+            logger.error(
+                "Something failed extracting featureType with xarray from %s. Reason: %s",
+                dapurl,
+                e,
+            )
+            return (None, error_msg)
+
+    if HAS_NETCDF4:
+        try:
+            ds = Dataset(dapurl)  # type: ignore[misc]
+            try:
+                ft = ds.getncattr("featureType")
+            finally:
+                ds.close()
+            return (ft, None)
+        except AttributeError:
+            return (None, None)
+        except Exception as e:
+            error_msg = f"Feature type extraction failed: {e}"
+            logger.error(
+                "Something failed extracting featureType with netCDF4 from %s. Reason: %s",
+                dapurl,
+                e,
+            )
+            return (None, error_msg)
+
+    error_msg = "feature type cannot be extracted: missing xarray and netCDF4"
+    logger.error(
+        "Cannot extract featureType from %s: missing xarray and netCDF4",
+        dapurl,
+    )
+    return (None, error_msg)
 
 
 def _canonical_feature_type(feature_type):
