@@ -739,9 +739,11 @@ class MMD4SolR:
             if short or long:
                 project_names.append(short or long)
         if project_names:
+            project_names = sorted(set(project_names))
             solr_doc["project_short_name"] = short_names
             solr_doc["project_long_name"] = long_names
             solr_doc["project_name"] = project_names
+            solr_doc["project_name_facet"] = project_names
 
     def _extract_data_center(self, solr_doc):
         short_names, long_names, names, urls = [], [], [], []

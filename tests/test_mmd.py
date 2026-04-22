@@ -607,7 +607,34 @@ def test_extract_project_name_prefers_short_then_falls_back_to_long():
 
     assert solr["project_short_name"] == ["Nansen Legacy"]
     assert solr["project_long_name"] == ["Nansen Legacy Project", "Long Name Only Project"]
-    assert solr["project_name"] == ["Nansen Legacy", "Long Name Only Project"]
+    assert solr["project_name"] == ["Long Name Only Project", "Nansen Legacy"]
+    assert solr["project_name_facet"] == ["Long Name Only Project", "Nansen Legacy"]
+
+
+@pytest.mark.indexdata
+def test_extract_project_name_is_unique_and_sorted():
+    root = _make_mmd_with_project(
+        """<project>
+          <short_name>Zeta</short_name>
+          <long_name>Zeta Long</long_name>
+        </project>""",
+        """<project>
+          <short_name>Alpha</short_name>
+          <long_name>Alpha Long</long_name>
+        </project>""",
+        """<project>
+          <short_name>Zeta</short_name>
+          <long_name>Zeta Long Duplicate</long_name>
+        </project>""",
+    )
+    doc = MMD4SolR(mydoc=root)
+    solr = {}
+    doc._extract_projects(solr)
+
+    assert solr["project_short_name"] == ["Zeta", "Alpha", "Zeta"]
+    assert solr["project_long_name"] == ["Zeta Long", "Alpha Long", "Zeta Long Duplicate"]
+    assert solr["project_name"] == ["Alpha", "Zeta"]
+    assert solr["project_name_facet"] == ["Alpha", "Zeta"]
 
 
 @pytest.mark.indexdata
