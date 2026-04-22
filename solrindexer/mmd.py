@@ -746,30 +746,25 @@ class MMD4SolR:
             solr_doc["project_name_facet"] = project_names
 
     def _extract_data_center(self, solr_doc):
-        short_names, long_names, names, urls = [], [], [], []
+        nodes = self._nodes("./mmd:data_center")
+        if not nodes:
+            return
 
-        for node in self._nodes("./mmd:data_center"):
-            short = self._first_text_for(node, "./mmd:data_center_name/mmd:short_name")
-            long = self._first_text_for(node, "./mmd:data_center_name/mmd:long_name")
-            url = self._first_text_for(node, "./mmd:data_center_url")
+        # MMD 4.x allows a single data_center. If multiple are present,
+        # use the first entry to stay compatible with single-valued Solr fields.
+        node = nodes[0]
+        short = self._first_text_for(node, "./mmd:data_center_name/mmd:short_name")
+        long = self._first_text_for(node, "./mmd:data_center_name/mmd:long_name")
+        url = self._first_text_for(node, "./mmd:data_center_url")
 
-            if short:
-                short_names.append(short)
-            if long:
-                long_names.append(long)
-            if short or long:
-                names.append(short or long)
-            if url:
-                urls.append(url)
-
-        if short_names:
-            solr_doc["data_center_short_name"] = short_names
-        if long_names:
-            solr_doc["data_center_long_name"] = long_names
-        if names:
-            solr_doc["data_center_name"] = names
-        if urls:
-            solr_doc["data_center_url"] = urls
+        if short:
+            solr_doc["data_center_short_name"] = short
+        if long:
+            solr_doc["data_center_long_name"] = long
+        if short or long:
+            solr_doc["data_center_name"] = short or long
+        if url:
+            solr_doc["data_center_url"] = url
 
     def _extract_storage_information(self, solr_doc):
         nodes = self._nodes("./mmd:storage_information")

@@ -539,10 +539,10 @@ def test_extract_data_center_single():
     solr = {}
     doc._extract_data_center(solr)
 
-    assert solr["data_center_short_name"] == ["MET Norway"]
-    assert solr["data_center_long_name"] == ["Norwegian Meteorological Institute"]
-    assert solr["data_center_name"] == ["MET Norway"]
-    assert solr["data_center_url"] == ["http://met.no"]
+    assert solr["data_center_short_name"] == "MET Norway"
+    assert solr["data_center_long_name"] == "Norwegian Meteorological Institute"
+    assert solr["data_center_name"] == "MET Norway"
+    assert solr["data_center_url"] == "http://met.no"
 
 
 @pytest.mark.indexdata
@@ -559,8 +559,8 @@ def test_extract_data_center_name_fallback_to_long_name():
     doc._extract_data_center(solr)
 
     assert "data_center_short_name" not in solr
-    assert solr["data_center_long_name"] == ["Norwegian Meteorological Institute"]
-    assert solr["data_center_name"] == ["Norwegian Meteorological Institute"]
+    assert solr["data_center_long_name"] == "Norwegian Meteorological Institute"
+    assert solr["data_center_name"] == "Norwegian Meteorological Institute"
 
 
 @pytest.mark.indexdata
@@ -584,10 +584,11 @@ def test_extract_data_center_multiple_entries():
     solr = {}
     doc._extract_data_center(solr)
 
-    assert solr["data_center_short_name"] == ["MET Norway", "NERSC"]
-    assert solr["data_center_long_name"] == ["Norwegian Meteorological Institute"]
-    assert solr["data_center_name"] == ["MET Norway", "NERSC"]
-    assert solr["data_center_url"] == ["http://met.no", "https://nersc.no"]
+    # MMD 4.x allows one data_center; extractor keeps first entry when multiple are present.
+    assert solr["data_center_short_name"] == "MET Norway"
+    assert solr["data_center_long_name"] == "Norwegian Meteorological Institute"
+    assert solr["data_center_name"] == "MET Norway"
+    assert solr["data_center_url"] == "http://met.no"
 
 
 @pytest.mark.indexdata
