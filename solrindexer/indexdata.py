@@ -673,6 +673,8 @@ class MMD4SolR:
                         mydict['personnel_{}_role'.format(personnel_role_LUT[role])] \
                             .append(personnel[entry])
                         mydict['personnel_role'].append(personnel[entry])
+                    elif entry_type == 'type':
+                        pass
                     else:
                         # Treat address specifically and handle faceting elements
                         # personnel_role, personnel_name, personnel_organisation.
