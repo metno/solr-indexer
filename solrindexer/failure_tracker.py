@@ -244,7 +244,9 @@ class FailureTracker:
 
                 for warning in sorted(file_warnings, key=lambda w: w.warning_stage or ""):
                     stage = warning.warning_stage or "unknown"
-                    summary_lines.append(f"  [{stage.upper()}] {warning.warning_message}")
+                    summary_lines.append(
+                        f"  {self._icon('warn')} [{stage.upper()}] {warning.warning_message}"
+                    )
 
                 summary_lines.append("")
 

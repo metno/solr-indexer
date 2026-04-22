@@ -237,7 +237,7 @@ class BulkIndexer:
                     return
             self.failure_tracker.add_warning(
                 filename=file,
-                warning_message=message,
+                warning_message=_clean_validation_message(message),
                 warning_stage=warning_stage,
                 metadata_identifier=metadata_id,
             )
