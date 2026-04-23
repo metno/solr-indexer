@@ -111,7 +111,6 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = [
-    "solrindexer.tools.tools",
     "solrindexer.__init__",
 ]
 disallow_untyped_calls = false

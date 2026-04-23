@@ -176,15 +176,15 @@
     <mmd:resource>https://doi.org/10.3390/rs14246346</mmd:resource>
   </mmd:related_information>
   <mmd:personnel>
-    <mmd:name>Stein Rune Karlsen</mmd:name>
+    <mmd:name>Donald Duck</mmd:name>
     <mmd:role>Investigator</mmd:role>
-    <mmd:email>skar@norceresearch.no</mmd:email>
+    <mmd:email>dd@example.com</mmd:email>
     <mmd:organisation>NORCE</mmd:organisation>
   </mmd:personnel>
   <mmd:personnel>
     <mmd:role>Data center contact</mmd:role>
     <mmd:name>ADC support</mmd:name>
-    <mmd:email>adc-support@met.no</mmd:email>
+    <mmd:email>adc-support@example.com</mmd:email>
     <mmd:organisation>Norwegian Meteorological Institute / Arctic Data Centre</mmd:organisation>
   </mmd:personnel>
   <mmd:data_access>
@@ -206,7 +206,7 @@
   </mmd:data_center>
   <mmd:dataset_citation>
     <mmd:title>NDVI for Svalbard</mmd:title>
-    <mmd:author>Stein Rune Karlsen</mmd:author>
+    <mmd:author>Donald Duck</mmd:author>
     <mmd:publisher>Norwegian Meteorological Institute</mmd:publisher>
     <mmd:publication_date>2023-06-28</mmd:publication_date>
     <mmd:doi>https://doi.org/10.21343/30hv-1e14</mmd:doi>

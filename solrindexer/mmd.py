@@ -422,6 +422,28 @@ class MMD4SolR:
         if periods:
             solr_doc["temporal_extent_period_dr"] = periods[0] if len(periods) == 1 else periods
 
+    def _extract_polygon_gml(self, geo_extent):
+        """Return serialized GML geometry XML from mmd:polygon, or None."""
+        polygon_nodes = geo_extent.xpath("./mmd:polygon", namespaces=self.NSMAP)
+        if not polygon_nodes:
+            return None, None
+
+        polygon_node = polygon_nodes[0]
+        # Pick first known GML geometry child under mmd:polygon.
+        gml_geom = polygon_node.xpath(
+            "./gml:*",
+            namespaces=self.NSMAP,
+        )
+        if not gml_geom:
+            return None, None
+
+        gml_node = gml_geom[0]
+        gml_srs = gml_node.attrib.get("srsName")
+
+        # bytes -> str for pygml.parse()
+        gml_xml = ET.tostring(gml_node, encoding="unicode")
+        return gml_xml, gml_srs
+
     def _extract_rectangle(self, geo_extent):
         north = self._first_text_for(geo_extent, "./mmd:rectangle/mmd:north")
         south = self._first_text_for(geo_extent, "./mmd:rectangle/mmd:south")
@@ -451,8 +473,29 @@ class MMD4SolR:
         solr_doc["geographic_extent_rectangle_south"] = south
         solr_doc["geographic_extent_rectangle_east"] = east
         solr_doc["geographic_extent_rectangle_west"] = west
-        # Call handle_solr_spatial to add geometry_wkt, geometry_geojson, geospatial_bounds3d
-        solr_doc = handle_solr_spatial(solr_doc, north, east, south, west)
+
+        gml_xml, gml_srs = self._extract_polygon_gml(extent)
+        # If polygon parsing fails in spatial helper, fall back to bbox-only processing.
+        try:
+            solr_doc = handle_solr_spatial(
+                solr_doc,
+                north,
+                east,
+                south,
+                west,
+                gml=gml_xml,
+                srs=gml_srs or srs_name,
+            )
+        except Exception as exc:
+            self._record_warning(
+                "%s Failed to parse geographic_extent polygon, falling back to rectangle: %s",
+                self._icon("warn"),
+                exc,
+                warning_stage="transformation",
+            )
+
+            # Call handle_solr_spatial to add geometry_wkt, geometry_geojson, geospatial_bounds3d
+            solr_doc = handle_solr_spatial(solr_doc, north, east, south, west)
 
     def _extract_keywords(self, solr_doc):
         keyword_all = []

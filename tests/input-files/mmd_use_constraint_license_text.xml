@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd" xmlns:xml="http://www.w3.org/XML/1998/namespace">
+<mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd" xmlns:xml="http://www.w3.org/XML/1998/namespace" xmlns:gml="http://www.opengis.net/gml">
   <mmd:metadata_identifier>urn:uuid:55555555-5555-4555-8555-555555555555</mmd:metadata_identifier>
   <mmd:title xml:lang="en">Use Constraint License Text Fixture</mmd:title>
   <mmd:abstract xml:lang="en">Validates free-text license branch in use_constraint and downstream indexing behavior. License info: https://example.org/mmd/license and legal contact: legal@example.org.</mmd:abstract>
@@ -25,12 +25,29 @@
     <mmd:keyword>Earth Science > Atmosphere</mmd:keyword>
   </mmd:keywords>
   <mmd:geographic_extent>
-    <mmd:rectangle>
-      <mmd:north>65.0</mmd:north>
-      <mmd:south>60.0</mmd:south>
-      <mmd:east>12.0</mmd:east>
-      <mmd:west>5.0</mmd:west>
+    <mmd:rectangle srsName="EPSG:4326">
+      <mmd:north>65.693413</mmd:north>
+      <mmd:south>62.557812</mmd:south>
+      <mmd:east>23.225039</mmd:east>
+      <mmd:west>13.659064</mmd:west>
     </mmd:rectangle>
+    <mmd:polygon>
+      <gml:MultiPolygon srsName="EPSG:4326">
+        <gml:polygonMember>
+          <gml:Polygon>
+            <gml:exterior>
+              <gml:LinearRing>
+                <gml:pos>62.557812 15.183176</gml:pos>
+                <gml:pos>63.345764 23.225039</gml:pos>
+                <gml:pos>65.693413 22.384415</gml:pos>
+                <gml:pos>64.86644 13.659064</gml:pos>
+                <gml:pos>62.557812 15.183176</gml:pos>
+              </gml:LinearRing>
+            </gml:exterior>
+          </gml:Polygon>
+        </gml:polygonMember>
+      </gml:MultiPolygon>
+    </mmd:polygon>
   </mmd:geographic_extent>
   <mmd:use_constraint>
     <mmd:license_text>This test dataset may be used internally for algorithm validation with attribution.</mmd:license_text>
