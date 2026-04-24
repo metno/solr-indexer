@@ -116,6 +116,7 @@ def main():
             logger.info("Parent update status=%s message=%s", status, msg)
             sys.exit(EXIT_SUCCESS if status else EXIT_FAILURE)
 
+        logger.info("Gathering input files...")
         files = _resolve_input_files(args)
         if not files:
             raise ValueError("No input files found")

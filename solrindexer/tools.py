@@ -372,7 +372,7 @@ def add_nbs_thumbnail(doc, config):
                 if thumbFound:
                     thumbnail_url = f"{nbs_base_url}/{product}/{year}/"
                     thumbnail_url += f"{month}/{day}/ql/{fname}/thumbnail.png"
-                    logger.info("NBS thumbnail_url set to: %s", thumbnail_url)
+                    logger.debug("NBS thumbnail_url set to: %s", thumbnail_url)
                     doc["thumbnail_url"] = thumbnail_url
                 else:
                     logger.error("NBS thumbnail not found: %s", thumb_path)
