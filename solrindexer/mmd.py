@@ -1089,7 +1089,6 @@ class MMD4SolR:
                 parent.remove(node)
         return html.unescape(ET.tostring(root_copy, pretty_print=True, encoding="unicode"))
 
-
     def _is_sentinel_product(self, product_string):
         """
         Checks if a given string is a Sentinel product string and splits it by underscores.
@@ -1106,7 +1105,7 @@ class MMD4SolR:
         # Check if the string matches the Sentinel product pattern
         if re.match(sentinel_regex, product_string):
             # Split the string by underscores and return it as a list
-            return product_string.split('_')
+            return product_string.split("_")
         else:
             # Return None if it's not a valid Sentinel product string
             return None
