@@ -22,6 +22,7 @@ import html
 import json
 import logging
 import os
+import re
 import sys
 import threading
 
@@ -1088,6 +1089,28 @@ class MMD4SolR:
                 parent.remove(node)
         return html.unescape(ET.tostring(root_copy, pretty_print=True, encoding="unicode"))
 
+
+    def _is_sentinel_product(self, product_string):
+        """
+        Checks if a given string is a Sentinel product string and splits it by underscores.
+
+        Parameters:
+            product_string (str): The input string to check.
+
+        Returns:
+            list: A list of components if the string is a Sentinel product, otherwise None.
+        """
+        # Define a regular expression for Sentinel product strings
+        sentinel_regex = r"^S[1-5][ABCP]_.*"
+
+        # Check if the string matches the Sentinel product pattern
+        if re.match(sentinel_regex, product_string):
+            # Split the string by underscores and return it as a list
+            return product_string.split('_')
+        else:
+            # Return None if it's not a valid Sentinel product string
+            return None
+
     def tosolr(self):
         solr_doc = {}
 
@@ -1175,6 +1198,10 @@ class MMD4SolR:
         metadata_source = self._first_text("./mmd:metadata_source")
         if metadata_source:
             solr_doc["metadata_source"] = metadata_source
+
+        sentinel_desc = self._is_sentinel_product(solr_doc["title"])
+        if sentinel_desc:
+            self._append_multivalued(solr_doc, "descriptions", sentinel_desc)
 
         solr_doc["mmd_xml_file"] = self._serialize_mmd_xml()
 
