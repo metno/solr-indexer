@@ -15,6 +15,7 @@ import pysolr
 from dotenv import load_dotenv
 from requests.auth import HTTPBasicAuth
 
+from solrindexer import _init_logging
 from solrindexer.failure_tracker import FailureTracker
 from solrindexer.indexer import BulkIndexer
 from solrindexer.mmd import IndexMMD, _get_cached_schema
@@ -78,6 +79,7 @@ def parse_arguments():
 
 
 def main():
+    _init_logging(logger)
     start_dt = datetime.now().astimezone()
     start_wall = time.perf_counter()
     start_cpu = time.process_time()
