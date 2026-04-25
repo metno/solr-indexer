@@ -891,6 +891,7 @@ class MMD4SolR:
                     resource_values.append(field_value)
                     if field_name == "doi":
                         doi_values.append(field_value)
+                        description_values.append(self.extract_doi(field_value))
                     continue
 
                 description_values.append(field_value)
@@ -1108,6 +1109,18 @@ class MMD4SolR:
             return product_string.split("_")
         else:
             # Return None if it's not a valid Sentinel product string
+            return None
+
+    def extract_doi(self, text):
+        # DOI regex pattern (simplified but effective for most cases)
+        doi_pattern = r"10\.\d{4,9}/[-._;()/:A-Z0-9]+"
+
+        # Search for DOI in text, ignoring case
+        match = re.search(doi_pattern, text, re.IGNORECASE)
+
+        if match:
+            return match.group(0)
+        else:
             return None
 
     def tosolr(self):
