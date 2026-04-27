@@ -1,7 +1,7 @@
 <mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd">
   <mmd:metadata_identifier>no.met.adc:43f02cf0-8d83-5b12-8cca-dbd4c8d48202</mmd:metadata_identifier>
   <mmd:title xml:lang="en">Title in English</mmd:title>
-  <mmd:abstract xml:lang="en">Summary in English with a short usage note. Project page: https://example.org/mmd/minimal. Contact: data-team@example.org for access and clarification.</mmd:abstract>
+  <mmd:abstract xml:lang="en">Summary in English with a short usage note. Project page: https://example.org/mmd/minimal. Contact: data-team@example.org for access and clarification. Synoptic meteorological measurements from MITTARFIK SISIMIUT (HOLSTEINSBORG LUFTHAVN) extracted from the WMO Global Telecommunication System (GTS). Data are not quality controlled after extraction from GTS.</mmd:abstract>
   <mmd:metadata_status>Active</mmd:metadata_status>
   <mmd:dataset_production_status>Not available</mmd:dataset_production_status>
   <mmd:collection>ADC</mmd:collection>

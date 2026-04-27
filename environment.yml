@@ -2,8 +2,8 @@ name: solrindexing
 channels:
   - conda-forge
 dependencies:
-  - python>=3.8
-  - netcdf4>=1.6.4
+  - python>=3.13
+  - netcdf4>=1.7.4
   - pip
   - pysolr
   - python-dateutil

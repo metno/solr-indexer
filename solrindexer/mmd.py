@@ -348,6 +348,7 @@ class MMD4SolR:
         if default_value is not None:
             target[base_name] = default_value
             target.setdefault(f"{base_name}_en", default_value)
+            target.setdefault(f"{base_name}_hl", default_value)
 
     def _extract_last_metadata_update(self, solr_doc):
         updates = self._nodes("./mmd:last_metadata_update/mmd:update")
@@ -1177,9 +1178,12 @@ class MMD4SolR:
             license_text = self._first_text_for(node, "./mmd:license_text")
             if license_text:
                 solr_doc["use_constraint_license_text"] = license_text
+                self._append_multivalued(solr_doc, "descriptions", [license_text])
+
         spatial_rep = self._first_text("./mmd:spatial_representation")
         if spatial_rep:
             solr_doc["spatial_representation"] = spatial_rep
+            self._append_multivalued(solr_doc, "descriptions", [spatial_rep])
 
         self._extract_last_metadata_update(solr_doc)
         self._extract_temporal_extent(solr_doc)
@@ -1198,20 +1202,23 @@ class MMD4SolR:
         iso_topic_category = self._all_text("./mmd:iso_topic_category")
         if iso_topic_category:
             solr_doc["iso_topic_category"] = iso_topic_category
+            self._append_multivalued(solr_doc, "descriptions", iso_topic_category)
 
         activity_type = self._all_text("./mmd:activity_type")
         if activity_type:
             solr_doc["activity_type"] = activity_type
+            self._append_multivalued(solr_doc, "descriptions", activity_type)
 
         quality_control = self._first_text("./mmd:quality_control")
         if quality_control:
             solr_doc["quality_control"] = quality_control
+            self._append_multivalued(solr_doc, "descriptions", [quality_control])
 
         metadata_source = self._first_text("./mmd:metadata_source")
         if metadata_source:
             solr_doc["metadata_source"] = metadata_source
 
-        sentinel_desc = self._is_sentinel_product(solr_doc["title"])
+        sentinel_desc = self._is_sentinel_product(solr_doc.get("title", ""))
         if sentinel_desc:
             self._append_multivalued(solr_doc, "descriptions", sentinel_desc)
 

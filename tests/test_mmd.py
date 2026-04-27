@@ -798,6 +798,7 @@ def test_extract_dataset_citation_json_descriptions_resources_and_dates():
         "11",
         "4",
         "Copernicus Publications",
+        "10.5194/essd-11-1531-2019",
     ]
     assert solr["resources"] == [
         "https://existing.example",
@@ -830,7 +831,7 @@ def test_extract_dataset_citation_skips_invalid_publication_date_and_filters_emp
             "doi": "https://doi.org/10.1234/example",
         }
     ]
-    assert solr["descriptions"] == ["Jane Doe", "not-a-date"]
+    assert solr["descriptions"] == ["Jane Doe", "not-a-date", "10.1234/example"]
     assert solr["resources"] == ["https://doi.org/10.1234/example"]
     assert solr["dataset_citation_doi"] == ["https://doi.org/10.1234/example"]
     assert "dataset_citation_publication_date" not in solr
