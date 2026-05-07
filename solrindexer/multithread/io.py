@@ -26,29 +26,42 @@ from concurrent.futures import ThreadPoolExecutor
 # Logging Setup
 logger = logging.getLogger(__name__)
 
-
 def load_file(filename):
     """
-    Load xml file and convert to dict using xmltodict
+    Load XML file and convert to dict using xmltodict.
     """
     filename = str(filename).strip().rstrip()
     try:
         file = Path(filename)
     except Exception as e:
-        logger.error('Not a valid filepath %s error was %s' % (filename, e))
+        logger.error('Not a valid filepath %s, error was: %s' % (filename, e))
         return None
-    with open(file, encoding='utf-8') as fd:
-        try:
-            xmlfile = fd.read()
-        except Exception as e:
-            logger.error('Could not read file %s error was %s' % (filename, e))
-            return None
-        try:
-            mmddict = xmltodict.parse(xmlfile)
-        except Exception as e:
-            logger.error('Could not parse the xmlfile: %s  with error %s' % (filename, e))
-            return None
-        return mmddict
+
+    try:
+        # Attempt to open the file
+        with open(file, encoding='utf-8') as fd:
+            try:
+                xmlfile = fd.read()
+            except Exception as e:
+                logger.error('Could not read file %s, error was: %s' % (filename, e))
+                return None
+
+            try:
+                mmddict = xmltodict.parse(xmlfile)
+            except Exception as e:
+                logger.error('Could not parse the XML file: %s, error was: %s' % (filename, e))
+                return None
+
+            return mmddict
+    except FileNotFoundError:
+        logger.error('File not found: %s' % filename)
+        return None
+    except PermissionError:
+        logger.error('Permission denied when trying to open file: %s' % filename)
+        return None
+    except Exception as e:
+        logger.error('Unexpected error when trying to open file %s, error was: %s' % (filename, e))
+        return None
 
 
 def load_files(filelist, threads=10):
