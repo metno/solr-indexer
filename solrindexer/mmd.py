@@ -301,21 +301,21 @@ class MMD4SolR:
                 continue
             for value in values:
                 if not self.vocabulary_loader.search(vocab_url, value):
-                    # if tag == "metadata_status":
-                    #     status_ok = False
-                    #     self._record_warning(
-                    #         "%s mmd:%s has non-controlled value: %s",
-                    #         self._icon("fail"),
-                    #         tag,
-                    #         value,
-                    #     )
-                    # else:
-                    self._record_warning(
-                        "%s mmd:%s has non-controlled value: %s",
-                        self._icon("warn"),
-                        tag,
-                        value,
-                    )
+                    if tag == "metadata_status":
+                        status_ok = False
+                        self._record_warning(
+                            "%s mmd:%s has non-controlled value: %s",
+                            self._icon("fail"),
+                            tag,
+                            value,
+                        )
+                    else:
+                        self._record_warning(
+                            "%s mmd:%s has non-controlled value: %s",
+                            self._icon("warn"),
+                            tag,
+                            value,
+                        )
 
         gcmd_values = []
         for keywords in self._nodes("./mmd:keywords"):
