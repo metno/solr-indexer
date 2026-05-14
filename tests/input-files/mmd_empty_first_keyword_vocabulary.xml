@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd" xmlns:xml="http://www.w3.org/XML/1998/namespace">
+  <mmd:metadata_identifier>urn:uuid:22222222-1111-4111-8111-11111112222</mmd:metadata_identifier>
+  <mmd:title xml:lang="en">Keywords Product</mmd:title>
+  <mmd:title xml:lang="no">Nøkkelord Produkt</mmd:title>
+  <mmd:abstract xml:lang="en">Testing missing keywords in the first vocabulary.</mmd:abstract>
+  <mmd:abstract xml:lang="no">Testing manglende nøkkelord i det første vokabularet.</mmd:abstract>
+  <mmd:metadata_status>Active</mmd:metadata_status>
+  <mmd:dataset_production_status>In Work</mmd:dataset_production_status>
+  <mmd:collection>ADC</mmd:collection>
+  <mmd:collection>SIOS</mmd:collection>
+  <mmd:last_metadata_update>
+    <mmd:update>
+      <mmd:datetime>2026-01-12T09:45:00Z</mmd:datetime>
+      <mmd:type>Created</mmd:type>
+      <mmd:note>Initial creation.</mmd:note>
+    </mmd:update>
+    <mmd:update>
+      <mmd:datetime>2026-02-10T15:00:00Z</mmd:datetime>
+      <mmd:type>Minor modification</mmd:type>
+      <mmd:note>Added additional language entries.</mmd:note>
+    </mmd:update>
+  </mmd:last_metadata_update>
+  <mmd:temporal_extent>
+    <mmd:start_date>2021-01-01T00:00:00Z</mmd:start_date>
+    <mmd:end_date>2021-12-31T23:59:59Z</mmd:end_date>
+  </mmd:temporal_extent>
+  <mmd:temporal_extent>
+    <mmd:start_date>2022-01-01T00:00:00Z</mmd:start_date>
+    <mmd:end_date>2022-12-31T23:59:59Z</mmd:end_date>
+  </mmd:temporal_extent>
+  <mmd:iso_topic_category>oceans</mmd:iso_topic_category>
+  <mmd:iso_topic_category>climatologyMeteorologyAtmosphere</mmd:iso_topic_category>
+  <mmd:keywords vocabulary="GEMET">
+    <mmd:keyword/>
+  </mmd:keywords>
+  <mmd:keywords vocabulary="None">
+    <mmd:keyword>fixture</mmd:keyword>
+    <mmd:keyword>multilingual</mmd:keyword>
+  </mmd:keywords>
+  <mmd:dataset_language>en</mmd:dataset_language>
+  <mmd:geographic_extent>
+    <mmd:rectangle>
+      <mmd:north>82.0</mmd:north>
+      <mmd:south>70.0</mmd:south>
+      <mmd:east>35.0</mmd:east>
+      <mmd:west>-20.0</mmd:west>
+    </mmd:rectangle>
+  </mmd:geographic_extent>
+  <mmd:personnel>
+    <mmd:role>Investigator</mmd:role>
+    <mmd:type>Person</mmd:type>
+    <mmd:name uri="https://orcid.org/0000-0002-1111-2222">Ada Lovelace</mmd:name>
+    <mmd:organisation uri="https://ror.org/001n36p86">Norwegian Meteorological Institute</mmd:organisation>
+    <mmd:email>ada@example.org</mmd:email>
+    <mmd:phone>+47-10000001</mmd:phone>
+    <mmd:contact_address>
+      <mmd:city>Tromso</mmd:city>
+      <mmd:postal_code>9008</mmd:postal_code>
+      <mmd:country>NO</mmd:country>
+    </mmd:contact_address>
+  </mmd:personnel>
+  <mmd:related_information>
+    <mmd:type>Dataset landing page</mmd:type>
+    <mmd:description>Landing page for multilingual fixture.</mmd:description>
+    <mmd:resource>https://example.org/datasets/multilang-heavy</mmd:resource>
+  </mmd:related_information>
+</mmd:mmd>

@@ -283,8 +283,12 @@ class MMD4SolR:
         status_ok = True
         logger.debug("Checking mmd file %s", self.filename)
         for tag in self.REQUIRED_ELEMENTS:
-            value = self._first_text(f"./mmd:{tag}")
-            if value:
+            if tag == "keywords":
+                has_value = bool(self._all_text("./mmd:keywords/mmd:keyword"))
+            else:
+                has_value = bool(self._all_text(f"./mmd:{tag}"))
+
+            if has_value:
                 logger.debug("%s check_mmd mmd:%s", self._icon("ok"), tag)
             else:
                 status_ok = False

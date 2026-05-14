@@ -29,6 +29,13 @@ def testCheckMMd():
 
 
 @pytest.mark.indexdata
+def test_check_mmd_accepts_empty_first_keywords_block_when_later_keywords_exist():
+    fixture = "./tests/input-files/mmd_empty_first_keyword_vocabulary.xml"
+    mydoc = MMD4SolR(fixture)
+    assert mydoc.check_mmd() is True
+
+
+@pytest.mark.indexdata
 def testToSolR():
     mydoc = MMD4SolR(infile)
     assert mydoc.tosolr
