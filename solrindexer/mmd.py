@@ -18,7 +18,6 @@ permissions and limitations under the License.
 """
 
 import contextlib
-import html
 import json
 import logging
 import os
@@ -305,7 +304,7 @@ class MMD4SolR:
                 continue
             for value in values:
                 if not self.vocabulary_loader.search(vocab_url, value):
-                    if tag == "metadata_status":
+                    if tag == "metadata_status" or tag == "dataset_production_status":
                         status_ok = False
                         self._record_warning(
                             "%s mmd:%s has non-controlled value: %s",
@@ -1093,7 +1092,7 @@ class MMD4SolR:
             parent = node.getparent()
             if parent is not None:
                 parent.remove(node)
-        return html.unescape(ET.tostring(root_copy, pretty_print=True, encoding="unicode"))
+        return ET.tostring(root_copy, pretty_print=True, encoding="unicode")
 
     def _is_sentinel_product(self, product_string):
         """
@@ -1174,10 +1173,10 @@ class MMD4SolR:
         if use_constraint:
             node = use_constraint[0]
             solr_doc["use_constraint_identifier"] = (
-                self._first_text_for(node, "./mmd:identifier") or "Not provided"
+                self._first_text_for(node, "./mmd:identifier") or None
             )
             solr_doc["use_constraint_resource"] = (
-                self._first_text_for(node, "./mmd:resource") or "Not provided"
+                self._first_text_for(node, "./mmd:resource") or None
             )
             license_text = self._first_text_for(node, "./mmd:license_text")
             if license_text:

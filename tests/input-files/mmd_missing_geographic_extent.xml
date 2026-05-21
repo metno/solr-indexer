@@ -4,7 +4,7 @@
   <mmd:title xml:lang="en">Invalid Fixture Missing Geographic Extent</mmd:title>
   <mmd:abstract xml:lang="en">This file is intentionally invalid for negative schema testing around spatial completeness. See https://example.org/mmd/negative-tests and contact qa@example.org.</mmd:abstract>
   <mmd:metadata_status>Active</mmd:metadata_status>
-  <mmd:dataset_production_status>DefinitelyInvalidStatus</mmd:dataset_production_status>
+  <mmd:dataset_production_status>In Work</mmd:dataset_production_status>
   <mmd:collection>ADC</mmd:collection>
   <mmd:last_metadata_update>
     <mmd:update>

@@ -27,7 +27,6 @@
   </mmd:temporal_extent>
   <mmd:temporal_extent>
     <mmd:start_date>2022-01-01T00:00:00Z</mmd:start_date>
-    <mmd:end_date>2022-12-31T23:59:59Z</mmd:end_date>
   </mmd:temporal_extent>
   <mmd:iso_topic_category>oceans</mmd:iso_topic_category>
   <mmd:iso_topic_category>climatologyMeteorologyAtmosphere</mmd:iso_topic_category>

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd" xmlns:xml="http://www.w3.org/XML/1998/namespace">
   <mmd:metadata_identifier>urn:uuid:99999999-9999-4999-8999-999999999999</mmd:metadata_identifier>
-  <mmd:title xml:lang="en">Invalid Fixture Missing Geographic Extent</mmd:title>
+  <mmd:title xml:lang="en">Invalid metadata_production_status value</mmd:title>
   <mmd:abstract xml:lang="en">This file is intentionally invalid for negative schema testing of dataset status values. Reference note: https://example.org/mmd/negative-tests and contact qa@example.org.</mmd:abstract>
   <mmd:metadata_status>Active</mmd:metadata_status>
   <mmd:dataset_production_status>DefinitelyInvalidStatus</mmd:dataset_production_status>
