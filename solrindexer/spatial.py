@@ -47,6 +47,9 @@ def handle_solr_spatial(solr_doc, north, east, south, west, gml=None, srs=None):
         geom_wkt = parse_gml_to_wkt(gml)
         geom_wkt = validate_fix_geometry(geom_wkt)
         solr_doc["geospatial_bounds3d"] = geom_wkt
+        if (west == -180.0 and east == 180.0) or (south == -90.0 and north == 90.0):
+            logger.debug("Spanning whole longitude using ENVELOPE syntax to avoid coplanar error")
+            solr_doc["geospatial_bounds3d"] = solr_doc["bbox"]
         solr_doc["geometry_wkt"] = geom_wkt
         solr_doc["geometry_geojson"] = wkt_to_geojson(geom_wkt)
         return solr_doc
@@ -58,7 +61,7 @@ def handle_solr_spatial(solr_doc, north, east, south, west, gml=None, srs=None):
         else:
             solr_doc["geospatial_bounds3d"] = solr_doc["bbox"]
 
-        if west == -180 and east == 180:
+        if (west == -180.0 and east == 180.0) or (south == -90.0 and north == 90.0):
             logger.debug("Spanning whole longitude using ENVELOPE syntax to avoid coplanar error")
             solr_doc["geospatial_bounds3d"] = solr_doc["bbox"]
 
