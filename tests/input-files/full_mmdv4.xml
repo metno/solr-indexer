@@ -198,6 +198,7 @@
     <mmd:file_size unit="MB">163.95</mmd:file_size>
     <mmd:checksum type="md5sum">3e25fde68624b130c5b1fa9c59366921</mmd:checksum>
     <mmd:storage_expiry_date>2026-10-11</mmd:storage_expiry_date>
+    <mmd:responsible_unit>HAV-FD</mmd:responsible_unit>
   </mmd:storage_information>
   <mmd:metadata_source>Internal</mmd:metadata_source>
 </mmd:mmd>

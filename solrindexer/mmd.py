@@ -825,6 +825,7 @@ class MMD4SolR:
         file_format = self._first_text_for(node, "./mmd:file_format")
         file_size_nodes = node.xpath("./mmd:file_size", namespaces=self.NSMAP)
         checksum_nodes = node.xpath("./mmd:checksum", namespaces=self.NSMAP)
+        responsible_unit = self._first_text_for(node, "./mmd:responsible_unit")
         storage_expiry_date = self._normalize_datetime(
             self._first_text_for(node, "./mmd:storage_expiry_date")
         )
@@ -835,6 +836,8 @@ class MMD4SolR:
             solr_doc["storage_information_file_location"] = file_location
         if file_format:
             solr_doc["storage_information_file_format"] = file_format
+        if responsible_unit:
+            solr_doc["storage_information_responsible_unit"] = responsible_unit
 
         if file_size_nodes:
             file_size_node = file_size_nodes[0]
