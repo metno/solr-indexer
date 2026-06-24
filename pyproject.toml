@@ -53,7 +53,7 @@ dev = [
     "pytest-cov",
     "tox",
     "ruff",
-    "mypy",
+    "mypy==1.17.1",
     "bandit[toml]",
     "prospector[with_everything]",
 ]
