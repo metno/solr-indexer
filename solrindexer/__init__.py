@@ -27,8 +27,8 @@ from .indexdata import MMD4SolR
 from .bulkindexer import BulkIndexer
 
 __package__ = "solrindexer"
-__version__ = "2.1.0"
-__date__ = "2024-01-23"
+__version__ = "2.2.0"
+__date__ = "2026-06-24"
 __all__ = ["IndexMMD", "MMD4SolR", "BulkIndexer"]
 
 
