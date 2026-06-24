@@ -2,16 +2,10 @@ name: solrindexing
 channels:
   - conda-forge
 dependencies:
-  - python>=3.8
-  - matplotlib>=3.1
-  - numpy>=1.17
-  - scipy>=1.2
-  - netcdf4>=1.6.4
-  - pyproj>=2.3
-  - cartopy
+  - python>=3.13
+  - netcdf4>=1.7.4
   - pip
   - pysolr
-  - xmltodict
   - python-dateutil
   - yaml
   - owslib
@@ -26,3 +20,4 @@ dependencies:
   - urllib3
   - requests
   - python-dotenv
+  - rdflib

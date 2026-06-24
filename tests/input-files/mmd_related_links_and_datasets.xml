@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd" xmlns:xml="http://www.w3.org/XML/1998/namespace">
+  <mmd:metadata_identifier>urn:uuid:33333333-3333-4333-8333-333333333333</mmd:metadata_identifier>
+  <mmd:title xml:lang="en">Related Information and Dataset Graph Fixture</mmd:title>
+  <mmd:abstract xml:lang="en">Focuses on relationship-heavy records for search graph testing. It intentionally includes simple HTML as escaped text: &lt;p&gt;Graph test&lt;/p&gt; and &lt;a href=&quot;https://example.org/guide&quot;&gt;guide&lt;/a&gt;. Contact: graph-maintainer@example.org.</mmd:abstract>
+  <mmd:metadata_status>Active</mmd:metadata_status>
+  <mmd:dataset_production_status>In Work</mmd:dataset_production_status>
+  <mmd:collection>NBS</mmd:collection>
+  <mmd:last_metadata_update>
+    <mmd:update>
+      <mmd:datetime>2026-02-02T12:00:00Z</mmd:datetime>
+      <mmd:type>Created</mmd:type>
+    </mmd:update>
+  </mmd:last_metadata_update>
+  <mmd:temporal_extent>
+    <mmd:start_date>2020-05-01T00:00:00Z</mmd:start_date>
+    <mmd:end_date>2020-09-30T00:00:00Z</mmd:end_date>
+  </mmd:temporal_extent>
+  <mmd:iso_topic_category>oceans</mmd:iso_topic_category>
+  <mmd:keywords vocabulary="GEMET">
+    <mmd:keyword>Marine waters</mmd:keyword>
+    <mmd:resource>http://inspire.ec.europa.eu/theme</mmd:resource>
+  </mmd:keywords>
+  <mmd:keywords vocabulary="GCMDSK">
+    <mmd:keyword>Earth Science > Atmosphere</mmd:keyword>
+  </mmd:keywords>
+  <mmd:geographic_extent>
+    <mmd:rectangle>
+      <mmd:north>76.0</mmd:north>
+      <mmd:south>72.0</mmd:south>
+      <mmd:east>24.0</mmd:east>
+      <mmd:west>10.0</mmd:west>
+    </mmd:rectangle>
+  </mmd:geographic_extent>
+  <mmd:related_information>
+    <mmd:type>Project home page</mmd:type>
+    <mmd:description>Main project website</mmd:description>
+    <mmd:resource>https://example.org/project/arctic-graph</mmd:resource>
+  </mmd:related_information>
+  <mmd:related_information>
+    <mmd:type>Scientific publication</mmd:type>
+    <mmd:description>Primary analysis publication</mmd:description>
+    <mmd:resource>https://doi.org/10.1000/example.1</mmd:resource>
+  </mmd:related_information>
+  <mmd:related_information>
+    <mmd:type>Data paper</mmd:type>
+    <mmd:description>Data descriptor publication</mmd:description>
+    <mmd:resource>https://doi.org/10.1000/example.2</mmd:resource>
+  </mmd:related_information>
+  <mmd:related_information>
+    <mmd:type>Other documentation</mmd:type>
+    <mmd:description>User note and caveats</mmd:description>
+    <mmd:resource>https://example.org/docs/arctic-graph</mmd:resource>
+  </mmd:related_information>
+  <mmd:related_dataset relation_type="parent">urn:uuid:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa</mmd:related_dataset>
+  <mmd:related_dataset relation_type="auxiliary">urn:uuid:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb</mmd:related_dataset>
+</mmd:mmd>

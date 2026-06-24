@@ -1,128 +1,77 @@
-name: Docker build test python 3.9-3.12
+name: CI
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
 
 jobs:
-  build:
+  tests:
+    name: Tests (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
 
-    - name: Build Docker image
-      run: |
-        docker build -f Dockerfile-build -t solrindexer:build .
-    - name: Install solrindexer in docker image
-      run: |
-        docker run --rm solrindexer:build
+      - name: Install package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[dev,rdflib]
 
-    - name: Set up Python 3.9
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.9'
+      - name: Smoke test installed CLI entry points
+        run: |
+          indexdata --help
+          searchindex --help
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install wheel
-        python --version
+      - name: Run pytest
+        run: |
+          pytest -q
 
-    - name: Install solrindexer with requirements
-      run: |
-        pip install . -r requirements.txt || exit 1
+  quality:
+    name: Quality checks (tox)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
 
-    - name: Install thumbnail requirements
-      run: |
-        pip install -r requirements-thumb.txt || exit 1
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
 
-    - name: Test executable script indexdata
-      run: |
-        indexdata -c etc/cfg-template.yml || exit 1
+      - name: Install tox
+        run: |
+          python -m pip install --upgrade pip
+          pip install tox
 
-    - name: Test executable script bulkindexer
-      run: |
-        bulkindexer -c etc/cfg-template.yml || exit 1
+      - name: Run linting and analysis envs
+        run: |
+          tox -e typecheck,security
 
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
+  adc-integration:
+    name: ADC integration (thumbnail path contract)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install wheel
-        python --version
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.9"
 
-    - name: Install solrindexer with requirements
-      run: |
-        pip install . -r requirements.txt || exit 1
+      - name: Install package deps and thumbnail-generator
+        run: |
+          python -m pip install --upgrade pip
+          pip install .[dev,rdflib]
+          pip install "metsis-thumbnail-generator @ git+https://github.com/magnarem/metsis-thumbnail.generator.git@main"
 
-    - name: Install thumbnail requirements
-      run: |
-        pip install -r requirements-thumb.txt || exit 1
-
-    - name: Test executable script indexdata
-      run: |
-        indexdata -c etc/cfg-template.yml || exit 1
-
-    - name: Test executable script bulkindexer
-      run: |
-        bulkindexer -c etc/cfg-template.yml || exit 1
-
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install wheel
-        python --version
-
-    - name: Install solrindexer with requirements
-      run: |
-        pip install . -r requirements.txt || exit 1
-
-    - name: Install thumbnail requirements
-      run: |
-        pip install -r requirements-thumb.txt || exit 1
-
-    - name: Test executable script indexdata
-      run: |
-        indexdata -c etc/cfg-template.yml || exit 1
-
-    - name: Test executable script bulkindexer
-      run: |
-        bulkindexer -c etc/cfg-template.yml || exit 1
-
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install wheel
-        python --version
-
-    - name: Install solrindexer with requirements
-      run: |
-        pip install . -r requirements.txt || exit 1
-
-    - name: Install thumbnail requirements
-      run: |
-        pip install -r requirements-thumb.txt || exit 1
-
-    - name: Test executable script indexdata
-      run: |
-        indexdata -c etc/cfg-template.yml || exit 1
-
-    - name: Test executable script bulkindexer
-      run: |
-        bulkindexer -c etc/cfg-template.yml || exit 1
+      - name: Run ADC contract parity test
+        run: |
+          pytest -q tests/test_tools.py::test_adc_deterministic_path_contract_vectors

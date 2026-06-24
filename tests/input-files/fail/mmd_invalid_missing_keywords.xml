@@ -1,0 +1,27 @@
+<mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd">
+  <mmd:metadata_identifier>no.met.adc:47f02cf0-8d83-5b12-8cca-dbd4c8d48101</mmd:metadata_identifier>
+  <mmd:title xml:lang="en">Title in English</mmd:title>
+  <mmd:abstract xml:lang="en">Summary in English with a short usage note. Project page: https://example.org/mmd/minimal. Contact: data-team@example.org for access and clarification.</mmd:abstract>
+  <mmd:metadata_status>Active</mmd:metadata_status>
+  <mmd:dataset_production_status>Not available</mmd:dataset_production_status>
+  <mmd:collection>ADC</mmd:collection>
+  <mmd:last_metadata_update>
+    <mmd:update>
+      <mmd:datetime>2024-10-24T10:00:00Z</mmd:datetime>
+      <mmd:type>Created</mmd:type>
+      <mmd:note>MMD record created from the NetCDF file</mmd:note>
+    </mmd:update>
+  </mmd:last_metadata_update>
+  <mmd:temporal_extent>
+    <mmd:start_date>2004-08-23T03:00:00Z</mmd:start_date>
+  </mmd:temporal_extent>
+  <mmd:iso_topic_category>climatologyMeteorologyAtmosphere</mmd:iso_topic_category>
+  <mmd:geographic_extent>
+    <mmd:rectangle srsName="EPSG:4326">
+      <mmd:north>78.95738</mmd:north>
+      <mmd:south>78.95738</mmd:south>
+      <mmd:east>11.82275</mmd:east>
+      <mmd:west>11.82275</mmd:west>
+    </mmd:rectangle>
+  </mmd:geographic_extent>
+</mmd:mmd>

@@ -17,93 +17,105 @@ implied. See the License for the specific language governing
 permissions and limitations under the License.
 """
 
-import os
 import logging
+import os
 import sys
-# import http
 
-from .indexdata import IndexMMD
-from .indexdata import MMD4SolR
-from .bulkindexer import BulkIndexer
+from .indexer import BulkIndexer
+from .mmd import IndexMMD, MMD4SolR
 
-__package__ = "solrindexer"
-__version__ = "2.3.0"
-__date__ = "2026-06-24"
+try:
+    from importlib.metadata import PackageNotFoundError, version
+except ImportError:
+    from importlib_metadata import PackageNotFoundError, version  # type: ignore
+
+try:
+    __version__ = version("solrindexer")
+except PackageNotFoundError:
+    __version__ = "0.0.0.dev0"
+
 __all__ = ["IndexMMD", "MMD4SolR", "BulkIndexer"]
 
 
 class InfoFilter(logging.Filter):
-    def filter(self, rec):
-        return rec.levelno == logging.INFO
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.levelno == logging.INFO
 
 
-def _init_logging(log_obj):
-    """Call to initialise logging."""
-    # Read environment variables
-    want_level = os.environ.get("SOLRINDEXER_LOGLEVEL", "INFO")
-    log_file = os.environ.get("SOLRINDEXER_LOGFILE", None)
+def _init_logging(log_obj: logging.Logger) -> None:
+    """Initialize package logging from environment variables.
 
-    # Determine log level and format
-    if hasattr(logging, want_level):
-        log_level = getattr(logging, want_level)
-    else:
+    Behavior:
+    - Reads log level from SOLRINDEXER_LOGLEVEL (default: INFO)
+    - Reads optional logfile path from SOLRINDEXER_LOGFILE
+    - Uses rich.logging.RichHandler for console output when rich is installed,
+      otherwise falls back to a plain stdout/stderr split handler setup
+    - Sends DEBUG/INFO to stdout and WARNING+ to stderr (no duplicates)
+    """
+    want_level = os.environ.get("SOLRINDEXER_LOGLEVEL", "INFO").upper()
+    log_file = os.environ.get("SOLRINDEXER_LOGFILE")
+
+    log_level = getattr(logging, want_level, logging.INFO)
+    if not hasattr(logging, want_level):
         print(
-            "Invalid logging level '%s' in environment variable SOLRINDEXER_LOGLEVEL" % want_level)
-        log_level = logging.INFO
+            f"Invalid logging level '{want_level}' in environment variable SOLRINDEXER_LOGLEVEL",
+            file=sys.stderr,
+        )
 
-    if log_level < logging.INFO:
-        msg_format = "[{asctime:}] [{thread:d}] [{threadName:s}]"
-        msg_format += " {name:>28}:{lineno:<4d} {levelname:8s} {message:}"
-    else:
-        msg_format = "[{asctime:}] [{processName:s}] [{threadName:s}] {levelname:8s} {message:}"
+    debug_fmt = "[{asctime:}]  [{processName:s}] [{threadName:s}] [{levelname:7s}] {name}:{lineno:<4d} : {message:}"
+    info_fmt = "[{asctime:}] {levelname:8s}: {message:}"
+    plain_format = logging.Formatter(
+        fmt=debug_fmt if log_level == logging.DEBUG else info_fmt, style="{"
+    )
 
-    log_format = logging.Formatter(fmt=msg_format, style="{")
+    # Make init idempotent (important for tests/import cycles)
+    log_obj.handlers.clear()
     log_obj.setLevel(log_level)
+    log_obj.propagate = False
 
-    # Create stream handlers
-    # h_stdout = logging.StreamHandler()
-    # h_stdout.setLevel(log_level)
-    # h_stdout.setFormatter(log_format)
-    # log_obj.addHandler(h_stdout)
+    try:
+        from rich.console import Console
+        from rich.logging import RichHandler
 
-    if log_file is not None:
-        h_file = logging.FileHandler(log_file, encoding="utf-8")
-        h_file.setLevel(log_level)
-        h_file.setFormatter(log_format)
-        log_obj.addHandler(h_file)
+        show_path = log_level == logging.DEBUG
 
-    # Create a handler for stdout, set its level to INFO.
-    stdout_format = "[{asctime:}] [{processName:s}] [{threadName:s}] {message:}"
-    stdout_log_format = logging.Formatter(fmt=stdout_format, style="{")
-    stdout_handler = logging.StreamHandler(sys.stdout)
-    if log_level == logging.INFO:
-        stdout_handler.setLevel(logging.INFO)
-        stdout_handler.addFilter(InfoFilter())
-        stdout_handler.setFormatter(stdout_log_format)
-    if log_level == logging.DEBUG:
-        stdout_handler.setLevel(logging.DEBUG)
-        stdout_handler.setFormatter(log_format)
+        # DEBUG/INFO → stdout
+        stdout_rich = RichHandler(
+            level=log_level,
+            console=Console(file=sys.stdout),
+            rich_tracebacks=True,
+            show_path=show_path,
+        )
+        stdout_rich.addFilter(lambda record: record.levelno <= logging.INFO)
+        log_obj.addHandler(stdout_rich)
 
-    # Create a handler for stderr, set its level to WARNING.
-    stderr_format = "[{asctime:}] [{thread:d}] [{threadName:s}]"
-    stderr_format += " {name:>28}:{lineno:<4d} {levelname:8s} {message:}"
-    stderr_handler = logging.StreamHandler(sys.stderr)
-    stderr_log_format = logging.Formatter(fmt=stderr_format, style="{")
-    stderr_handler.setLevel(logging.WARNING)
-    stderr_handler.setFormatter(stderr_log_format)
+        # WARNING+ → stderr (respects 2>/dev/null)
+        stderr_rich = RichHandler(
+            level=logging.WARNING,
+            console=Console(file=sys.stderr, stderr=True),
+            rich_tracebacks=True,
+            show_path=show_path,
+        )
+        log_obj.addHandler(stderr_rich)
+    except ImportError:
+        # Fallback: stdout for DEBUG/INFO, stderr for WARNING+
+        stdout_handler = logging.StreamHandler(sys.stdout)
+        stdout_handler.setLevel(log_level)
+        stdout_handler.setFormatter(plain_format)
+        stdout_handler.addFilter(lambda record: record.levelno <= logging.INFO)
+        log_obj.addHandler(stdout_handler)
 
-    # Add the handlers to the logger.
-    log_obj.addHandler(stdout_handler)
-    log_obj.addHandler(stderr_handler)
+        stderr_handler = logging.StreamHandler(sys.stderr)
+        stderr_handler.setLevel(logging.WARNING)
+        stderr_handler.setFormatter(plain_format)
+        log_obj.addHandler(stderr_handler)
 
-    # if log_level == logging.DEBUG:
-    # http.client.HTTPConnection.debuglevel = 1
-    # http.client.HTTPSConnection.debuglevel = 1
-    # Set logger level to the lowest level, this level is used to determine
-    # whether a incoming message should be processed.
-    # logger.setLevel(logging.INFO)
-
-    return
+    # Optional logfile: always plain text regardless of rich availability
+    if log_file:
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        file_handler.setLevel(log_level)
+        file_handler.setFormatter(plain_format)
+        log_obj.addHandler(file_handler)
 
 
 # Logging Setup
