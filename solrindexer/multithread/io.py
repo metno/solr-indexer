@@ -26,6 +26,7 @@ from concurrent.futures import ThreadPoolExecutor
 # Logging Setup
 logger = logging.getLogger(__name__)
 
+
 def load_file(filename):
     """
     Load XML file and convert to dict using xmltodict.
