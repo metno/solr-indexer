@@ -17,25 +17,24 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import fnmatch
+import json
+import logging
+import math
 import os
 import re
-import sys
-import math
-import json
-import fnmatch
-import pysolr
-import shapely
-import logging
-import requests
-import validators
-import netCDF4
-import dateutil.parser
 import subprocess
+import sys
+from threading import Lock
 
+import dateutil.parser
+import netCDF4
+import pysolr
+import requests
+import shapely
+import validators
 from shapely import wkt
 from shapely.ops import transform
-
-from threading import Lock
 
 from solrindexer.thumb.thumbnail_api import create_wms_thumbnail_api
 
@@ -44,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 lock = Lock()
 
-IDREPLS = [':', '/', '.']
+IDREPLS = [":", "/", "."]
 
 DATETIME_REGEX = re.compile(
     r"^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})T(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})(\.\d+)?Z$"  # NOQA: E501
@@ -90,8 +89,7 @@ def get_dataset(id):
     """
     res = None
     try:
-        res = requests.get(solr_endpoint + '/get?wt=json&id=' + id,
-                           auth=authClass)
+        res = requests.get(solr_endpoint + "/get?wt=json&id=" + id, auth=authClass)
         res.raise_for_status()
     except requests.exceptions.HTTPError as errh:
         logger.error("Http Error: %s", errh)
@@ -118,11 +116,11 @@ def solr_ping():
     """Ping Solr"""
     try:
         pong = solr_pysolr.ping()
-        status = json.loads(pong)['status']
-        if status == 'OK':
-            logger.info('Solr ping with status %s', status)
+        status = json.loads(pong)["status"]
+        if status == "OK":
+            logger.info("Solr ping with status %s", status)
         else:
-            logger.error('Error! Solr ping with status %s', status)
+            logger.error("Error! Solr ping with status %s", status)
             sys.exit(1)
 
     except pysolr.SolrError as e:
@@ -151,7 +149,7 @@ def to_solr_id(id):
     """
     solr_id = str(id)
     for e in IDREPLS:
-        solr_id = solr_id.replace(e, '-')
+        solr_id = solr_id.replace(e, "-")
 
     return solr_id
 
@@ -170,7 +168,7 @@ def parse_date(_date):
     elif not test:
         try:
             parsed_date = dateutil.parser.parse(date)
-            date = parsed_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+            date = parsed_date.strftime("%Y-%m-%dT%H:%M:%SZ")
         except Exception as e:
             logger.error("Could not parse date: %s, reason: %s", date, e)
             return None
@@ -182,11 +180,11 @@ def parse_date(_date):
             return date
         else:
             logger.debug("dateformat not solr compatible. fixing...")
-            if re.search(r'\+\d\d:\d\dZ$', date) is not None:
-                date = re.sub(r'\+\d\d:\d\d', '', date)
+            if re.search(r"\+\d\d:\d\dZ$", date) is not None:
+                date = re.sub(r"\+\d\d:\d\d", "", date)
                 try:
                     newdate = dateutil.parser.parse(date)
-                    date = newdate.strftime('%Y-%m-%dT%H:%M:%SZ')
+                    date = newdate.strftime("%Y-%m-%dT%H:%M:%SZ")
                     logger.debug("parsed solr date: %s", date)
                 except Exception as e:
                     logger.error("Could not parse date: %s, reason: %s", date, e)
@@ -228,8 +226,8 @@ def getListOfFiles(dirName):
     """
     logger.debug("Creating list of files traversing %s", dirName)
     listOfFiles = list()
-    for (dirpath, dirnames, filenames) in os.walk(dirName):
-        for filename in fnmatch.filter(filenames, '*.xml'):
+    for dirpath, dirnames, filenames in os.walk(dirName):
+        for filename in fnmatch.filter(filenames, "*.xml"):
             listOfFiles.append(os.path.join(dirpath, filename))
     logger.debug("Found %d files.", len(listOfFiles))
     if len(listOfFiles) == 0:
@@ -241,10 +239,9 @@ def find_xml_files(directory):
     logger.debug("Creating list of files traversing %s", directory)
     try:
         output = subprocess.check_output(
-            ["find", directory, "-type", "f", "-name", "*.xml"],
-            universal_newlines=True
+            ["find", directory, "-type", "f", "-name", "*.xml"], universal_newlines=True
         )
-        return output.split('\n')[:-1]  # Remove last item which is an empty string
+        return output.split("\n")[:-1]  # Remove last item which is an empty string
     except subprocess.CalledProcessError as e:
         print(f"Error occurred while finding XML files: {str(e)}")
         return []
@@ -261,12 +258,12 @@ def process_feature_type(tmpdoc):
     """
     dapurl = None
     tmpdoc_ = tmpdoc
-    metadata_status = tmpdoc.get('metadata_status', 'unknown')
-    if metadata_status == 'Inactive' or metadata_status == 'inactive':
+    metadata_status = tmpdoc.get("metadata_status", "unknown")
+    if metadata_status == "Inactive" or metadata_status == "inactive":
         return tmpdoc
-    if 'data_access_url_opendap' in tmpdoc:
-        dapurl = tmpdoc['data_access_url_opendap']
-        if (isinstance(dapurl, list)):
+    if "data_access_url_opendap" in tmpdoc:
+        dapurl = tmpdoc["data_access_url_opendap"]
+        if isinstance(dapurl, list):
             dapurl = dapurl[0]
         dapurl = str(dapurl).strip()
         valid = validators.url(dapurl)
@@ -288,7 +285,7 @@ def process_feature_type(tmpdoc):
         # lock.acquire()
         ds = None
         try:
-            ds = netCDF4.Dataset(dapurl, 'r')
+            ds = netCDF4.Dataset(dapurl, "r")
         except Exception as e:
             logger.error("Something failed reading netcdf %s. Reason: %s", dapurl, e)
             if ds is not None:
@@ -302,7 +299,7 @@ def process_feature_type(tmpdoc):
         # Try to get the global attribute featureType
         featureType = None
         try:
-            featureType = ds.getncattr('featureType')
+            featureType = ds.getncattr("featureType")
         except AttributeError:
             pass
         except Exception as e:
@@ -313,14 +310,17 @@ def process_feature_type(tmpdoc):
 
         if featureType is not None:
             logger.debug("Got featuretype: %s", featureType)
-            validfeaturetypes = {'point': 'point', 'timeseries': 'timeSeries',
-                                 'trajectory': 'trajectory', 'profile': 'profile',
-                                 'timeseriesprofile': 'timeSeriesProfile',
-                                 'trajectoryprofile': 'trajectoryProfile'}
+            validfeaturetypes = {
+                "point": "point",
+                "timeseries": "timeSeries",
+                "trajectory": "trajectory",
+                "profile": "profile",
+                "timeseriesprofile": "timeSeriesProfile",
+                "trajectoryprofile": "trajectoryProfile",
+            }
 
             if featureType not in validfeaturetypes.values():
-                logger.warning(
-                    "The featureType found - %s - is not valid", featureType)
+                logger.warning("The featureType found - %s - is not valid", featureType)
                 logger.warning("Fixing this locally")
                 if featureType.lower() in validfeaturetypes.keys():
                     featureType = validfeaturetypes[featureType.lower()]
@@ -329,15 +329,17 @@ def process_feature_type(tmpdoc):
                     featureType = None
 
             if featureType is not None:
-                logger.debug('feature_type found: %s', featureType)
-                tmpdoc_.update({'feature_type': featureType})
+                logger.debug("feature_type found: %s", featureType)
+                tmpdoc_.update({"feature_type": featureType})
             else:
-                logger.debug('Neither gridded nor discrete sampling \
-                            geometry found in this record...')
+                logger.debug(
+                    "Neither gridded nor discrete sampling \
+                            geometry found in this record..."
+                )
 
         polygon = None
         try:
-            polygon = ds.getncattr('geospatial_bounds')
+            polygon = ds.getncattr("geospatial_bounds")
         except AttributeError:
             pass
         except Exception as e:
@@ -357,26 +359,26 @@ def process_feature_type(tmpdoc):
                 return tmpdoc_
             geom_type = polygon_.geom_type
             logger.debug("Got geospatial type %s with bounds: %s", geom_type, polygon)
-            if geom_type == 'Point':
+            if geom_type == "Point":
                 point_ = polygon_
                 point = polygon_.wkt
                 if shapely.has_z(point_):
                     point_ = shapely.force_2d(point_)
                     point = point_.wkt
-                if 'polygon_rpt' in tmpdoc_:
-                    parsed_point = wkt.loads(tmpdoc_['polygon_rpt'])
+                if "polygon_rpt" in tmpdoc_:
+                    parsed_point = wkt.loads(tmpdoc_["polygon_rpt"])
                     if not parsed_point.equals(point_):
                         point = transform(flip, point_).wkt
-                tmpdoc_.update({'geospatial_bounds': point})
+                tmpdoc_.update({"geospatial_bounds": point})
 
-            elif geom_type == 'MultiPoint':
+            elif geom_type == "MultiPoint":
                 mpoint_ = polygon_
                 mpoint = polygon_.wkt
                 if shapely.has_z(polygon_):
                     mpoint_ = shapely.force_2d(polygon_)
                     mpoint = mpoint_.wkt
                 mpoint = transform(flip, mpoint_).wkt
-                tmpdoc_.update({'geospatial_bounds': mpoint})
+                tmpdoc_.update({"geospatial_bounds": mpoint})
 
             else:
                 try:
@@ -385,12 +387,12 @@ def process_feature_type(tmpdoc):
                     logger.warning("Could not transform incoming geospatial bounds: %s", polygon_)
                     pass
                 else:
-                    tmpdoc_.update({'geospatial_bounds': polygon.wkt})
-                    tmpdoc_.update({'polygon_rpt': polygon.wkt})
+                    tmpdoc_.update({"geospatial_bounds": polygon.wkt})
+                    tmpdoc_.update({"polygon_rpt": polygon.wkt})
 
         bounds_crs = None
         try:
-            bounds_crs = ds.getncattr('geospatial_bounds_crs')
+            bounds_crs = ds.getncattr("geospatial_bounds_crs")
         except AttributeError:
             pass
         except Exception as e:
@@ -402,7 +404,7 @@ def process_feature_type(tmpdoc):
         if bounds_crs is not None:
             crs = str(bounds_crs).strip()
             logger.debug("Got geospatial bounds CRS: %s", crs)
-            tmpdoc_.update({'geographic_extent_polygon_srsName': crs})
+            tmpdoc_.update({"geographic_extent_polygon_srsName": crs})
 
         logger.debug("Closing netCDF file.")
         ds.close()
@@ -413,27 +415,27 @@ def process_feature_type(tmpdoc):
 
 
 def create_wms_thumbnail(doc):
-    """ Add thumbnail to SolR
-        Args:
-            type: solr document
-        Returns:
-            solr document with thumbnail
+    """Add thumbnail to SolR
+    Args:
+        type: solr document
+    Returns:
+        solr document with thumbnail
     """
     # global thumbClass
     doc_ = doc.copy()
-    ogc_wms_url = doc['data_access_url_ogc_wms']
+    ogc_wms_url = doc["data_access_url_ogc_wms"]
     if isinstance(ogc_wms_url, list):
         ogc_wms_url = ogc_wms_url[0]
     url = str(ogc_wms_url).strip()
-    id = str(doc['id']).strip()
+    id = str(doc["id"]).strip()
     logger.debug("adding thumbnail for %s with url: %s", id, url)
     wms_layers_mmd = []
-    if 'data_access_wms_layers' in doc:
-        wms_layers_mmd = doc['data_access_wms_layers']
+    if "data_access_wms_layers" in doc:
+        wms_layers_mmd = doc["data_access_wms_layers"]
         logger.debug("wms_layers_mmd is: %s", wms_layers_mmd)
     try:
         thumbnail_data = thumbClass.create_wms_thumbnail(url, id, wms_layers_mmd)
-        doc_.update({'thumbnail_data': thumbnail_data})
+        doc_.update({"thumbnail_data": thumbnail_data})
     except Exception as e:
         logger.error("Thumbnail creation from OGC WMS failed: %s, id: %s", e, id)
         # raise Exception("Thumbnail creation from OGC WMS failed: %s, id: %s", e, id)
@@ -446,12 +448,12 @@ def add_nbs_thumbnail(doc, config):
     NBS_PROD_RE = r"(\w\d\w)/(\d{4})/(\d{2})/(\d{2})(?:/(IW|EW))?/(.+).zip"
 
     # Get the configuration
-    nbs_base_path = config.get('nbs-thumbnails-base-path', None)
-    nbs_base_url = config.get('nbs-thumbnails-base-url', None)
+    nbs_base_path = config.get("nbs-thumbnails-base-path", None)
+    nbs_base_url = config.get("nbs-thumbnails-base-url", None)
     # Extract filename and path from data_access_url_opendap
-    data_access_url_http = doc.get('data_access_url_http', '')[0]
-    if not data_access_url_http.endswith('.zip'):
-        data_access_url_http = doc.get('data_access_url_http', '')[1]
+    data_access_url_http = doc.get("data_access_url_http", "")[0]
+    if not data_access_url_http.endswith(".zip"):
+        data_access_url_http = doc.get("data_access_url_http", "")[1]
     logger.debug(data_access_url_http)
     if data_access_url_http is not None:
         match = re.search(NBS_PROD_RE, data_access_url_http)
@@ -471,7 +473,7 @@ def add_nbs_thumbnail(doc, config):
                     thumbnail_url = f"{nbs_base_url}/{product}/{year}/"
                     thumbnail_url += f"{month}/{day}/{mode}/ql/{fname}/thumbnail.png"
                     logger.info("NBS thumbnail_url set to: %s", thumbnail_url)
-                    doc['thumbnail_url'] = thumbnail_url
+                    doc["thumbnail_url"] = thumbnail_url
                 else:
                     logger.error("NBS thumbnail not found: %s", thumb_path)
 
@@ -484,7 +486,7 @@ def add_nbs_thumbnail(doc, config):
                     thumbnail_url = f"{nbs_base_url}/{product}/{year}/"
                     thumbnail_url += f"{month}/{day}/ql/{fname}/thumbnail.png"
                     logger.info("NBS thumbnail_url set to: %s", thumbnail_url)
-                    doc['thumbnail_url'] = thumbnail_url
+                    doc["thumbnail_url"] = thumbnail_url
                 else:
                     logger.error("NBS thumbnail not found: %s", thumb_path)
     return doc
@@ -494,15 +496,15 @@ def add_nbs_thumbnail_bulk(doc):
     NBS_PROD_RE = r"(\w\d\w)/(\d{4})/(\d{2})/(\d{2})(?:/(IW|EW))?/(.+).zip"
 
     # Get the configuration
-    nbs_base_path = thumbClass.get('nbs_base_path', None)
-    nbs_base_url = thumbClass.get('nbs_base_url', None)
+    nbs_base_path = thumbClass.get("nbs_base_path", None)
+    nbs_base_url = thumbClass.get("nbs_base_url", None)
     # Extract filename and path from data_access_url_opendap
-    data_access_url_http = doc.get('data_access_url_http', '')[0]
-    if not data_access_url_http.endswith('.zip'):
-        data_access_url_http = doc.get('data_access_url_http', '')[1]
+    data_access_url_http = doc.get("data_access_url_http", "")[0]
+    if not data_access_url_http.endswith(".zip"):
+        data_access_url_http = doc.get("data_access_url_http", "")[1]
     logger.debug(data_access_url_http)
 
-    title = doc.get('title', [])[0]
+    title = doc.get("title", [])[0]
     logger.debug(title)
     logger.debug(data_access_url_http)
     if data_access_url_http is not None:
@@ -523,7 +525,7 @@ def add_nbs_thumbnail_bulk(doc):
                     thumbnail_url = f"{nbs_base_url}/{product}/{year}/"
                     thumbnail_url += f"{month}/{day}/{mode}/ql/{fname}/thumbnail.png"
                     logger.debug("NBS thumbnail_url set to: %s", thumbnail_url)
-                    doc['thumbnail_url'] = thumbnail_url
+                    doc["thumbnail_url"] = thumbnail_url
                 else:
                     logger.error("NBS thumbnail not found: %s", thumb_path)
 
@@ -536,51 +538,51 @@ def add_nbs_thumbnail_bulk(doc):
                     thumbnail_url = f"{nbs_base_url}/{product}/{year}/"
                     thumbnail_url += f"{month}/{day}/ql/{fname}/thumbnail.png"
                     logger.debug("NBS thumbnail_url set to: %s", thumbnail_url)
-                    doc['thumbnail_url'] = thumbnail_url
+                    doc["thumbnail_url"] = thumbnail_url
                 else:
                     logger.error("NBS thumbnail not found: %s", thumb_path)
     return doc
 
 
 def create_wms_thumbnail_api_wrapper(doc):
-    """ Add thumbnail to SolR using API wms generator
-        Args:
-            type: solr document
-        Returns:
-            solr document with thumbnail
+    """Add thumbnail to SolR using API wms generator
+    Args:
+        type: solr document
+    Returns:
+        solr document with thumbnail
     """
     # global thumbClass
     wmsconfig = thumbClass.copy()
     doc_ = doc.copy()
-    url = str(doc['data_access_url_ogc_wms']).strip()
-    id = str(doc['id']).strip()
+    url = str(doc["data_access_url_ogc_wms"]).strip()
+    id = str(doc["id"]).strip()
     logger.debug("adding thumbnail for %s with url: %s", id, url)
     wms_layers_mmd = []
-    if 'data_access_wms_layers' in doc:
-        wms_layers_mmd = doc['data_access_wms_layers']
+    if "data_access_wms_layers" in doc:
+        wms_layers_mmd = doc["data_access_wms_layers"]
         logger.debug("wms_layers_mmd is: %s", wms_layers_mmd)
-    wmsconfig.update({'wms_url': url})
-    wmsconfig.update({'wms_layers_mmd': wms_layers_mmd})
+    wmsconfig.update({"wms_url": url})
+    wmsconfig.update({"wms_layers_mmd": wms_layers_mmd})
     wmsconfig.update({"id": id})
     logger.debug("Calling WMS ThumbnailAPI with settings: %s", wmsconfig)
     response = create_wms_thumbnail_api(wmsconfig)
     logger.debug("WMS api response: %s", response)
-    error = response.get('error')
-    status_code = response.get('status_code')
+    error = response.get("error")
+    status_code = response.get("status_code")
     if error is None and status_code == 200:
         thumbnail_url = response.get("data", None).get("thumbnail_url", None)
         if thumbnail_url is not None:
-            logger.debug("Adding thumbnail_url field with value: %s",
-                         thumbnail_url)
-            doc_.update({'thumbnail_url': thumbnail_url})
+            logger.debug("Adding thumbnail_url field with value: %s", thumbnail_url)
+            doc_.update({"thumbnail_url": thumbnail_url})
         else:
             logger.warning("Could not properly generate thumbnail")
         #     # If WMS is not available, remove this data_access element
         #     # from the XML that is indexed
         #     del input_record['data_access_url_ogc_wms']
     else:
-        logger.error("Could not generate thumbnail, reason: %s, status_code %s",
-                     error, status_code)
+        logger.error(
+            "Could not generate thumbnail, reason: %s, status_code %s", error, status_code
+        )
     return doc_
 
 
