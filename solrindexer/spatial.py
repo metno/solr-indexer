@@ -255,7 +255,7 @@ def validate_fix_geometry(geom_wkt):
             # Apply buffer(0) trick to fix the geometry
             fixed_geom = unary_union(geom.buffer(0).simplify(1))
             if fixed_geom.is_valid:
-                logger.info("Geometry fixed successfully.")
+                logger.debug("Geometry fixed successfully.")
                 return to_wkt(fixed_geom)
             logger.error("Failed to fix Geometry")
         except GEOSException as e:
