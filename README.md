@@ -9,6 +9,9 @@ Scientific Data Network projects.
 - [Installation](#installation)
 - [Configuration](#configuration)
   - [SKOS vocabulary validation](#skos-vocabulary-validation)
+  - [XSD Validation and Schema Caching](#xsd-validation-and-schema-caching)
+  - [NBS Thumbnail handling](#nbs-thumbnail-handling)
+  - [ADC Thumbnail handling](#adc-thumbnail-handling)
 - [Commands](#commands)
   - [indexdata](#indexdata)
   - [searchindex](#searchindex)
@@ -138,7 +141,10 @@ authentication is disabled.
 | `vocabulary-cache-dir` | system temp (`/tmp/...`) | Directory for persisted REST vocabulary cache files; set to shared storage on multi-node clusters |
 | `nbs-thumbnails-base-path` | — | Filesystem root where NBS `thumbnail.png` files are stored |
 | `nbs-thumbnails-base-url` | — | Public base URL from which NBS thumbnails are served |
-| `scope` | — | Set to `NBS` to enable NBS-specific thumbnail lookup |
+| `adc-thumbnails-base-path` | — | Filesystem root where ADC thumbnail files are stored |
+| `adc-thumbnails-base-url` | — | Public base URL from which ADC thumbnails are served |
+| `scope` | — | Set to `NBS` to enable NBS-specific thumbnail lookup, or `ADC` to enable ADC-specific thumbnail lookup|
+|
 
 See [`etc/cfg-template.yml`](etc/cfg-template.yml) for a fully commented example.
 
@@ -168,6 +174,34 @@ This optimization is automatic and transparent:
 This approach ensures optimal performance for large bulk indexing jobs while maintaining
 thread-safe concurrent validation (lxml XMLSchema validation is not thread-safe; thread-local
 caching prevents race conditions).
+
+### NBS Thumbnail handling
+
+The NBS production chain generates thumbnails for products applicable for thumbnail generation in a determenistic path hiriarchy.
+
+For the solrindexer to be able to lookup the thumbnails and add the correct thumbnail url to the `thumbnail_url`solr field, the configuration key `scope` should be set to `NBS`, and the config keys `nbs-thumbnails-base-path` and `nbs-thumbnails-base-url` have to be configured with the correct path and base url.
+
+The `nbs-thumbnails-base-path` must be accessible from the machine the solrindexer are running, and the user running the solrindexer must have read permissions to that path and sub-folders.
+
+When the `indexdata`command are run with the `-t` (`--thumbnail`) flag, the solrindexer will check if the thumbnail for that product exists in the dermined path and generate the correct url based on the  `nbs-thumbnails-base-url` config value, and add the generated url to the `thumbnail_url`field and add to the document.
+
+### ADC Thumbnail handling
+
+In the context of ADC, the thumbnails are generated with the [metsis-thumbnail-generator](https://github.com/metno/metsis-thumbnail-generator). Either before indexing given a path with mmd files as input, or after indexing by querying solr. See the metsis-thumbnail-generator [README.md](https://github.com/metno/metsis-thumbnail-generator/blob/main/README.md) on how to generate thumbnails and various options.
+
+To configure the solrindexer to lookup and generate the correct urls, the configuration key `scope` should be set to `ADC`, and the config keys `nbs-thumbnails-base-path` and `nbs-thumbnails-base-url` have to be configured with the correct path and base url.
+
+The `adc-thumbnails-base-path` must be accessible from the machine the solrindexer are running, and the user running the solrindexer must have read permissions to that path and sub-folders.
+
+When the `indexdata`command are run with the `-t` (`--thumbnail`) flag, the solrindexer will check if the thumbnail for that dataset exists in the dermined path and generate the correct url based on the  `adc-thumbnails-base-url` config value, and add the generated url to the `thumbnail_url`field and add to the document.
+
+#### **Important!**
+
+The [metsis-thumbnail-generator](https://github.com/metno/metsis-thumbnail-generator) provides an API contract for determenistc path generation, that the solrindexer depend on.
+
+The metsis-thumbnail-generator should be installed in the same python environment as the solrindexer.
+
+If the solrindexer are run from within the solrindexer project root using the `./indexdata` wrapper script, the solrindexer will try to lookup the api contract in the current python environment and fall back to find the metsis-thumbnail-generator in `../metsis-thumbnail-generator`
 
 ---
 
