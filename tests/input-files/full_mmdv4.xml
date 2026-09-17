@@ -51,7 +51,7 @@
       <mmd:west>11.82275</mmd:west>
     </mmd:rectangle>
   </mmd:geographic_extent>
-  <mmd:access_constraint>Open</mmd:access_constraint>
+  <mmd:access_constraint classification_framework="general">Open</mmd:access_constraint>
   <mmd:use_constraint>
     <mmd:identifier>CC-BY-4.0</mmd:identifier>
     <mmd:resource>http://spdx.org/licenses/CC-BY-4.0</mmd:resource>

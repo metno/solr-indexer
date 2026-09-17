@@ -49,6 +49,7 @@
       </gml:MultiPolygon>
     </mmd:polygon>
   </mmd:geographic_extent>
+  <mmd:access_constraint classification_framework="general">Closed</mmd:access_constraint>
   <mmd:use_constraint>
     <mmd:license_text>This test dataset may be used internally for algorithm validation with attribution.</mmd:license_text>
   </mmd:use_constraint>

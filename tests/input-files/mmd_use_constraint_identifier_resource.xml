@@ -31,7 +31,7 @@
       <mmd:west>13.0</mmd:west>
     </mmd:rectangle>
   </mmd:geographic_extent>
-  <mmd:access_constraint>Open</mmd:access_constraint>
+   <mmd:access_constraint classification_framework="general">Protected</mmd:access_constraint>
   <mmd:use_constraint>
     <mmd:identifier>CC-BY-4.0</mmd:identifier>
     <mmd:resource>https://spdx.org/licenses/CC-BY-4.0</mmd:resource>
