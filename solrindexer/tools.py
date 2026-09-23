@@ -45,6 +45,14 @@ except ImportError:
     Dataset = None  # type: ignore[assignment]
     HAS_NETCDF4 = False
 
+try:
+    from pydap.client import open_url
+
+    HAS_PYDAP = True
+except ImportError:
+    open_url = None  # type: ignore[assignment]
+    HAS_PYDAP = False
+
 # Logging Setup
 logger = logging.getLogger(__name__)
 
@@ -226,20 +234,59 @@ def _fix_nersc_url(dapurl):
     return dapurl
 
 
+def _needs_feature_type_lookup(doc):
+    """Return False when the dataset's featureType can be inferred without a network lookup.
+
+    Datasets that expose an OGC WMS endpoint, or that declare a "grid" spatial
+    representation, don't need an OPeNDAP featureType lookup: WMS-capable datasets are
+    not point/timeSeries/trajectory style discrete-sampling datasets, and a grid spatial
+    representation already tells us the dataset isn't a discrete-sampling featureType.
+    """
+    wms_url = doc.get("data_access_url_ogc_wms")
+    if isinstance(wms_url, list):
+        wms_url = wms_url[0] if wms_url else None
+    if wms_url:
+        return False
+
+    spatial_rep = str(doc.get("spatial_representation") or "").strip().lower()
+    if spatial_rep == "grid":
+        return False
+
+    return "data_access_url_opendap" in doc
+
+
 def _extract_feature_type(dapurl):
     """Open remote dataset and return (featureType, error_msg).
 
-    Backend priority is xarray first, then netCDF4.
+    Backend priority is pydap first, then xarray, then netCDF4.
     Either value in the returned tuple may be None. error_msg is only set when an actual
     exception prevented extraction (not when the attribute is simply absent).
     """
+    if HAS_PYDAP:
+        pydapurl = dapurl.replace("https://", "dap2://")
+        try:
+            # pydap's DatasetType (returned by open_url) does not implement the
+            # context-manager protocol and has no close() method, so there is
+            # nothing to explicitly clean up here.
+            ds = open_url(pydapurl)
+            if "featureType" in ds.attributes:
+                ft = ds.attributes["featureType"]
+            else:
+                return (None, None)
+            return (ft, None)
+        except Exception as e:
+            error_msg = f"Feature type extraction failed: {e}"
+            logger.error(
+                "Failed to extract featureType using pypdap from %s. Reason: %s", dapurl, e
+            )
+            return (None, error_msg)
+
     if HAS_XARRAY:
         try:
-            ds = xr.open_dataset(dapurl, decode_times=False)
-            try:
+            # Use a context manager so the underlying file handle/connection is always
+            # closed, even if the C library raises mid-open (e.g. a partial HDF5 read).
+            with xr.open_dataset(dapurl, decode_times=False) as ds:
                 ft = ds.attrs.get("featureType")
-            finally:
-                ds.close()
             return (ft, None)
         except AttributeError:
             return (None, None)
@@ -254,11 +301,10 @@ def _extract_feature_type(dapurl):
 
     if HAS_NETCDF4:
         try:
-            ds = Dataset(dapurl)  # type: ignore[misc]
-            try:
+            # netCDF4.Dataset supports the context-manager protocol, ensuring the
+            # connection is closed even if the underlying C library raises mid-open.
+            with Dataset(dapurl) as ds:  # type: ignore[misc]
                 ft = ds.getncattr("featureType")
-            finally:
-                ds.close()
             return (ft, None)
         except AttributeError:
             return (None, None)
