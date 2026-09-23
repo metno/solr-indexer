@@ -29,6 +29,8 @@ from solrindexer.failure_tracker import FailureTracker
 from solrindexer.io import load_file
 from solrindexer.mmd import MMD4SolR
 from solrindexer.tools import (
+    _canonical_feature_type,
+    _needs_feature_type_lookup,
     add_adc_thumbnails_bulk,
     add_nbs_thumbnail_bulk,
     process_feature_type,
@@ -457,6 +459,25 @@ class BulkIndexer:
         """Message logging callback function"""
         logger.info(msg)
 
+    def _resolve_override_feature_type(self):
+        """Validate the configured ``override-feature-type`` value.
+
+        Returns the canonical feature type string when the config value is valid, or
+        ``None`` when unset or invalid (a warning is logged in the invalid case, and
+        indexing falls back to normal skip/lookup behavior).
+        """
+        raw_value = (self.config or {}).get("override-feature-type")
+        if not raw_value:
+            return None
+        canonical = _canonical_feature_type(raw_value)
+        if canonical is None:
+            logger.warning(
+                "Configured override-feature-type '%s' is not a valid featureType; ignoring override",
+                raw_value,
+            )
+            return None
+        return canonical
+
     def _should_use_process_pool(self, doc_count):
         """Decide whether process-pool overhead is worth it for this stage.
 
@@ -478,6 +499,7 @@ class BulkIndexer:
 
         chunksize = self.chunksize
         skip_feature_type = self.config.get("skip-feature-type", False)
+        override_feature_type = self._resolve_override_feature_type()
         nbs_scope = self.config.get("scope", "") == "NBS"
         adc_scope = self.config.get("scope", "") == "ADC"
 
@@ -603,7 +625,18 @@ class BulkIndexer:
                             if status is not None:
                                 parent_ids_referenced.add(status)
 
-                            if not skip_feature_type and "data_access_url_opendap" in doc:
+                            eligible_for_feature_type = _needs_feature_type_lookup(doc)
+
+                            if override_feature_type is not None and eligible_for_feature_type:
+                                # Force the configured feature type directly onto the doc,
+                                # skipping the network lookup entirely.
+                                doc["feature_type"] = override_feature_type
+                                _add_doc_to_chunk(doc, file_path)
+                            elif (
+                                not skip_feature_type
+                                and override_feature_type is None
+                                and eligible_for_feature_type
+                            ):
                                 # Submit feature_type and keep it in the same loop
                                 t0 = time.perf_counter()
                                 ft_fut = executor.submit(process_feature_type, doc)

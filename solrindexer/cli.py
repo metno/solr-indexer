@@ -68,6 +68,21 @@ def parse_arguments():
     parser.add_argument("-nbs", "--nbs", action="store_true", help="Enable NBS thumbnail mode")
     parser.add_argument("-adc", "--adc", action="store_true", help="Enable ADC thumbnail mode")
 
+    parser.add_argument(
+        "--skip-feature-type",
+        dest="skip_feature_type",
+        action="store_true",
+        default=None,
+        help="Skip OPeNDAP feature-type extraction (overrides config file)",
+    )
+    parser.add_argument(
+        "--override-feature-type",
+        dest="override_feature_type",
+        default=None,
+        help="Force a specific feature type for eligible documents, skipping extraction "
+        "(overrides config file)",
+    )
+
     args = parser.parse_args()
     if args.nbs and args.adc:
         parser.error("Use either --nbs or --adc, not both")
@@ -99,6 +114,11 @@ def main():
             cfg["scope"] = "ADC"
         else:
             cfg["scope"] = cfg.get("scope")
+
+        if args.skip_feature_type is not None:
+            cfg["skip-feature-type"] = args.skip_feature_type
+        if args.override_feature_type is not None:
+            cfg["override-feature-type"] = args.override_feature_type
 
         solr_url = _build_solr_url(cfg)
         authentication = _resolve_authentication(cfg)

@@ -9,6 +9,7 @@ from solrindexer.cli import (
     _determine_exit_code,
     _report_parent_integrity,
     _resolve_referenced_parents,
+    parse_arguments,
 )
 from solrindexer.failure_tracker import FailureTracker
 
@@ -86,3 +87,43 @@ def test_determine_exit_code_returns_failure_code_when_failures_exist():
     failure_tracker.add_failure("file.xml", "failure", "indexing", "id-1")
 
     assert _determine_exit_code(failure_tracker) == EXIT_FAILURE
+
+
+@pytest.mark.indexdata
+def test_parse_arguments_feature_type_flags_default_to_none():
+    """Unset flags default to None so config-file values aren't overridden."""
+    with patch("sys.argv", ["indexdata", "-c", "cfg.yml", "-i", "file.xml"]):
+        args = parse_arguments()
+
+    assert args.skip_feature_type is None
+    assert args.override_feature_type is None
+
+
+@pytest.mark.indexdata
+def test_parse_arguments_skip_feature_type_flag_sets_true():
+    with patch(
+        "sys.argv",
+        ["indexdata", "-c", "cfg.yml", "-i", "file.xml", "--skip-feature-type"],
+    ):
+        args = parse_arguments()
+
+    assert args.skip_feature_type is True
+
+
+@pytest.mark.indexdata
+def test_parse_arguments_override_feature_type_flag_sets_value():
+    with patch(
+        "sys.argv",
+        [
+            "indexdata",
+            "-c",
+            "cfg.yml",
+            "-i",
+            "file.xml",
+            "--override-feature-type",
+            "timeSeries",
+        ],
+    ):
+        args = parse_arguments()
+
+    assert args.override_feature_type == "timeSeries"

@@ -131,8 +131,8 @@ authentication is disabled.
 | `workers` | `1` | Parallel OS-level worker processes (for very large datasets) |
 | `threads` | `20` | Worker threads per process for I/O-bound indexing |
 | `end-solr-commit` | `false` | Send a hard commit to Solr when indexing finishes |
-| `skip-feature-type` | `false` | Skip OPeNDAP feature-type extraction |
-| `override-feature-type` | — | Force a specific feature type for all documents (also skips extraction) |
+| `skip-feature-type` | `false` | Skip OPeNDAP feature-type extraction. Also settable with `--skip-feature-type` |
+| `override-feature-type` | — | Force a specific feature type for eligible documents (also skips extraction). Also settable with `--override-feature-type`. Ignored with a warning if not a valid featureType |
 | `mmd-xsd-path` | — | Path to `mmd.xsd` for optional XSD validation (warns; never blocks indexing) |
 | `vocabulary-backend` | `native` | Vocabulary backend: `native`, `legacy-metvocab`, or `rest-skosmos` |
 | `vocabulary-ttl-path` | — | Path to a local MMD vocabulary TTL file (used with `native` backend) |
@@ -147,6 +147,24 @@ authentication is disabled.
 |
 
 See [`etc/cfg-template.yml`](etc/cfg-template.yml) for a fully commented example.
+
+### Feature-type extraction
+
+A document is only considered for OPeNDAP `featureType` lookup (or override) when it has a
+`data_access_url_opendap` field **and** neither of the following is true:
+
+- it has a (non-empty) `data_access_url_ogc_wms` field, or
+- its `spatial_representation` is `grid` (case-insensitive).
+
+For eligible documents:
+- `skip-feature-type: true` (or `--skip-feature-type`) skips the lookup entirely; no `feature_type`
+  field is set.
+- `override-feature-type: <value>` (or `--override-feature-type <value>`) sets `feature_type` to
+  `<value>` directly, without opening the remote dataset. If `<value>` isn't a recognized
+  featureType, a warning is logged and the override is ignored, falling back to normal
+  skip/lookup behavior.
+- When neither is set, the extraction backends are tried in order: `pydap`, then `xarray`, then
+  `netCDF4`.
 
 ### SKOS vocabulary validation
 
@@ -234,6 +252,11 @@ performance:
 
 solr:
   -a, --always_commit       Commit to Solr after every batch
+
+feature type:
+  --skip-feature-type              Skip OPeNDAP feature-type extraction (overrides config file)
+  --override-feature-type VALUE    Force a specific feature type for eligible documents,
+                                    skipping extraction (overrides config file)
 
 thumbnails (NBS scope only):
   -t, --thumbnail           Enable NBS thumbnail URL lookup

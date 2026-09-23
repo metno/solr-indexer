@@ -5,6 +5,7 @@ import pytest
 
 from solrindexer.tools import (
     _extract_feature_type,
+    _needs_feature_type_lookup,
     add_adc_thumbnails,
     checkDateFormat,
     load_adc_thumbnail_path_contract_cases,
@@ -56,6 +57,69 @@ class TestExtractFeatureType:
     """Tests for _extract_feature_type backend selection and extraction."""
 
     @pytest.mark.indexdata
+    def test_pydap_success(self):
+        """pydap is tried first; DatasetType has no context-manager/close support."""
+
+        class FakeDatasetType:
+            """Mimic pydap's DatasetType: no __enter__/__exit__/close()."""
+
+            attributes = {"featureType": "timeSeries"}
+
+        with patch("solrindexer.tools.HAS_PYDAP", True), patch(
+            "solrindexer.tools.open_url", return_value=FakeDatasetType()
+        ):
+            ft, err = _extract_feature_type("https://fake.dap/ds")
+
+        assert ft == "timeSeries"
+        assert err is None
+
+    @pytest.mark.indexdata
+    def test_pydap_missing_attribute_returns_none(self):
+        """When featureType is absent, pydap returns (None, None) — not an error."""
+
+        class FakeDatasetType:
+            attributes = {}
+
+        with patch("solrindexer.tools.HAS_PYDAP", True), patch(
+            "solrindexer.tools.open_url", return_value=FakeDatasetType()
+        ):
+            ft, err = _extract_feature_type("https://fake.dap/ds")
+
+        assert ft is None
+        assert err is None
+
+    @pytest.mark.indexdata
+    def test_pydap_fails_returns_error_message_and_no_fallback(self):
+        """When pydap raises, returns (None, error_msg); other backends are not tried."""
+        with patch("solrindexer.tools.HAS_PYDAP", True), patch(
+            "solrindexer.tools.open_url", side_effect=RuntimeError("pydap boom")
+        ), patch("xarray.open_dataset") as mock_xr_open:
+            ft, err = _extract_feature_type("https://fake.dap/ds")
+
+        assert ft is None
+        assert err is not None
+        assert "pydap boom" in err
+        mock_xr_open.assert_not_called()
+
+    @pytest.mark.indexdata
+    def test_pydap_does_not_require_context_manager_support(self):
+        """DatasetType (pydap 3.5.x) has no __enter__/__exit__/close(); ensure we never call them."""
+
+        class FakeDatasetType:
+            attributes = {"featureType": "point"}
+
+        fake_ds = FakeDatasetType()
+        with patch("solrindexer.tools.HAS_PYDAP", True), patch(
+            "solrindexer.tools.open_url", return_value=fake_ds
+        ):
+            ft, err = _extract_feature_type("https://fake.dap/ds")
+
+        assert not hasattr(fake_ds, "__enter__")
+        assert not hasattr(fake_ds, "close")
+        assert ft == "point"
+        assert err is None
+
+    @pytest.mark.indexdata
     def test_xarray_success(self):
         """xarray opens dataset and returns featureType attribute."""
         mock_ds = MagicMock()
@@ -63,7 +127,9 @@ class TestExtractFeatureType:
         mock_ds.__enter__ = lambda s: s
         mock_ds.__exit__ = MagicMock(return_value=False)
 
-        with patch("xarray.open_dataset", return_value=mock_ds):
+        with patch("solrindexer.tools.HAS_PYDAP", False), patch(
+            "xarray.open_dataset", return_value=mock_ds
+        ):
             ft, err = _extract_feature_type("http://fake.dap/ds")
 
         assert ft == "timeSeries"
@@ -74,8 +140,12 @@ class TestExtractFeatureType:
         """When featureType is absent xarray returns (None, None) — not an error."""
         mock_ds = MagicMock()
         mock_ds.attrs = {}
+        mock_ds.__enter__ = lambda s: s
+        mock_ds.__exit__ = MagicMock(return_value=False)
 
-        with patch("xarray.open_dataset", return_value=mock_ds):
+        with patch("solrindexer.tools.HAS_PYDAP", False), patch(
+            "xarray.open_dataset", return_value=mock_ds
+        ):
             ft, err = _extract_feature_type("http://fake.dap/ds")
 
         assert ft is None
@@ -84,7 +154,9 @@ class TestExtractFeatureType:
     @pytest.mark.indexdata
     def test_xarray_fails_returns_error_message(self):
         """When xarray raises, returns (None, error_msg) — no fallback available."""
-        with patch("xarray.open_dataset", side_effect=RuntimeError("xr boom")):
+        with patch("solrindexer.tools.HAS_PYDAP", False), patch(
+            "xarray.open_dataset", side_effect=RuntimeError("xr boom")
+        ):
             ft, err = _extract_feature_type("http://fake.dap/ds")
 
         assert ft is None
@@ -94,32 +166,77 @@ class TestExtractFeatureType:
     @pytest.mark.indexdata
     def test_xarray_attribute_error_returns_none_no_error(self):
         """AttributeError on xarray (no featureType) is not treated as an error."""
-        with patch("xarray.open_dataset", side_effect=AttributeError):
+        with patch("solrindexer.tools.HAS_PYDAP", False), patch(
+            "xarray.open_dataset", side_effect=AttributeError
+        ):
             ft, err = _extract_feature_type("http://fake.dap/ds")
 
         assert ft is None
         assert err is None
 
     @pytest.mark.indexdata
+    def test_xarray_close_called_even_when_attrs_lookup_raises(self):
+        """The dataset is always closed via __exit__, even if reading attrs fails mid-open."""
+        mock_ds = MagicMock()
+        mock_ds.attrs = MagicMock()
+        mock_ds.attrs.get.side_effect = RuntimeError("C library boom")
+        mock_ds.__enter__ = lambda s: s
+        mock_ds.__exit__ = MagicMock(return_value=False)
+
+        with patch("solrindexer.tools.HAS_PYDAP", False), patch(
+            "xarray.open_dataset", return_value=mock_ds
+        ):
+            ft, err = _extract_feature_type("http://fake.dap/ds")
+
+        assert ft is None
+        assert err is not None
+        assert "C library boom" in err
+        mock_ds.__exit__.assert_called_once()
+
+    @pytest.mark.indexdata
     def test_netcdf4_used_when_xarray_missing(self):
         """When xarray is unavailable, netCDF4 is used for featureType extraction."""
         mock_ds = MagicMock()
         mock_ds.getncattr.return_value = "trajectory"
+        mock_ds.__enter__ = lambda s: s
+        mock_ds.__exit__ = MagicMock(return_value=False)
 
-        with patch("solrindexer.tools.HAS_XARRAY", False), patch(
-            "solrindexer.tools.HAS_NETCDF4", True
-        ), patch("solrindexer.tools.Dataset", return_value=mock_ds):
+        with patch("solrindexer.tools.HAS_PYDAP", False), patch(
+            "solrindexer.tools.HAS_XARRAY", False
+        ), patch("solrindexer.tools.HAS_NETCDF4", True), patch(
+            "solrindexer.tools.Dataset", return_value=mock_ds
+        ):
             ft, err = _extract_feature_type("http://fake.dap/ds")
 
         assert ft == "trajectory"
         assert err is None
 
     @pytest.mark.indexdata
-    def test_missing_backends_returns_explicit_error(self):
-        """When both backends are missing, extraction returns an explicit error."""
-        with patch("solrindexer.tools.HAS_XARRAY", False), patch(
-            "solrindexer.tools.HAS_NETCDF4", False
+    def test_netcdf4_close_called_even_when_getncattr_raises(self):
+        """The netCDF4 dataset is always closed via __exit__, even on a mid-open failure."""
+        mock_ds = MagicMock()
+        mock_ds.getncattr.side_effect = RuntimeError("netCDF4 C library boom")
+        mock_ds.__enter__ = lambda s: s
+        mock_ds.__exit__ = MagicMock(return_value=False)
+
+        with patch("solrindexer.tools.HAS_PYDAP", False), patch(
+            "solrindexer.tools.HAS_XARRAY", False
+        ), patch("solrindexer.tools.HAS_NETCDF4", True), patch(
+            "solrindexer.tools.Dataset", return_value=mock_ds
         ):
+            ft, err = _extract_feature_type("http://fake.dap/ds")
+
+        assert ft is None
+        assert err is not None
+        assert "netCDF4 C library boom" in err
+        mock_ds.__exit__.assert_called_once()
+
+    @pytest.mark.indexdata
+    def test_missing_backends_returns_explicit_error(self):
+        """When all backends are missing, extraction returns an explicit error."""
+        with patch("solrindexer.tools.HAS_PYDAP", False), patch(
+            "solrindexer.tools.HAS_XARRAY", False
+        ), patch("solrindexer.tools.HAS_NETCDF4", False):
             ft, err = _extract_feature_type("http://fake.dap/ds")
 
         assert ft is None
@@ -159,7 +276,9 @@ class TestProcessFeatureType:
     def test_extraction_error_propagated_as_error_msg(self):
         """Extraction failure surfaces as non-None error_msg, doc is returned unchanged."""
         doc = self._make_doc()
-        with patch("xarray.open_dataset", side_effect=RuntimeError("xr boom")):
+        with patch("solrindexer.tools.HAS_PYDAP", False), patch(
+            "xarray.open_dataset", side_effect=RuntimeError("xr boom")
+        ):
             result_doc, err = process_feature_type(doc)
 
         assert result_doc is doc
@@ -172,8 +291,12 @@ class TestProcessFeatureType:
         doc = self._make_doc()
         mock_ds = MagicMock()
         mock_ds.attrs = {"featureType": "timeSeries"}
+        mock_ds.__enter__ = lambda s: s
+        mock_ds.__exit__ = MagicMock(return_value=False)
 
-        with patch("xarray.open_dataset", return_value=mock_ds):
+        with patch("solrindexer.tools.HAS_PYDAP", False), patch(
+            "xarray.open_dataset", return_value=mock_ds
+        ):
             result_doc, err = process_feature_type(doc)
 
         assert err is None
@@ -185,12 +308,70 @@ class TestProcessFeatureType:
         doc = self._make_doc()
         mock_ds = MagicMock()
         mock_ds.attrs = {"featureType": "notAValidType"}
+        mock_ds.__enter__ = lambda s: s
+        mock_ds.__exit__ = MagicMock(return_value=False)
 
-        with patch("xarray.open_dataset", return_value=mock_ds):
+        with patch("solrindexer.tools.HAS_PYDAP", False), patch(
+            "xarray.open_dataset", return_value=mock_ds
+        ):
             result_doc, err = process_feature_type(doc)
 
         assert err is None
         assert "feature_type" not in result_doc
+
+
+class TestNeedsFeatureTypeLookup:
+    """Tests for _needs_feature_type_lookup eligibility gating."""
+
+    @pytest.mark.indexdata
+    def test_no_opendap_url_is_not_eligible(self):
+        assert _needs_feature_type_lookup({}) is False
+
+    @pytest.mark.indexdata
+    def test_opendap_only_is_eligible(self):
+        doc = {"data_access_url_opendap": "http://fake.dap/ds"}
+        assert _needs_feature_type_lookup(doc) is True
+
+    @pytest.mark.indexdata
+    def test_wms_string_url_skips_lookup(self):
+        doc = {
+            "data_access_url_opendap": "http://fake.dap/ds",
+            "data_access_url_ogc_wms": "http://fake.wms/ds",
+        }
+        assert _needs_feature_type_lookup(doc) is False
+
+    @pytest.mark.indexdata
+    def test_wms_list_url_skips_lookup(self):
+        doc = {
+            "data_access_url_opendap": "http://fake.dap/ds",
+            "data_access_url_ogc_wms": ["http://fake.wms/ds"],
+        }
+        assert _needs_feature_type_lookup(doc) is False
+
+    @pytest.mark.indexdata
+    def test_empty_wms_list_does_not_skip_lookup(self):
+        doc = {
+            "data_access_url_opendap": "http://fake.dap/ds",
+            "data_access_url_ogc_wms": [],
+        }
+        assert _needs_feature_type_lookup(doc) is True
+
+    @pytest.mark.indexdata
+    @pytest.mark.parametrize("spatial_rep", ["grid", "Grid", "GRID"])
+    def test_grid_spatial_representation_skips_lookup(self, spatial_rep):
+        doc = {
+            "data_access_url_opendap": "http://fake.dap/ds",
+            "spatial_representation": spatial_rep,
+        }
+        assert _needs_feature_type_lookup(doc) is False
+
+    @pytest.mark.indexdata
+    def test_non_grid_spatial_representation_does_not_skip_lookup(self):
+        doc = {
+            "data_access_url_opendap": "http://fake.dap/ds",
+            "spatial_representation": "point",
+        }
+        assert _needs_feature_type_lookup(doc) is True
 
 
 class TestResolveParentIds:
