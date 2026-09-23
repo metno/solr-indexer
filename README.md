@@ -207,7 +207,7 @@ When the `indexdata`command are run with the `-t` (`--thumbnail`) flag, the solr
 
 In the context of ADC, the thumbnails are generated with the [metsis-thumbnail-generator](https://github.com/metno/metsis-thumbnail-generator). Either before indexing given a path with mmd files as input, or after indexing by querying solr. See the metsis-thumbnail-generator [README.md](https://github.com/metno/metsis-thumbnail-generator/blob/main/README.md) on how to generate thumbnails and various options.
 
-To configure the solrindexer to lookup and generate the correct urls, the configuration key `scope` should be set to `ADC`, and the config keys `nbs-thumbnails-base-path` and `nbs-thumbnails-base-url` have to be configured with the correct path and base url.
+To configure the solrindexer to lookup and generate the correct urls, the configuration key `scope` should be set to `ADC`, and the config keys `adc-thumbnails-base-path` and `adc-thumbnails-base-url` have to be configured with the correct path and base url.
 
 The `adc-thumbnails-base-path` must be accessible from the machine the solrindexer are running, and the user running the solrindexer must have read permissions to that path and sub-folders.
 
