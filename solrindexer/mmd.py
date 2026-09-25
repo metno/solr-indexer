@@ -28,7 +28,6 @@ import threading
 import lxml.etree as ET
 import pysolr
 import requests
-
 from pydap.client import open_url
 
 from solrindexer.spatial import handle_solr_spatial
