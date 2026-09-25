@@ -66,6 +66,7 @@ DATETIME_REGEX = re.compile(
 validfeaturetypes = {
     "point": "point",
     "timeseries": "timeSeries",
+    "timseries": "timeSeries",
     "trajectory": "trajectory",
     "profile": "profile",
     "timeseriesprofile": "timeSeriesProfile",
@@ -271,6 +272,8 @@ def _extract_feature_type(dapurl):
             ds = open_url(pydapurl)
             if "featureType" in ds.attributes:
                 ft = ds.attributes["featureType"]
+            elif "feature_type" in ds.attributes:
+                ft = ds.attributes["feature_type"]
             else:
                 return (None, None)
             return (ft, None)
@@ -287,6 +290,8 @@ def _extract_feature_type(dapurl):
             # closed, even if the C library raises mid-open (e.g. a partial HDF5 read).
             with xr.open_dataset(dapurl, decode_times=False) as ds:
                 ft = ds.attrs.get("featureType")
+                if not ft:
+                    ft = ds.attrs.get("feature_type")
             return (ft, None)
         except AttributeError:
             return (None, None)
@@ -305,6 +310,8 @@ def _extract_feature_type(dapurl):
             # connection is closed even if the underlying C library raises mid-open.
             with Dataset(dapurl) as ds:  # type: ignore[misc]
                 ft = ds.getncattr("featureType")
+                if not ft:
+                    ft = ds.getncattr("feature_type")
             return (ft, None)
         except AttributeError:
             return (None, None)
