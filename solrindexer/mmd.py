@@ -26,9 +26,9 @@ import sys
 import threading
 
 import lxml.etree as ET
-import netCDF4
 import pysolr
 import requests
+from pydap.client import open_url
 
 from solrindexer.spatial import handle_solr_spatial
 from solrindexer.tools import (
@@ -1424,21 +1424,21 @@ class IndexMMD:
         """Set feature type from OPeNDAP"""
         logger.info("Now in get_feature_type")
 
-        # Open as OPeNDAP
+        pydapurl = myopendap.replace("https://", "dap2://")
         try:
-            ds = netCDF4.Dataset(myopendap)
+            # pydap's DatasetType (returned by open_url) does not implement the
+            # context-manager protocol and has no close() method, so there is
+            # nothing to explicitly clean up here.
+            ds = open_url(pydapurl)
+            if "featureType" in ds.attributes:
+                featureType = ds.attributes["featureType"]
+            elif "feature_type" in ds.attributes:
+                featureType = ds.attributes["feature_type"]
         except Exception as e:
-            logger.error("Something failed reading dataset: %s", str(e))
-
-        # Try to get the global attribute featureType
-        try:
-            featureType = ds.getncattr("featureType")
-        except AttributeError:
+            logger.error(
+                "Failed to extract featureType using pypdap from %s. Reason: %s", pydapurl, e
+            )
             raise
-        except Exception as e:
-            logger.error("Something failed extracting featureType: %s", str(e))
-            raise
-        ds.close()
 
         if featureType not in [
             "point",

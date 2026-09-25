@@ -4,18 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "solrindexer"
-version = "4.0.0"
+version = "4.0.1"
 description = "Tools and wrappers used for indexing MMD in SolR"
 readme = "README.md"
 requires-python = ">=3.9"
-license = {text = "GPL-3.0"}
+license = { text = "GPL-3.0-or-later"}
 authors = [
     {name = "MET Norway", email = "csw-services@met.no"}
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: GNU General Public License version 3 (GPLv3)",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.9",
@@ -31,8 +30,7 @@ classifiers = [
 dependencies = [
     "Shapely",
     "lxml",
-    "xarray",
-    "netCDF4",
+    "pydap",
     "pysolr",
     "PyYAML",
     "requests",
@@ -56,6 +54,8 @@ dev = [
     "mypy==1.17.1",
     "bandit[toml]",
     "prospector[with_everything]",
+    "xarray",
+    "netCDF4"
 ]
 
 [project.urls]
@@ -101,7 +101,7 @@ markers = [
 ]
 
 [tool.bandit]
-exclude_dirs = ["tests", "venv", ".venv"]
+exclude_dirs = ["tests", "venv", ".venv", "venv*"]
 skips = ["B101"]  # assert statements are fine in tests
 
 [tool.mypy]

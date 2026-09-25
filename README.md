@@ -50,6 +50,9 @@ Optional extras:
 # For vocabulary validation using rdflib
 pip install ".[rdflib]"
 
+# For ADC thumbnail lookup path API contract
+pip install ".[adc]"
+
 # For rich terminal output (colours, syntax highlighting)
 pip install ".[rich]"
 
