@@ -56,7 +56,7 @@ except ImportError:
 # Logging Setup
 logger = logging.getLogger(__name__)
 
-IDREPLS = [":", "/", "."]
+IDREPLS = [":", "/", ".", "?"]
 
 DATETIME_REGEX = re.compile(
     r"^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})T(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})(\.\d+)?Z$"  # NOQA: E501
