@@ -110,7 +110,6 @@ class MMD4SolR:
         "collection",
         "last_metadata_update",
         "iso_topic_category",
-        "keywords",
     )
 
     CONTROLLED_ELEMENTS = {
@@ -319,20 +318,6 @@ class MMD4SolR:
                             tag,
                             value,
                         )
-
-        gcmd_values = []
-        for keywords in self._nodes("./mmd:keywords"):
-            vocabulary = (keywords.attrib.get("vocabulary") or "").upper()
-            if vocabulary == "GCMDSK":
-                gcmd_values.extend(
-                    [
-                        self._text(node)
-                        for node in keywords.xpath("./mmd:keyword", namespaces=self.NSMAP)
-                    ]
-                )
-        if not gcmd_values:
-            self._record_warning("%s Keywords in GCMD are not available", self._icon("warn"))
-
         return status_ok
 
     @staticmethod
