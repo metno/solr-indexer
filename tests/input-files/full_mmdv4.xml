@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <mmd:mmd xmlns:mmd="http://www.met.no/schema/mmd">
-  <mmd:metadata_identifier>8a21900c-61ee-56eb-ab20-c1a4826982b7</mmd:metadata_identifier><mmd:alternate_identifier type="WIS">urn:wmo:md:int.wmo.wis::ca.gc.ec.msc-1.1.9.3</mmd:alternate_identifier>
+  <mmd:metadata_identifier>no.met.adc:8a21900c-61ee-56eb-ab20-c1a4826982b7</mmd:metadata_identifier><mmd:alternate_identifier type="WIS">urn:wmo:md:int.wmo.wis::ca.gc.ec.msc-1.1.9.3</mmd:alternate_identifier>
   <mmd:title xml:lang="en">Title in English</mmd:title>
   <mmd:title xml:lang="no">Title på norsk</mmd:title>
   <mmd:abstract xml:lang="en">Summary in English with additional context on scope and provenance. Documentation: https://example.org/mmd/full and support email: support@example.org.</mmd:abstract>
@@ -122,6 +122,12 @@
     <mmd:description>Other documentation</mmd:description>
     <mmd:resource>https://doi.org/10.XXXXX/AABBCCDD</mmd:resource>
   </mmd:related_information>
+  <mmd:related_information>
+    <mmd:type>Dataset landing page</mmd:type>
+    <mmd:description>Dataset landing page</mmd:description>
+    <mmd:resource>https://metsis-drupal.ddev.site/dataset/8a21900c-61ee-56eb-ab20-c1a4826982b7</mmd:resource>
+  </mmd:related_information>
+
   <mmd:personnel>
     <mmd:name uri="https://orcid.org/0000-0001-5221-1377">First1 Family1</mmd:name>
     <mmd:role>Investigator</mmd:role>
