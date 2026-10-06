@@ -117,8 +117,12 @@ def main():
 
         if args.skip_feature_type is not None:
             cfg["skip-feature-type"] = args.skip_feature_type
+            logger.info(
+                "Skipping featureType lookup. NOTE! Solr feature_type are not going to be populated"
+            )
         if args.override_feature_type is not None:
             cfg["override-feature-type"] = args.override_feature_type
+            logger.info("Overriding solr feature_type to: %s", cfg["override-feature-type"])
 
         solr_url = _build_solr_url(cfg)
         authentication = _resolve_authentication(cfg)
