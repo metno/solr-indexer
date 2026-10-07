@@ -144,6 +144,7 @@ def main():
         files = _resolve_input_files(args)
         if not files:
             raise ValueError("No input files found")
+        logger.info("Found %d input file(s)", len(files))
 
         configured_threads = (
             args.threads if args.threads is not None else int(cfg.get("threads", DEFAULT_THREADS))
@@ -539,15 +540,22 @@ def _resolve_authentication(cfg):
 
 def _resolve_input_files(args):
     if args.input_file:
+        logger.info("Input: single file %s", args.input_file)
         return [args.input_file]
 
     if args.list_file:
+        logger.info("Input: file list %s", args.list_file)
         with open(args.list_file, encoding="utf-8") as handle:
             return [line.strip() for line in handle if line.strip()]
 
     if args.directory:
         files = []
         directory_path = Path(args.directory)
+        logger.info(
+            "Input: directory %s (%s)",
+            args.directory,
+            "recursive" if args.recursive else "non-recursive",
+        )
 
         if args.recursive:
             for xml_file in sorted(directory_path.rglob("*.xml")):

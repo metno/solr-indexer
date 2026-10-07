@@ -43,6 +43,10 @@ from solrindexer.tools import (
 
 logger = logging.getLogger(__name__)
 
+SENTINEL_PLATFORM_RE = re.compile(r"^Sentinel-\d[A-Z]$", re.IGNORECASE)
+# Lookarounds prevent matching inside timestamps such as "20240101T105441".
+SENTINEL_TILE_RE = re.compile(r"(?<![A-Za-z0-9])T\d{2}[A-Z]{3}(?![A-Za-z0-9])")
+
 # Thread-local schema cache: keyed by xsd_path, stores compiled ET.XMLSchema objects.
 # Each thread maintains its own cache to avoid concurrent validation race conditions.
 _schema_cache = threading.local()
@@ -1103,6 +1107,24 @@ class MMD4SolR:
             # Return None if it's not a valid Sentinel product string
             return None
 
+    @staticmethod
+    def _sentinel_platforms(short_names):
+        """Map Sentinel platform short names to their constellation, e.g. Sentinel-1A -> Sentinel-1."""
+        platforms = []
+        for name in short_names or []:
+            name = name.strip()
+            if SENTINEL_PLATFORM_RE.match(name):
+                platform = name[:-1]
+                if platform not in platforms:
+                    platforms.append(platform)
+        return platforms
+
+    @staticmethod
+    def _extract_sentinel_tile(product_string):
+        """Return the Sentinel-2 tile (e.g. T32VNM) from a product string, or None."""
+        match = SENTINEL_TILE_RE.search(product_string or "")
+        return match.group(0) if match else None
+
     def extract_doi(self, text):
         # DOI regex pattern (simplified but effective for most cases)
         doi_pattern = r"10\.\d{4,9}/[-._;()/:A-Z0-9]+"
@@ -1209,9 +1231,17 @@ class MMD4SolR:
         if metadata_source:
             solr_doc["metadata_source"] = metadata_source
 
-        sentinel_desc = self._is_sentinel_product(solr_doc.get("title", ""))
+        title = solr_doc.get("title", "")
+        sentinel_desc = self._is_sentinel_product(title)
         if sentinel_desc:
             self._append_multivalued(solr_doc, "descriptions", sentinel_desc)
+            platform_sentinel = self._sentinel_platforms(solr_doc.get("platform_short_name"))
+            if platform_sentinel:
+                solr_doc["platform_sentinel"] = platform_sentinel
+                if "Sentinel-2" in platform_sentinel:
+                    tile = self._extract_sentinel_tile(title)
+                    if tile:
+                        solr_doc["sentinel_tile"] = tile
 
         solr_doc["mmd_xml_file"] = self._serialize_mmd_xml()
 
