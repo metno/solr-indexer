@@ -1171,3 +1171,43 @@ def test_get_cached_schema_different_paths_cached_independently():
     # Verify the same call returns the same instance (cache reuse)
     schema1_again = _get_cached_schema(xsd_path_1)
     assert schema1_again is schema1
+
+
+def _make_sentinel_mmd(title, short_name):
+    xml = f"""<mmd xmlns="http://www.met.no/schema/mmd">
+  <metadata_identifier>test-id</metadata_identifier>
+  <title xml:lang="en">{title}</title>
+  <platform><short_name>{short_name}</short_name></platform>
+</mmd>"""
+    return ET.fromstring(xml.encode())
+
+
+@pytest.mark.indexdata
+def test_tosolr_sentinel1_sets_platform_sentinel_without_tile():
+    root = _make_sentinel_mmd(
+        "S1A_IW_GRDH_1SDV_20240101T055425_20240101T055450_051909_0645A1_1F2B", "Sentinel-1A"
+    )
+    solr = MMD4SolR(mydoc=root).tosolr()
+
+    assert solr["platform_sentinel"] == ["Sentinel-1"]
+    assert "sentinel_tile" not in solr
+
+
+@pytest.mark.indexdata
+def test_tosolr_sentinel2_sets_platform_sentinel_and_tile():
+    root = _make_sentinel_mmd(
+        "S2B_MSIL1C_20240101T105441_N0510_R051_T32VNM_20240101T113004", "Sentinel-2B"
+    )
+    solr = MMD4SolR(mydoc=root).tosolr()
+
+    assert solr["platform_sentinel"] == ["Sentinel-2"]
+    assert solr["sentinel_tile"] == "T32VNM"
+
+
+@pytest.mark.indexdata
+def test_tosolr_non_sentinel_title_sets_no_sentinel_fields():
+    root = _make_sentinel_mmd("Some regular dataset", "Sentinel-2A")
+    solr = MMD4SolR(mydoc=root).tosolr()
+
+    assert "platform_sentinel" not in solr
+    assert "sentinel_tile" not in solr

@@ -1,3 +1,5 @@
+import logging
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -8,6 +10,7 @@ from solrindexer.cli import (
     EXIT_WARNINGS,
     _determine_exit_code,
     _report_parent_integrity,
+    _resolve_input_files,
     _resolve_referenced_parents,
     parse_arguments,
 )
@@ -127,3 +130,32 @@ def test_parse_arguments_override_feature_type_flag_sets_value():
         args = parse_arguments()
 
     assert args.override_feature_type == "timeSeries"
+
+
+def _input_args(**kwargs):
+    defaults = {"input_file": None, "list_file": None, "directory": None, "recursive": False}
+    defaults.update(kwargs)
+    return SimpleNamespace(**defaults)
+
+
+def test_resolve_input_files_logs_single_file(caplog):
+    with caplog.at_level(logging.INFO, logger="solrindexer.cli"):
+        assert _resolve_input_files(_input_args(input_file="a.xml")) == ["a.xml"]
+    assert "Input: single file a.xml" in caplog.text
+
+
+def test_resolve_input_files_logs_list_file(tmp_path, caplog):
+    list_file = tmp_path / "files.txt"
+    list_file.write_text("a.xml\n\nb.xml\n", encoding="utf-8")
+    with caplog.at_level(logging.INFO, logger="solrindexer.cli"):
+        assert _resolve_input_files(_input_args(list_file=str(list_file))) == ["a.xml", "b.xml"]
+    assert f"Input: file list {list_file}" in caplog.text
+
+
+@pytest.mark.parametrize("recursive, label", [(True, "recursive"), (False, "non-recursive")])
+def test_resolve_input_files_logs_directory(tmp_path, caplog, recursive, label):
+    (tmp_path / "a.xml").write_text("<x/>", encoding="utf-8")
+    with caplog.at_level(logging.INFO, logger="solrindexer.cli"):
+        files = _resolve_input_files(_input_args(directory=str(tmp_path), recursive=recursive))
+    assert files == [str(tmp_path / "a.xml")]
+    assert f"Input: directory {tmp_path} ({label})" in caplog.text
