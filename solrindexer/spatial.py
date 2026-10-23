@@ -227,7 +227,7 @@ def orient_polygon_for_solr(geom_wkt):
         # Already oriented and valid: keep the WKT exactly as parsed.
         index_wkt = geom_wkt
     else:
-        logger.info("Polygon reoriented (or repaired) for Solr: %s", geom_wkt[:120])
+        logger.debug("Polygon reoriented (or repaired) for Solr: %s", geom_wkt[:120])
         index_wkt = index.wkt
     display_wkt = index_wkt if display.equals_exact(index, 1e-9) else display.wkt
     return index_wkt, display_wkt
