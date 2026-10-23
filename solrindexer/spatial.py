@@ -1,10 +1,12 @@
 import logging
 import math
 
+import numpy as np
 import pygml
+import shapely
 from pygeoif import shape
 from shapely import GEOSException, Point, to_geojson, to_wkt
-from shapely.geometry import box
+from shapely.geometry import MultiPolygon, Polygon, box
 from shapely.geometry.polygon import orient
 from shapely.ops import unary_union
 from shapely.validation import explain_validity
@@ -23,7 +25,10 @@ def handle_solr_spatial(solr_doc, north, east, south, west, gml=None, srs=None):
     if maxX < minX, dateline crossing is assumed.
 
     If mmd:polygon is provided as gml, this is parsed, validated, and indexed
-    to the solr RecursivePrefixTree field type.
+    to the solr RecursivePrefixTree field type. Solr reads the inside of a
+    polygon from the direction of its exterior ring, so rings are oriented
+    first (see orient_polygon_for_solr): a clockwise ring would index the
+    rest of the Earth instead of the dataset's footprint.
 
     Also we store WKT and GeoJSON string representation of the geometries.
     Those are used for visualization of the geometries in Openlayers/Leaflet etc.
@@ -45,13 +50,22 @@ def handle_solr_spatial(solr_doc, north, east, south, west, gml=None, srs=None):
         # Use the provided GML geometry for indexing.
         logger.debug("Got GML Geometry, parsing and processing")
         geom_wkt = parse_gml_to_wkt(gml)
-        geom_wkt = validate_fix_geometry(geom_wkt)
-        solr_doc["geospatial_bounds3d"] = geom_wkt
+        oriented = orient_polygon_for_solr(geom_wkt)
+        if oriented is None:
+            # Not a polygon (point, line): index it as given.
+            geom_wkt = validate_fix_geometry(geom_wkt)
+            index_wkt = display_wkt = geom_wkt
+        elif isinstance(oriented, str):
+            # A ring around a pole: index the polar cap it encloses.
+            index_wkt, display_wkt = oriented, geom_wkt
+        else:
+            index_wkt, display_wkt = oriented
+        solr_doc["geospatial_bounds3d"] = index_wkt
         if (west == -180.0 and east == 180.0) or (south == -90.0 and north == 90.0):
             logger.debug("Spanning whole longitude using ENVELOPE syntax to avoid coplanar error")
             solr_doc["geospatial_bounds3d"] = solr_doc["bbox"]
-        solr_doc["geometry_wkt"] = geom_wkt
-        solr_doc["geometry_geojson"] = wkt_to_geojson(geom_wkt)
+        solr_doc["geometry_wkt"] = display_wkt
+        solr_doc["geometry_geojson"] = wkt_to_geojson(display_wkt)
         return solr_doc
 
     if gml is None:
@@ -81,6 +95,142 @@ def parse_gml_to_wkt(gml):
     """Parses a gml geometry xml string and return WKT"""
     geom = pygml.parse(gml)
     return shape(geom).wkt
+
+
+def _lon_step(lon_from, lon_to):
+    """Longitude change along the shortest path between two meridians, in [-180, 180)."""
+    return (lon_to - lon_from + 180.0) % 360.0 - 180.0
+
+
+def unwrap_ring(coords):
+    """
+    Unwrap the longitudes of a ring so that no edge is longer than 180 degrees.
+
+    Consecutive vertices are joined along the shortest path, so the edge from
+    170 to -170 crosses the antimeridian (20 degrees) rather than going round
+    the globe (340 degrees). In the unwrapped coordinates that edge runs from
+    170 to 190, and planar geometry (orientation, validity) applies again.
+
+    :param coords: ring coordinates (lon, lat), closed or not
+    :return: (unwrapped open ring as a list of (lon, lat), winding) where the
+             winding is the total longitude change around the ring: 0 for an
+             ordinary ring, +360 or -360 for a ring that goes once round a pole
+    """
+    points = [(float(c[0]), float(c[1])) for c in coords]
+    if len(points) > 1 and points[0] == points[-1]:
+        points = points[:-1]
+    unwrapped = [points[0]]
+    for lon, lat in points[1:]:
+        previous = unwrapped[-1][0]
+        # whole turns only, so coordinates that need no shift stay exact
+        unwrapped.append((lon + 360.0 * round((previous - lon) / 360.0), lat))
+    closing = _lon_step(unwrapped[-1][0], unwrapped[0][0])
+    winding = round(unwrapped[-1][0] + closing - unwrapped[0][0])
+    return unwrapped, winding
+
+
+def _wrap_lons(xy):
+    """Coordinate array with longitudes back in [-180, 180], keeping 180 as 180."""
+    lon = xy[:, 0]
+    turns = np.where(lon > 180.0, -360.0, np.where(lon < -180.0, 360.0, 0.0))
+    return np.column_stack([lon + turns, xy[:, 1]])
+
+
+def _polar_cap_envelope(ring, winding):
+    """
+    ENVELOPE of the polar cap enclosed by a ring that goes once round a pole.
+
+    The pole is on the side the ring encloses: an anticlockwise ring goes
+    eastward round the north pole and westward round the south pole.
+    """
+    lats = [lat for _lon, lat in ring]
+    north_pole = sum(lats) / len(lats) >= 0
+    if (winding > 0) != north_pole:
+        logger.warning(
+            "Ring round the %s pole is clockwise; indexing the polar cap it describes",
+            "north" if north_pole else "south",
+        )
+    if north_pole:
+        return generate_solr_envelope(90.0, 180.0, min(lats), -180.0)
+    return generate_solr_envelope(max(lats), 180.0, -90.0, -180.0)
+
+
+def _orient_polygon(polygon):
+    """
+    Orient one shapely Polygon in unwrapped coordinates.
+
+    :return: the oriented Polygon or MultiPolygon in unwrapped longitudes
+             (exterior anticlockwise, holes clockwise), or an ENVELOPE string
+             when the exterior ring goes round a pole
+    """
+    exterior, winding = unwrap_ring(polygon.exterior.coords)
+    if winding != 0:
+        return _polar_cap_envelope(exterior, winding)
+    holes = []
+    for interior in polygon.interiors:
+        ring, _winding = unwrap_ring(interior.coords)
+        # Place the hole in the same 360 degree window as the exterior.
+        shift = 360.0 * round((exterior[0][0] - ring[0][0]) / 360.0)
+        holes.append([(lon + shift, lat) for lon, lat in ring])
+    unwrapped = Polygon(exterior, holes)
+    if not unwrapped.is_valid:
+        unwrapped = loads(validate_fix_geometry(unwrapped.wkt))
+    if unwrapped.geom_type == "MultiPolygon":
+        return MultiPolygon([orient(part, sign=1.0) for part in unwrapped.geoms])
+    return orient(unwrapped, sign=1.0)
+
+
+def orient_polygon_for_solr(geom_wkt):
+    """
+    Orient a polygon the way Solr's spatial fields expect.
+
+    Solr (Spatial4j / Geo3D) takes the inside of a polygon to be on the left of
+    its exterior ring. Given clockwise, a footprint becomes "the whole Earth
+    except the footprint" and matches every search, wherever its box is.
+
+    Orientation is judged along the shortest path between vertices, so a
+    polygon crossing the antimeridian (an edge from 170 to -170) is handled like
+    any other. That is the same rule create_polygon_wkt_from_bbox follows when
+    it orients a dateline-crossing box clockwise in plain longitudes.
+
+    :param geom_wkt: WKT of the parsed mmd:polygon, longitudes in [-180, 180]
+    :return: None if the geometry is not a (Multi)Polygon;
+             an ENVELOPE string for a ring that goes round a pole;
+             else (index_wkt, display_wkt): index_wkt with longitudes in
+             [-180, 180] for geospatial_bounds3d, display_wkt with the
+             antimeridian crossing denormalized (longitudes above 180) for
+             geometry_wkt / geometry_geojson, as the bbox path does
+    """
+    geom = loads(geom_wkt)
+    if geom.geom_type == "Polygon":
+        parts = [geom]
+    elif geom.geom_type == "MultiPolygon":
+        parts = list(geom.geoms)
+    else:
+        return None
+
+    oriented = []
+    for part in parts:
+        result = _orient_polygon(part)
+        if isinstance(result, str):
+            if len(parts) > 1:
+                logger.warning("Polar ring inside a MultiPolygon; indexing its polar cap only")
+            return result
+        oriented.extend(result.geoms if result.geom_type == "MultiPolygon" else [result])
+
+    display = oriented[0] if len(oriented) == 1 else MultiPolygon(oriented)
+    if display.bounds[0] < -180.0:
+        display = shapely.transform(display, lambda xy: xy + [360.0, 0.0])
+    index = shapely.transform(display, _wrap_lons)
+
+    if index.geom_type == geom.geom_type and index.equals_exact(geom, 1e-9):
+        # Already oriented and valid: keep the WKT exactly as parsed.
+        index_wkt = geom_wkt
+    else:
+        logger.info("Polygon reoriented (or repaired) for Solr: %s", geom_wkt[:120])
+        index_wkt = index.wkt
+    display_wkt = index_wkt if display.equals_exact(index, 1e-9) else display.wkt
+    return index_wkt, display_wkt
 
 
 def generate_solr_envelope(north, east, south, west):
