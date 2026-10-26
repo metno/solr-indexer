@@ -48,12 +48,22 @@ def _init_logging(log_obj: logging.Logger) -> None:
     Behavior:
     - Reads log level from SOLRINDEXER_LOGLEVEL (default: INFO)
     - Reads optional logfile path from SOLRINDEXER_LOGFILE
+    - Reads SOLRINDEXER_LOG_RICH (default: 1); 0/false/no/off disable Rich
     - Uses rich.logging.RichHandler for console output when rich is installed,
-      otherwise falls back to a plain stdout/stderr split handler setup
+      and enabled, otherwise uses a plain stdout/stderr split handler setup
     - Sends DEBUG/INFO to stdout and WARNING+ to stderr (no duplicates)
     """
     want_level = os.environ.get("SOLRINDEXER_LOGLEVEL", "INFO").upper()
     log_file = os.environ.get("SOLRINDEXER_LOGFILE")
+    rich_value = os.environ.get("SOLRINDEXER_LOG_RICH", "1").strip().lower()
+    if rich_value not in {"0", "false", "no", "off", "1", "true", "yes", "on"}:
+        print(
+            f"Invalid value '{rich_value}' in environment variable SOLRINDEXER_LOG_RICH; "
+            "using default '1'",
+            file=sys.stderr,
+        )
+        rich_value = "1"
+    use_rich = rich_value not in {"0", "false", "no", "off"}
 
     log_level = getattr(logging, want_level, logging.INFO)
     if not hasattr(logging, want_level):
@@ -62,10 +72,14 @@ def _init_logging(log_obj: logging.Logger) -> None:
             file=sys.stderr,
         )
 
-    debug_fmt = "[{asctime:}]  [{processName:s}] [{threadName:s}] [{levelname:7s}] {name}:{lineno:<4d} : {message:}"
-    info_fmt = "[{asctime:}] {levelname:8s}: {message:}"
     plain_format = logging.Formatter(
-        fmt=debug_fmt if log_level == logging.DEBUG else info_fmt, style="{"
+        fmt=(
+            "[{asctime:}]  [{processName:s}] [{threadName:s}] "
+            "[{levelname:7s}] {name}:{lineno:<4d} : {message:}"
+            if log_level == logging.DEBUG
+            else "[{asctime:}] {levelname:8s}: {message:}"
+        ),
+        style="{",
     )
 
     # Make init idempotent (important for tests/import cycles)
@@ -73,10 +87,14 @@ def _init_logging(log_obj: logging.Logger) -> None:
     log_obj.setLevel(log_level)
     log_obj.propagate = False
 
-    try:
-        from rich.console import Console
-        from rich.logging import RichHandler
+    if use_rich:
+        try:
+            from rich.console import Console
+            from rich.logging import RichHandler
+        except ImportError:
+            use_rich = False
 
+    if use_rich:
         show_path = log_level == logging.DEBUG
 
         # DEBUG/INFO → stdout
@@ -97,7 +115,7 @@ def _init_logging(log_obj: logging.Logger) -> None:
             show_path=show_path,
         )
         log_obj.addHandler(stderr_rich)
-    except ImportError:
+    else:
         # Fallback: stdout for DEBUG/INFO, stderr for WARNING+
         stdout_handler = logging.StreamHandler(sys.stdout)
         stdout_handler.setLevel(log_level)

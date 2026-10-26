@@ -371,6 +371,20 @@ Logging is controlled via environment variables:
 |----------|---------|-------------|
 | `SOLRINDEXER_LOGLEVEL` | `INFO` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `SOLRINDEXER_LOGFILE` | — | If set, log output is also written to this file path |
+| `SOLRINDEXER_LOG_RICH` | `1` | Use Rich console logging when installed; set to `0` for standard Python logging |
+
+`SOLRINDEXER_LOG_RICH` accepts `1`, `true`, `yes`, or `on` to enable Rich and
+`0`, `false`, `no`, or `off` to disable it (case-insensitive; surrounding whitespace
+is ignored). Invalid values produce a warning on stderr and use the default `1`.
+If Rich is not installed, standard Python logging is used regardless of this setting.
+Set the variable before starting the command: logging is configured at package import.
+
+For HPC jobs submitted with `qsub`, redirected output, or other batch environments,
+disable Rich to avoid terminal-width-dependent wrapping and formatting. Plain logging
+writes complete messages without terminal-width wrapping or ANSI styling.
+In both modes, DEBUG/INFO go to stdout and WARNING or higher to stderr.
+`SOLRINDEXER_LOGFILE` always receives plain text. This switch controls logging only;
+it does not change progress indicators or search result formatting.
 
 Examples:
 
@@ -383,6 +397,10 @@ indexdata -c etc/config.yml -d /data/mmd > index.log 2> errors.log
 
 # Log to file in addition to console
 SOLRINDEXER_LOGFILE=/var/log/solrindexer.log indexdata -c etc/config.yml -d /data/mmd
+
+# In a qsub job's shell wrapper, disable Rich for batch logs
+export SOLRINDEXER_LOG_RICH=0
+indexdata -c etc/config.yml -d /data/mmd > index.log 2> errors.log
 ```
 
 ---
