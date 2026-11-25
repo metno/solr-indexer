@@ -48,22 +48,22 @@ def _init_logging(log_obj: logging.Logger) -> None:
     Behavior:
     - Reads log level from SOLRINDEXER_LOGLEVEL (default: INFO)
     - Reads optional logfile path from SOLRINDEXER_LOGFILE
-    - Reads SOLRINDEXER_LOG_RICH (default: 1); 0/false/no/off disable Rich
+    - Reads SOLRINDEXER_LOG_RICH (default: 0); 1/true/yes/on enable Rich
     - Uses rich.logging.RichHandler for console output when rich is installed,
       and enabled, otherwise uses a plain stdout/stderr split handler setup
     - Sends DEBUG/INFO to stdout and WARNING+ to stderr (no duplicates)
     """
     want_level = os.environ.get("SOLRINDEXER_LOGLEVEL", "INFO").upper()
     log_file = os.environ.get("SOLRINDEXER_LOGFILE")
-    rich_value = os.environ.get("SOLRINDEXER_LOG_RICH", "1").strip().lower()
+    rich_value = os.environ.get("SOLRINDEXER_LOG_RICH", "0").strip().lower()
     if rich_value not in {"0", "false", "no", "off", "1", "true", "yes", "on"}:
         print(
             f"Invalid value '{rich_value}' in environment variable SOLRINDEXER_LOG_RICH; "
-            "using default '1'",
+            "using default '0'",
             file=sys.stderr,
         )
-        rich_value = "1"
-    use_rich = rich_value not in {"0", "false", "no", "off"}
+        rich_value = "0"
+    use_rich = rich_value in {"1", "true", "yes", "on"}
 
     log_level = getattr(logging, want_level, logging.INFO)
     if not hasattr(logging, want_level):

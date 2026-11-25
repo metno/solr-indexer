@@ -27,11 +27,24 @@ def logging_fixture(monkeypatch: pytest.MonkeyPatch) -> Iterator[logging.Logger]
     logger.handlers.clear()
 
 
+def test_default_logging_uses_plain_handlers_without_importing_rich(
+    log_obj: logging.Logger,
+) -> None:
+    """Standard logging is the default, even when Rich is installed."""
+    with patch("builtins.__import__", wraps=builtins.__import__) as import_mock:
+        _init_logging(log_obj)
+    assert not any(call.args[0].startswith("rich") for call in import_mock.call_args_list)
+    assert [type(handler) for handler in log_obj.handlers] == [
+        logging.StreamHandler,
+        logging.StreamHandler,
+    ]
+
+
 @pytest.mark.parametrize("value", ["0", "false", "no", "off", " FALSE "])
-def test_disabled_rich_uses_plain_handlers_without_importing_rich(
+def test_false_values_use_plain_handlers_without_importing_rich(
     log_obj: logging.Logger, monkeypatch: pytest.MonkeyPatch, value: str
 ) -> None:
-    """Disabling Rich bypasses its imports, even when it is installed."""
+    """False values explicitly keep standard logging."""
     monkeypatch.setenv("SOLRINDEXER_LOG_RICH", value)
     with patch("builtins.__import__", wraps=builtins.__import__) as import_mock:
         _init_logging(log_obj)
@@ -42,21 +55,23 @@ def test_disabled_rich_uses_plain_handlers_without_importing_rich(
     ]
 
 
-@pytest.mark.parametrize("value", [None, "1", "true", "yes", "on", " TRUE "])
-def test_enabled_rich_and_default_use_rich_handlers(
-    log_obj: logging.Logger, monkeypatch: pytest.MonkeyPatch, value: str | None
+@pytest.mark.parametrize("value", ["1", "true", "yes", "on", " TRUE "])
+def test_explicitly_enabled_rich_uses_rich_handlers(
+    log_obj: logging.Logger, monkeypatch: pytest.MonkeyPatch, value: str
 ) -> None:
-    """Keep existing Rich behavior by default and for explicit true values."""
+    """Rich logging is used only for explicit true values."""
     rich_logging = pytest.importorskip("rich.logging")
-    if value is not None:
-        monkeypatch.setenv("SOLRINDEXER_LOG_RICH", value)
+    monkeypatch.setenv("SOLRINDEXER_LOG_RICH", value)
     _init_logging(log_obj)
     assert len(log_obj.handlers) == 2
     assert all(isinstance(handler, rich_logging.RichHandler) for handler in log_obj.handlers)
 
 
-def test_missing_rich_falls_back_to_plain_handlers(log_obj: logging.Logger) -> None:
+def test_missing_rich_falls_back_to_plain_handlers(
+    log_obj: logging.Logger, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Requesting Rich still works when the optional dependency is absent."""
+    monkeypatch.setenv("SOLRINDEXER_LOG_RICH", "1")
     with patch.dict(sys.modules, {"rich.console": None, "rich.logging": None}):
         _init_logging(log_obj)
     assert [type(handler) for handler in log_obj.handlers] == [
@@ -73,14 +88,16 @@ def test_invalid_rich_value_warns_and_keeps_default(
     value: str,
 ) -> None:
     """Invalid values are reported rather than silently changing logging."""
-    rich_logging = pytest.importorskip("rich.logging")
     monkeypatch.setenv("SOLRINDEXER_LOG_RICH", value)
     _init_logging(log_obj)
     captured = capsys.readouterr()
     assert captured.out == ""
     assert "SOLRINDEXER_LOG_RICH" in captured.err
-    assert "using default '1'" in captured.err
-    assert all(isinstance(handler, rich_logging.RichHandler) for handler in log_obj.handlers)
+    assert "using default '0'" in captured.err
+    assert [type(handler) for handler in log_obj.handlers] == [
+        logging.StreamHandler,
+        logging.StreamHandler,
+    ]
 
 
 @pytest.mark.parametrize("rich_value", ["0", "1"])
